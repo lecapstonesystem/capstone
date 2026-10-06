@@ -217,7 +217,11 @@
             </div>
             <div class="min-w-0">
               <p class="text-lg font-semibold text-gray-800 truncate">
-                {{ detailMember.firstName }} {{ detailMember.lastName }}
+                {{
+                  [detailMember.firstName, detailMember.middleName, detailMember.lastName]
+                    .filter(Boolean)
+                    .join(' ')
+                }}
               </p>
               <p class="text-sm text-gray-500">{{ detailMember.memberNo }}</p>
             </div>
@@ -242,6 +246,38 @@
             <div>
               <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Address</p>
               <p class="text-gray-700">{{ detailMember.address || '—' }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                Member Type
+              </p>
+              <p class="text-gray-700">{{ detailMember.memberType || '—' }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                Civil Status
+              </p>
+              <p class="text-gray-700">
+                {{ detailMember.civilStatus || '—'
+                }}<span v-if="detailMember.spouseName">
+                  — spouse: {{ detailMember.spouseName }}</span
+                >
+              </p>
+            </div>
+            <div>
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                Landline
+              </p>
+              <p class="text-gray-700">{{ detailMember.landline || '—' }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                Government IDs
+              </p>
+              <ul class="text-gray-700 space-y-0.5">
+                <li v-for="line in detailGovIds" :key="line">{{ line }}</li>
+                <li v-if="detailGovIds.length === 0">—</li>
+              </ul>
             </div>
             <div>
               <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
@@ -435,7 +471,7 @@
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       @click.self="closeModal"
     >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-xl max-h-[90vh] overflow-y-auto">
         <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <h2 class="text-lg font-semibold text-gray-800">
             {{ modalMode === 'add' ? 'Add Member' : 'Edit Member' }}
@@ -457,13 +493,22 @@
             {{ formError }}
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
               <input
                 v-model="form.firstName"
                 type="text"
                 placeholder="e.g. Juan"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Middle Name</label>
+              <input
+                v-model="form.middleName"
+                type="text"
+                placeholder="e.g. Lim"
                 class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
             </div>
@@ -478,6 +523,43 @@
             </div>
           </div>
 
+          <!-- Membership classification + civil status (Members' Data Sheet) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Member Type</label>
+              <select
+                v-model="form.memberType"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="Regular">Regular</option>
+                <option value="Associate">Associate</option>
+                <option value="Extension">Extension</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Civil Status</label>
+              <select
+                v-model="form.civilStatus"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="Single">Single</option>
+                <option value="Married">Married</option>
+                <option value="Widowed">Widowed</option>
+                <option value="Separated">Separated</option>
+              </select>
+            </div>
+          </div>
+
+          <div v-if="form.civilStatus === 'Married'">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Spouse Name</label>
+            <input
+              v-model="form.spouseName"
+              type="text"
+              placeholder="Spouse full name"
+              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+          </div>
+
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
@@ -488,16 +570,30 @@
             />
           </div>
 
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Phone (11 digits)</label>
-            <input
-              v-model="form.phone"
-              type="tel"
-              maxlength="11"
-              placeholder="09XXXXXXXXX"
-              @input="sanitizePhone"
-              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Phone (11 digits)</label>
+              <input
+                v-model="form.phone"
+                type="tel"
+                maxlength="11"
+                placeholder="09XXXXXXXXX"
+                @input="sanitizePhone"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Landline (optional)</label
+              >
+              <input
+                v-model="form.landline"
+                type="tel"
+                maxlength="20"
+                placeholder="02XXXXXXXXX"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
           </div>
 
           <div>
@@ -529,6 +625,80 @@
                 type="date"
                 class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
+            </div>
+          </div>
+
+          <!-- Government IDs — Members' Data Sheet (all optional) -->
+          <div class="border-t border-gray-100 pt-4 space-y-4">
+            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">
+              Government IDs — optional
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">ID Type</label>
+                <select
+                  v-model="form.govIdType"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option value="">Select ID type</option>
+                  <option value="National ID">National ID</option>
+                  <option value="Driver's License">Driver's License</option>
+                  <option value="Passport">Passport</option>
+                  <option value="UMID">UMID</option>
+                  <option value="Voter's ID">Voter's ID</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">ID Number</label>
+                <input
+                  v-model="form.govIdNumber"
+                  type="text"
+                  maxlength="30"
+                  placeholder="e.g. D12-34-567890"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">GSIS No.</label>
+                <input
+                  v-model="form.gsisNumber"
+                  type="text"
+                  maxlength="20"
+                  placeholder="Optional"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">SSS No.</label>
+                <input
+                  v-model="form.sssNumber"
+                  type="text"
+                  maxlength="20"
+                  placeholder="Optional"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Pag-IBIG No.</label>
+                <input
+                  v-model="form.pagibigNumber"
+                  type="text"
+                  maxlength="20"
+                  placeholder="Optional"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">PhilHealth No.</label>
+                <input
+                  v-model="form.philhealthNumber"
+                  type="text"
+                  maxlength="20"
+                  placeholder="Optional"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -703,6 +873,20 @@ function submitCapital() {
 // Details modal
 const detailMember = ref(null)
 
+// One readable line per government ID, only for the ones actually filled in
+const detailGovIds = computed(() => {
+  const member = detailMember.value
+  if (!member) return []
+  const lines = []
+  const primaryId = [member.govIdType, member.govIdNumber].filter(Boolean).join(' ')
+  if (primaryId) lines.push(primaryId)
+  if (member.gsisNumber) lines.push(`GSIS ${member.gsisNumber}`)
+  if (member.sssNumber) lines.push(`SSS ${member.sssNumber}`)
+  if (member.pagibigNumber) lines.push(`Pag-IBIG ${member.pagibigNumber}`)
+  if (member.philhealthNumber) lines.push(`PhilHealth ${member.philhealthNumber}`)
+  return lines
+})
+
 function openDetails(member) {
   detailMember.value = member
   showCapitalInput.value = false
@@ -731,13 +915,24 @@ const visibleColumnCount = computed(() => 3 + Object.values(columns).filter(Bool
 // Only force horizontal scroll when wide columns are visible
 const tableMinWidth = computed(() => (columns.contact || columns.address ? '1000px' : '720px'))
 
-// Form model
+// Form model — mirrors the Members' Data Sheet (essentials only)
 const emptyForm = {
   firstName: '',
+  middleName: '',
   lastName: '',
+  memberType: 'Regular',
+  civilStatus: 'Single',
+  spouseName: '',
   email: '',
   phone: '',
+  landline: '',
   address: '',
+  govIdType: '',
+  govIdNumber: '',
+  gsisNumber: '',
+  sssNumber: '',
+  pagibigNumber: '',
+  philhealthNumber: '',
   status: 'Active',
   dateJoined: new Date().toISOString().split('T')[0],
 }
@@ -757,10 +952,21 @@ function openEditModal(member) {
   formError.value = ''
   Object.assign(form, {
     firstName: member.firstName,
+    middleName: member.middleName || '',
     lastName: member.lastName,
+    memberType: member.memberType || 'Regular',
+    civilStatus: member.civilStatus || 'Single',
+    spouseName: member.spouseName || '',
     email: member.email,
     phone: member.phone,
+    landline: member.landline || '',
     address: member.address,
+    govIdType: member.govIdType || '',
+    govIdNumber: member.govIdNumber || '',
+    gsisNumber: member.gsisNumber || '',
+    sssNumber: member.sssNumber || '',
+    pagibigNumber: member.pagibigNumber || '',
+    philhealthNumber: member.philhealthNumber || '',
     status: member.status,
     dateJoined: member.dateJoined,
   })
@@ -795,13 +1001,28 @@ function saveMember() {
     formError.value = 'Phone number must be exactly 11 digits.'
     return
   }
+  if (form.civilStatus === 'Married' && !form.spouseName.trim()) {
+    formError.value = 'Spouse name is required for married members.'
+    return
+  }
 
   const data = {
     firstName: form.firstName.trim(),
+    middleName: form.middleName.trim(),
     lastName: form.lastName.trim(),
+    memberType: form.memberType,
+    civilStatus: form.civilStatus,
+    spouseName: form.civilStatus === 'Married' ? form.spouseName.trim() : '',
     email: form.email.trim(),
     phone: form.phone.trim(),
+    landline: form.landline.trim(),
     address: form.address.trim(),
+    govIdType: form.govIdType,
+    govIdNumber: form.govIdNumber.trim(),
+    gsisNumber: form.gsisNumber.trim(),
+    sssNumber: form.sssNumber.trim(),
+    pagibigNumber: form.pagibigNumber.trim(),
+    philhealthNumber: form.philhealthNumber.trim(),
     status: form.status,
     dateJoined: form.dateJoined,
   }

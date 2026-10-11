@@ -25,10 +25,16 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 # --------------------------------------------------------------------------
-# 0. PATHS — set these two to match your machine, everything else derives.
+# 0. PATHS — env override wins, else paths relative to THIS file's tree.
 # --------------------------------------------------------------------------
-DATA_DIR = Path("/home/gustave/Documents/data-science-portfolio/data")
-OUTPUT_DIR = Path("/home/gustave/Documents/data-science-portfolio/outputs")
+# Backend runs from capstone-main/, notebooks ran from data-science-portfolio/;
+# UCMS_DATA_DIR / UCMS_OUTPUT_DIR let each caller point at its own tree
+# without editing code. Defaults = the data/ and outputs/ next to scripts/.
+import os
+
+_HERE = Path(__file__).resolve()
+DATA_DIR = Path(os.environ.get("UCMS_DATA_DIR", _HERE.parents[1] / "data"))
+OUTPUT_DIR = Path(os.environ.get("UCMS_OUTPUT_DIR", _HERE.parents[1] / "outputs"))
 
 LOANS_CSV = DATA_DIR / "loans_clean.csv"        # one row per loan
 PAYMENTS_CSV = DATA_DIR / "payments.csv"        # one row per installment

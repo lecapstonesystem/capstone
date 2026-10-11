@@ -418,4 +418,3 @@ ALTER TABLE ONLY public.payment
 --
 -- PostgreSQL database dump complete
 --
-

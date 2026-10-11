@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+pandas
+scikit-learn
+matplotlib
+openpyxl
+# supabase  # phase 2: service_role write-through (approvals, audit log)

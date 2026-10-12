@@ -42,6 +42,9 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import ucms_analytics as ua  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from store import load_all  # noqa: E402  (Supabase-first, CSV fallback)
+
 API_KEY = os.environ.get("UCMS_API_KEY", "")  # empty = dev-open, warns at startup
 # Comma-separated frontend origin(s) allowed to call this API in browsers.
 CORS_ORIGINS = [o.strip() for o in
@@ -125,10 +128,10 @@ def round2(value) -> float:
 
 
 def load():
-    loans, pays, stats, shares = ua.load_data()
+    loans, pays, stats, shares = load_all()  # Supabase live, else CSVs
     if loans.empty:
         raise HTTPException(status_code=503,
-                            detail=f"no loans found — check {ua.LOANS_CSV}")
+                            detail="no loans found — check data/ CSVs or Supabase")
     return loans, pays, stats, shares
 
 

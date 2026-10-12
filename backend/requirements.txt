@@ -1,7 +1,8 @@
 fastapi
 uvicorn[standard]
+supabase  # Supabase read layer (store.py) + seed script; backend still boots without it (CSV mode)
 pandas
 scikit-learn
 matplotlib
 openpyxl
-# supabase  # phase 2: service_role write-through (approvals, audit log)
+# NOTE: `supabase` is optional at import (lazy) — missing lib just means CSV fallback.

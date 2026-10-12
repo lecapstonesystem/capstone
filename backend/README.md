@@ -42,3 +42,20 @@ Docs: http://localhost:8000/docs
 All (except docs page) require header `X-API-Key: <UCMS_API_KEY>`
 when the env var is set. `service_role` is never accepted here as a
 substitute and never leaves the server.
+
+## Data source: Supabase-first, CSV fallback
+
+`store.py` (`load_all()`) tries live Supabase rows when `SUPABASE_URL` +
+`SUPABASE_SERVICE_ROLE_KEY` are set, else falls back to `data/*.csv`.
+Frames keep CSV shapes, so every endpoint works unchanged on either
+source. The active source prints on each load — check server logs.
+
+Seed the cloud once from the sample (idempotent, skips Unknown members,
+dateless loans, and schedule-only rows):
+
+```bash
+cd scripts
+../backend/.venv/bin/python seed_supabase.py --dry-run   # offline plan, no creds
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+  ../backend/.venv/bin/python seed_supabase.py --apply
+```

@@ -95,7 +95,10 @@ def build_plan(loans: pd.DataFrame, pays: pd.DataFrame):
             skipped["unknown_member"] += 1
             continue
         date_iso = r.get("date_iso")
-        if not date_iso:
+        # NaN is truthy in Python: empty CSV dates arrive as float nan
+        # (not None), so `not date_iso` alone never caught them and
+        # add_months crashed on NaT.strftime. pd.isna covers None/NaN/NaT.
+        if not date_iso or pd.isna(date_iso):
             skipped["no_date"] += 1
             continue
         if name not in seen:
@@ -105,7 +108,11 @@ def build_plan(loans: pd.DataFrame, pays: pd.DataFrame):
         loan_key = key_of(name, r.get("loan_amount"), term, date_iso)
         rows = pay_groups.get(loan_key, [])
         actuals = [x for x in rows if pd.notna(x.get("paid_num"))]
-        exp = sum(float(x.get("exp_num") or 0) for x in rows)
+        # `nan or 0` yields nan (NaN is truthy), which poisons the sum and
+        # makes the Paid/Released evidence check unreachable — count blanks
+        # as 0 instead.
+        exp = sum(float(x.get("exp_num")) if pd.notna(x.get("exp_num"))
+                  else 0.0 for x in rows)
         got = sum(float(x.get("paid_num") or 0) for x in actuals)
         loans_out.append({
             "_key": (name, loan_key),

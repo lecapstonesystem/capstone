@@ -1,0 +1,18 @@
+# ---- Secrets: never commit keys (service_role, API keys) ----
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# ---- Python (backend/ + scripts/) ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ---- Generated ----
+outputs/
+
+# ---- OS noise ----
+Thumbs.db
+.DS_Store

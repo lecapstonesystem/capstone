@@ -14,11 +14,11 @@ INSERT INTO admin (name, role, email, created_at, auth_uid)
 SELECT
   'Hans Baldovino',            -- display name shown in the portal
   'Super Admin',               -- exact string the portal matches on (admins.js)
-  'admin@ucms.com',            -- must match the Auth user's email (lowercase)
+  'admin1@ucms.com',            -- must match the Auth user's email (lowercase)
   now(),
   u.id
 FROM auth.users u
-WHERE u.email = 'admin@ucms.com'
+WHERE u.email = 'admin1@ucms.com'
 ON CONFLICT (auth_uid) DO NOTHING;
 
 -- Verify — expect exactly 1 row with linked = true.

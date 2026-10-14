@@ -13,7 +13,7 @@
 INSERT INTO admin (name, role, email, created_at, auth_uid)
 SELECT
   'Change Me',                 -- EDIT: display name shown in the portal
-  'Administrator',
+  'Super Admin',               -- exact string the portal matches on (admins.js)
   'change-me@example.com',     -- EDIT: must match the Auth user's email (lowercase)
   now(),
   u.id

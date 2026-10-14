@@ -12,13 +12,13 @@
 -- ============================================================
 INSERT INTO admin (name, role, email, created_at, auth_uid)
 SELECT
-  'Change Me',                 -- EDIT: display name shown in the portal
+  'Hans Baldovino',            -- display name shown in the portal
   'Super Admin',               -- exact string the portal matches on (admins.js)
-  'change-me@example.com',     -- EDIT: must match the Auth user's email (lowercase)
+  'admin@ucms.com',            -- must match the Auth user's email (lowercase)
   now(),
   u.id
 FROM auth.users u
-WHERE u.email = 'change-me@example.com'   -- EDIT (same email again)
+WHERE u.email = 'admin@ucms.com'
 ON CONFLICT (auth_uid) DO NOTHING;
 
 -- Verify — expect exactly 1 row with linked = true.

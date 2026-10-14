@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 import LoginView from '../views/LoginView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import MembersView from '../views/MembersView.vue'
@@ -70,14 +71,15 @@ const router = createRouter({
   ],
 })
 
-// Redirect to login if not authenticated
-router.beforeEach((to, from, next) => {
-  const isLoggedIn = localStorage.getItem('ucms-auth')
-  if (to.meta.requiresAuth && !isLoggedIn) {
-    next('/login')
-  } else {
-    next()
-  }
+// Redirect to login if the Supabase session is missing.
+// ensureInit() resolves getSession() once, so the first navigation
+// never races the auth state; stale localStorage flags are ignored.
+router.beforeEach(async (to) => {
+  const auth = useAuthStore()
+  await auth.ensureInit()
+  if (to.meta.requiresAuth && !auth.isAuthenticated) return '/login'
+  if (to.path === '/login' && auth.isAuthenticated) return '/dashboard'
+  return true
 })
 
 export default router

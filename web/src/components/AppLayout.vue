@@ -119,9 +119,9 @@
           <div
             class="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white text-sm font-bold"
           >
-            A
+            {{ avatarInitials }}
           </div>
-          <span class="text-sm text-gray-600 font-medium">Admin</span>
+          <span class="text-sm text-gray-600 font-medium">{{ auth.displayName }}</span>
         </div>
       </header>
 
@@ -136,9 +136,11 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const route = useRoute()
+const auth = useAuthStore()
 
 const currentPageTitle = computed(() => {
   const titles = {
@@ -153,8 +155,16 @@ const currentPageTitle = computed(() => {
   return titles[route.path] || 'Dashboard'
 })
 
-const handleLogout = () => {
-  localStorage.removeItem('ucms-auth')
+// First + last initial of the logged-in admin (from their admin row)
+const avatarInitials = computed(() => {
+  const parts = auth.displayName.trim().split(/\s+/)
+  const first = parts[0]?.charAt(0) || 'A'
+  const last = parts.length > 1 ? parts[parts.length - 1].charAt(0) : ''
+  return (first + last).toUpperCase()
+})
+
+const handleLogout = async () => {
+  await auth.signOut()
   router.push('/login')
 }
 </script>

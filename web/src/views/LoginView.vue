@@ -67,6 +67,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 const email = ref('')
 const password = ref('')
@@ -74,6 +75,7 @@ const error = ref('')
 const loading = ref(false)
 const showPassword = ref(false)
 const router = useRouter()
+const auth = useAuthStore()
 
 const handleLogin = async () => {
   // Basic validation
@@ -85,13 +87,13 @@ const handleLogin = async () => {
   loading.value = true
   error.value = ''
 
-  // Temporary login logic without Supabase
-  // We will replace this with real Supabase auth later
-  if (email.value === 'admin@ucms.com' && password.value === 'admin123') {
-    localStorage.setItem('ucms-auth', 'true')
+  // Real Supabase Auth — bad credentials and unprovisioned accounts
+  // come back as messages from the auth store.
+  const result = await auth.signIn(email.value.trim().toLowerCase(), password.value)
+  if (result.ok) {
     router.push('/dashboard')
   } else {
-    error.value = 'Invalid email or password. Please try again.'
+    error.value = result.message
   }
 
   loading.value = false

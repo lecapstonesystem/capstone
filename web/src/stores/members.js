@@ -1,11 +1,12 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { supabase } from '../lib/supabase'
 import { randomPassword } from '../utils/password'
 
 /**
- * Members store
+ * Members store — live Supabase data (swapped from mocks).
  *
- * Account management model:
+ * Account management model (unchanged):
  *   Active    — full member, can log into the mobile app
  *   Suspended — temporarily blocked (login disabled), reversible
  *   Dropped   — member left / archived, record is kept forever
@@ -13,220 +14,113 @@ import { randomPassword } from '../utils/password'
  * Cooperatives must keep member records, so permanent deletion is a
  * last resort — the UI pushes suspend/drop instead.
  *
- * Credentials are MOCKED for now. When Supabase is connected, replace
- * issueTempPassword / setLoginEnabled with supabase.auth.admin calls
- * and store mustChangePassword in the user's metadata. The
- * MembersView component will NOT need to change.
+ * Mapping to public.member (database/03 + 04):
+ *   phone -> contact_number, govIdNumber -> government_id.
+ *   The seed wrote only member_id/name/date_joined, so first/middle/
+ *   last fall back to splitting `name` until a form edit writes all
+ *   four name columns together (03's contract). member_no is NULL on
+ *   seeded rows — database/09_backfill_member_no.sql fills them, and
+ *   generateMemberNo floors at max(member_id) either way.
+ *   status/member_type are stored lowercase by DEFAULT but matched
+ *   Title Case in the UI — normalized on read, written Title Case.
  *
- * Data-sheet fields (added to match the coop's Members' Data Sheet,
- * see database/03_add_form_columns.sql):
- *   middleName, memberType, civilStatus, spouseName, landline,
- *   govIdType, govIdNumber, gsisNumber, sssNumber, pagibigNumber,
- *   philhealthNumber
- * They are all optional — paper form stays the master record.
+ * capitalShare lives in share_capital (sum of amount), read in a
+ * second query and summed client-side.
+ *
+ * Credentials (login_enabled / must_change_password / temp_password)
+ * are 04's TRANSITIONAL columns: persisted now, dropped when member
+ * logins move to Supabase Auth through the backend.
+ *
+ * history has no table yet — logAction appends client-side, so the
+ * activity list lives until the page reloads.
  */
 
-// Temporary sample data — delete once Supabase is connected
-const mockMembers = [
-  {
-    id: 1,
-    memberNo: 'KHS-0001',
-    firstName: 'Juan',
-    lastName: 'Dela Cruz',
-    middleName: 'Lim',
-    memberType: 'Regular', // Regular / Associate / Extension — coop classification
-    civilStatus: 'Married',
-    spouseName: 'Teresa Cruz',
-    landline: '0281234567',
-    govIdType: "Driver's License",
-    govIdNumber: 'D12-34-567890',
-    gsisNumber: '012345678',
-    sssNumber: '34-1234567-8',
-    pagibigNumber: '1234-5678-9012',
-    philhealthNumber: '12-345678901-2',
-    email: 'juan.delacruz@example.com',
-    phone: '09171234567',
-    address: '123 P. Del Rosario St., Caloocan City',
-    status: 'Active',
-    dateJoined: '2025-01-15',
-    capitalShare: 100000,
+// --- row <-> store mapping ------------------------------------
+
+function titleCase(value) {
+  if (!value) return ''
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
+}
+
+function splitName(row) {
+  if (row.first_name || row.last_name) {
+    return { first: row.first_name || '', last: row.last_name || '' }
+  }
+  const parts = String(row.name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (parts.length <= 1) return { first: parts[0] || '', last: '' }
+  // "Juan Dela Cruz" -> first "Juan", last "Dela Cruz"
+  return { first: parts[0], last: parts.slice(1).join(' ') }
+}
+
+function rowToMember(row, capitals) {
+  const names = splitName(row)
+  return {
+    id: row.member_id,
+    memberNo: row.member_no || '',
+    firstName: names.first,
+    lastName: names.last,
+    middleName: row.middle_name || '',
+    memberType: titleCase(row.member_type) || 'Regular',
+    civilStatus: row.civil_status || '',
+    spouseName: row.spouse_name || '',
+    landline: row.landline || '',
+    govIdType: row.gov_id_type || '',
+    govIdNumber: row.government_id || '',
+    gsisNumber: row.gsis_number || '',
+    sssNumber: row.sss_number || '',
+    pagibigNumber: row.pagibig_number || '',
+    philhealthNumber: row.philhealth_number || '',
+    email: row.email || '',
+    phone: row.contact_number || '',
+    address: row.address || '',
+    status: titleCase(row.status) || 'Active',
+    dateJoined: (row.date_joined || '').slice(0, 10),
+    capitalShare: capitals.get(row.member_id) || 0,
     account: {
-      loginEnabled: true,
-      mustChangePassword: true,
-      tempPassword: 'Khs7mQ2x',
+      loginEnabled: row.login_enabled !== false,
+      mustChangePassword: row.must_change_password === true,
+      tempPassword: row.temp_password || null,
     },
-    history: [
-      {
-        at: '2025-01-15T09:00:00',
-        action: 'Member registered face-to-face',
-        by: 'Admin',
-      },
-      {
-        at: '2025-01-15T09:20:00',
-        action: 'Credentials issued — temporary password set',
-        by: 'Admin',
-      },
-    ],
-  },
-  {
-    id: 2,
-    memberNo: 'KHS-0002',
-    firstName: 'Maria',
-    lastName: 'Santos',
-    middleName: 'Reyes',
-    memberType: 'Regular',
-    civilStatus: 'Single',
-    spouseName: '',
-    landline: '',
-    govIdType: 'UMID',
-    govIdNumber: 'UM-987654321',
-    gsisNumber: '',
-    sssNumber: '35-7654321-0',
-    pagibigNumber: '2345-6789-0123',
-    philhealthNumber: '13-456789012-3',
-    email: 'maria.santos@example.com',
-    phone: '09181234567',
-    address: '456 Aquino Ave., Caloocan City',
-    status: 'Active',
-    dateJoined: '2025-02-03',
-    capitalShare: 14000, // below the ₱15k minimum — not loan-eligible yet
-    account: {
-      loginEnabled: true,
-      mustChangePassword: false,
-      tempPassword: null, // credentials not handed over yet
-    },
-    history: [
-      {
-        at: '2025-02-03T10:15:00',
-        action: 'Member registered face-to-face',
-        by: 'Admin',
-      },
-    ],
-  },
-  {
-    id: 3,
-    memberNo: 'KHS-0003',
-    firstName: 'Pedro',
-    lastName: 'Reyes',
-    middleName: '',
-    memberType: 'Associate',
-    civilStatus: 'Widowed',
-    spouseName: '',
-    landline: '0287654321',
-    govIdType: 'National ID',
-    govIdNumber: 'PH-1234-5678-90',
-    gsisNumber: '',
-    sssNumber: '',
-    pagibigNumber: '',
-    philhealthNumber: '',
-    email: 'pedro.reyes@example.com',
-    phone: '09191234567',
-    address: '789 Bonifacio St., Caloocan City',
-    status: 'Suspended',
-    dateJoined: '2025-06-21',
-    capitalShare: 80000,
-    account: {
-      loginEnabled: false,
-      mustChangePassword: false,
-      tempPassword: null,
-    },
-    history: [
-      {
-        at: '2026-02-10T14:30:00',
-        action: 'Status changed to Suspended',
-        by: 'Admin',
-      },
-      {
-        at: '2025-06-21T11:00:00',
-        action: 'Member registered face-to-face',
-        by: 'Admin',
-      },
-    ],
-  },
-  {
-    id: 4,
-    memberNo: 'KHS-0004',
-    firstName: 'Ana',
-    lastName: 'Garcia',
-    middleName: 'Cruz',
-    memberType: 'Regular',
-    civilStatus: 'Married',
-    spouseName: 'Ramon Garcia',
-    landline: '',
-    govIdType: '',
-    govIdNumber: '',
-    gsisNumber: '',
-    sssNumber: '',
-    pagibigNumber: '',
-    philhealthNumber: '',
-    email: 'ana.garcia@example.com',
-    phone: '09201234567',
-    address: '101 Rizal Blvd., Caloocan City',
-    status: 'Dropped',
-    dateJoined: '2024-11-30',
-    capitalShare: 25000,
-    account: {
-      loginEnabled: false,
-      mustChangePassword: false,
-      tempPassword: null,
-    },
-    history: [
-      {
-        at: '2025-10-05T16:45:00',
-        action: 'Status changed to Dropped',
-        by: 'Admin',
-      },
-      {
-        at: '2024-11-30T09:00:00',
-        action: 'Member registered face-to-face',
-        by: 'Admin',
-      },
-    ],
-  },
-  {
-    id: 5,
-    memberNo: 'KHS-0005',
-    firstName: 'Jose',
-    lastName: 'Mendoza',
-    middleName: 'Diaz',
-    memberType: 'Extension',
-    civilStatus: 'Single',
-    spouseName: '',
-    landline: '0285551234',
-    govIdType: 'Passport',
-    govIdNumber: 'P1234567A',
-    gsisNumber: '',
-    sssNumber: '36-1111222-3',
-    pagibigNumber: '',
-    philhealthNumber: '',
-    email: 'jose.mendoza@example.com',
-    phone: '09211234567',
-    address: '202 Mabini St., Caloocan City',
-    status: 'Active',
-    dateJoined: '2025-08-12',
-    capitalShare: 32000,
-    account: {
-      loginEnabled: true,
-      mustChangePassword: false,
-      tempPassword: 'Pn4wR8kt',
-    },
-    history: [
-      {
-        at: '2025-08-12T13:00:00',
-        action: 'Member registered face-to-face',
-        by: 'Admin',
-      },
-      {
-        at: '2025-08-12T13:25:00',
-        action: 'Credentials issued — temporary password set',
-        by: 'Admin',
-      },
-    ],
-  },
-]
+    history: [],
+  }
+}
+
+// The app writes all four name columns together; `name` keeps the
+// composed full name that reports and the backend read.
+function toRow(data) {
+  const fullName = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(' ')
+  const row = {
+    name: fullName || 'Member',
+    first_name: data.firstName || null,
+    middle_name: data.middleName || null,
+    last_name: data.lastName || null,
+    member_type: data.memberType || 'Regular',
+    civil_status: data.civilStatus || null,
+    spouse_name: data.spouseName || null,
+    landline: data.landline || null,
+    gov_id_type: data.govIdType || null,
+    government_id: data.govIdNumber || null,
+    gsis_number: data.gsisNumber || null,
+    sss_number: data.sssNumber || null,
+    pagibig_number: data.pagibigNumber || null,
+    philhealth_number: data.philhealthNumber || null,
+    email: data.email || null,
+    contact_number: data.phone || null,
+    address: data.address || null,
+    status: data.status || 'Active',
+    date_joined: data.dateJoined || new Date().toISOString().slice(0, 10),
+  }
+  if (data.memberNo) row.member_no = data.memberNo
+  return row
+}
 
 export const useMembersStore = defineStore('members', () => {
-  const members = ref([...mockMembers])
+  const members = ref([])
+  const loading = ref(false)
+  const lastError = ref('')
   const search = ref('')
   const statusFilter = ref('All')
 
@@ -283,98 +177,210 @@ export const useMembersStore = defineStore('members', () => {
     if (page.value > count) page.value = count
   })
 
-  // KHS-0001, KHS-0002, ... based on the highest number already used
-  function generateMemberNo() {
-    const numbers = members.value.map((member) =>
-      Number.parseInt(member.memberNo.split('-')[1], 10),
-    )
-    const next = (numbers.length ? Math.max(...numbers) : 0) + 1
-    return `KHS-${String(next).padStart(4, '0')}`
+  function errorMessage(error) {
+    return error?.message || String(error)
   }
 
-  // Newest first
+  // KHS-0001, KHS-0002, ... — highest printed number, floored at the
+  // highest member_id so NULL member_no rows can't collide.
+  function generateMemberNo() {
+    let max = 0
+    for (const member of members.value) {
+      const fromNo = Number.parseInt(String(member.memberNo || '').split('-')[1], 10)
+      if (Number.isFinite(fromNo)) max = Math.max(max, fromNo)
+      max = Math.max(max, Number(member.id) || 0)
+    }
+    return `KHS-${String(max + 1).padStart(4, '0')}`
+  }
+
+  // Newest first — client-side only until audit history gets a table
   function logAction(member, action) {
     if (!member.history) member.history = []
     member.history.unshift({ at: new Date().toISOString(), action, by: 'Admin' })
   }
 
-  function addMember(data) {
-    const now = new Date().toISOString()
-    members.value.push({
-      id: Date.now(), // temporary id — Supabase will generate the real one
-      memberNo: generateMemberNo(),
-      status: 'Active',
-      capitalShare: 0, // capital paid in staggered amounts via addCapital
-      account: {
-        loginEnabled: true,
-        mustChangePassword: false,
-        tempPassword: null,
-      },
-      history: [{ at: now, action: 'Member registered face-to-face', by: 'Admin' }],
-      ...data,
-    })
+  // detailMember holds a direct reference to the row object, so
+  // update in place — replacing the object would freeze the drawer.
+  function replaceLocal(updated) {
+    const current = members.value.find((item) => item.id === updated.id)
+    if (!current) return null
+    updated.history = current.history || []
+    Object.assign(current, updated)
+    return current
   }
 
-  function updateMember(id, data) {
-    const index = members.value.findIndex((member) => member.id === id)
-    if (index !== -1) {
-      members.value[index] = { ...members.value[index], ...data }
+  function keepCapital(member) {
+    return new Map([[member.id, member.capitalShare || 0]])
+  }
+
+  async function fetchMembers() {
+    loading.value = true
+    lastError.value = ''
+    try {
+      const [membersRes, capitalRes] = await Promise.all([
+        supabase.from('member').select('*').order('member_id', { ascending: true }),
+        supabase.from('share_capital').select('member_id, amount'),
+      ])
+      if (membersRes.error) throw membersRes.error
+      const capitals = new Map()
+      if (!capitalRes.error) {
+        for (const row of capitalRes.data || []) {
+          capitals.set(row.member_id, (capitals.get(row.member_id) || 0) + Number(row.amount || 0))
+        }
+      }
+      members.value = (membersRes.data || []).map((row) => rowToMember(row, capitals))
+    } catch (error) {
+      lastError.value = errorMessage(error)
+      members.value = []
+    } finally {
+      loading.value = false
     }
+  }
+
+  // Both save actions return an error message (or null) so the form
+  // can stay open and show it — the view has no toast layer.
+  async function addMember(data) {
+    const { data: row, error } = await supabase
+      .from('member')
+      .insert({
+        ...toRow({ ...data, memberNo: generateMemberNo() }),
+        login_enabled: true,
+        must_change_password: false,
+      })
+      .select()
+      .single()
+    if (error) {
+      lastError.value = errorMessage(error)
+      return lastError.value
+    }
+    const member = rowToMember(row, new Map())
+    members.value.push(member)
+    logAction(member, 'Member registered face-to-face')
+    return null
+  }
+
+  async function updateMember(id, data) {
+    const current = members.value.find((item) => item.id === id)
+    if (!current) return 'Member not found.'
+    const { data: row, error } = await supabase
+      .from('member')
+      .update(toRow(data))
+      .eq('member_id', id)
+      .select()
+      .single()
+    if (error) {
+      lastError.value = errorMessage(error)
+      return lastError.value
+    }
+    replaceLocal(rowToMember(row, keepCapital(current)))
+    return null
   }
 
   // Lifecycle: every change is logged and keeps the record
-  function setStatus(id, status) {
-    const member = members.value.find((item) => item.id === id)
-    if (!member || member.status === status) return
-    member.status = status
-    member.account.loginEnabled = status === 'Active'
-    if (status !== 'Active') {
-      member.account.mustChangePassword = false
+  async function setStatus(id, status) {
+    const current = members.value.find((item) => item.id === id)
+    if (!current || current.status === status) return
+    const patch = { status, login_enabled: status === 'Active' }
+    if (status !== 'Active') patch.must_change_password = false
+    const { data: row, error } = await supabase
+      .from('member')
+      .update(patch)
+      .eq('member_id', id)
+      .select()
+      .single()
+    if (error) {
+      lastError.value = errorMessage(error)
+      return
     }
-    logAction(member, `Status changed to ${status}`)
+    const updated = replaceLocal(rowToMember(row, keepCapital(current)))
+    if (updated) logAction(updated, `Status changed to ${status}`)
   }
 
   // Generates a temp password (first issue) or replaces it (reset)
-  function issueTempPassword(id) {
-    const member = members.value.find((item) => item.id === id)
-    if (!member) return
-    const alreadyIssued = Boolean(member.account.tempPassword)
-    member.account.tempPassword = randomPassword()
-    member.account.mustChangePassword = true
-    member.account.loginEnabled = true
-    logAction(
-      member,
-      alreadyIssued
-        ? 'Password reset — new temporary password issued'
-        : 'Credentials issued — temporary password set',
-    )
+  async function issueTempPassword(id) {
+    const current = members.value.find((item) => item.id === id)
+    if (!current) return
+    const alreadyIssued = Boolean(current.account.tempPassword)
+    const { data: row, error } = await supabase
+      .from('member')
+      .update({
+        temp_password: randomPassword(),
+        must_change_password: true,
+        login_enabled: true,
+      })
+      .eq('member_id', id)
+      .select()
+      .single()
+    if (error) {
+      lastError.value = errorMessage(error)
+      return
+    }
+    const updated = replaceLocal(rowToMember(row, keepCapital(current)))
+    if (updated) {
+      logAction(
+        updated,
+        alreadyIssued
+          ? 'Password reset — new temporary password issued'
+          : 'Credentials issued — temporary password set',
+      )
+    }
   }
 
-  function setLoginEnabled(id, enabled) {
-    const member = members.value.find((item) => item.id === id)
-    if (!member) return
-    member.account.loginEnabled = enabled
-    logAction(member, enabled ? 'Login re-enabled' : 'Login disabled')
+  async function setLoginEnabled(id, enabled) {
+    const current = members.value.find((item) => item.id === id)
+    if (!current) return
+    const { data: row, error } = await supabase
+      .from('member')
+      .update({ login_enabled: enabled })
+      .eq('member_id', id)
+      .select()
+      .single()
+    if (error) {
+      lastError.value = errorMessage(error)
+      return
+    }
+    const updated = replaceLocal(rowToMember(row, keepCapital(current)))
+    if (updated) logAction(updated, enabled ? 'Login re-enabled' : 'Login disabled')
   }
 
-  // 💰 Capital contribution — the client's "capital share" (15k new / 20k old
+  // Capital contribution — the client's "capital share" (15k new / 20k old
   // minimum, paid in staggered amounts). The Loans module uses 2× capital
-  // share as the loan ceiling. A payment here can later also create a Ledger
-  // income entry (see the Ledger swap comment).
-  function addCapital(id, amount) {
-    const member = members.value.find((item) => item.id === id)
-    if (!member || !(amount > 0)) return false
-    member.capitalShare = (member.capitalShare || 0) + amount
-    logAction(member, `Capital contribution — ₱${amount.toLocaleString('en-PH')}`)
+  // share as the loan ceiling. Each payment is one share_capital row; the
+  // member's capital is their sum. (Future: also a Ledger income entry.)
+  async function addCapital(id, amount) {
+    const current = members.value.find((item) => item.id === id)
+    if (!current || !(amount > 0)) return false
+    const { error } = await supabase.from('share_capital').insert({
+      member_id: id,
+      amount,
+      date_recorded: new Date().toISOString().slice(0, 10),
+    })
+    if (error) {
+      lastError.value = errorMessage(error)
+      return false
+    }
+    current.capitalShare = (current.capitalShare || 0) + amount
+    logAction(current, `Capital contribution — ₱${amount.toLocaleString('en-PH')}`)
     return true
   }
 
-  function deleteMember(id) {
+  async function deleteMember(id) {
+    const { error } = await supabase.from('member').delete().eq('member_id', id)
+    if (error) {
+      // Typical cause: the member still has loans (FK protects the record)
+      lastError.value = errorMessage(error)
+      return
+    }
     members.value = members.value.filter((member) => member.id !== id)
   }
 
+  // Load once, when the store is first used (MembersView mounts).
+  fetchMembers()
+
   return {
     members,
+    loading,
+    lastError,
     search,
     statusFilter,
     filteredMembers,

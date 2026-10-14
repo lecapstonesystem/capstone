@@ -983,7 +983,7 @@ function sanitizePhone() {
   form.phone = form.phone.replace(/\D/g, '').slice(0, 11)
 }
 
-function saveMember() {
+async function saveMember() {
   // Validation
   if (!form.firstName.trim() || !form.lastName.trim()) {
     formError.value = 'First name and last name are required.'
@@ -1027,10 +1027,14 @@ function saveMember() {
     dateJoined: form.dateJoined,
   }
 
-  if (modalMode.value === 'add') {
-    membersStore.addMember(data)
-  } else {
-    membersStore.updateMember(editingId.value, data)
+  const saveError =
+    modalMode.value === 'add'
+      ? await membersStore.addMember(data)
+      : await membersStore.updateMember(editingId.value, data)
+  if (saveError) {
+    // Keep the modal open and show what the database said
+    formError.value = saveError
+    return
   }
 
   closeModal()

@@ -27,8 +27,8 @@ function onClick() {
       <slot />
       <!-- ▲▼ both always shown: the active direction lights up green -->
       <span class="text-[9px] leading-none" aria-hidden="true">
-        <span :class="state === 'asc' ? 'text-green-600' : 'text-gray-300'">▲</span>
-        <span :class="state === 'desc' ? 'text-green-600' : 'text-gray-300'">▼</span>
+        <span :class="state === 'asc' ? 'text-green-600' : 'text-gray-400'">▲</span>
+        <span :class="state === 'desc' ? 'text-green-600' : 'text-gray-400'">▼</span>
       </span>
     </span>
   </th>

@@ -78,20 +78,20 @@
       <!-- Members Table -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div class="table-scroll overflow-x-auto">
-          <table class="w-full text-sm" :style="{ minWidth: tableMinWidth }">
+          <table class="w-full table-fixed text-sm" :style="{ minWidth: tableMinWidth }">
             <thead>
               <tr
                 class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                <SortableTh class="px-6 py-3" :store="membersStore" sort-key="memberNo">
+                <SortableTh class="px-6 py-3 w-[13%]" :store="membersStore" sort-key="memberNo">
                   Member No.
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="membersStore" sort-key="name">
+                <SortableTh class="px-6 py-3 w-[27%]" :store="membersStore" sort-key="name">
                   Name
                 </SortableTh>
                 <SortableTh
                   v-if="columns.contact"
-                  class="px-6 py-3"
+                  class="px-6 py-3 w-[16%]"
                   :store="membersStore"
                   sort-key="contact"
                 >
@@ -99,7 +99,7 @@
                 </SortableTh>
                 <SortableTh
                   v-if="columns.address"
-                  class="px-6 py-3"
+                  class="px-6 py-3 w-[16%]"
                   :store="membersStore"
                   sort-key="address"
                 >
@@ -107,7 +107,7 @@
                 </SortableTh>
                 <SortableTh
                   v-if="columns.status"
-                  class="px-6 py-3"
+                  class="px-6 py-3 w-[10%]"
                   :store="membersStore"
                   sort-key="status"
                 >
@@ -115,13 +115,13 @@
                 </SortableTh>
                 <SortableTh
                   v-if="columns.dateJoined"
-                  class="px-6 py-3"
+                  class="px-6 py-3 w-[13%]"
                   :store="membersStore"
                   sort-key="dateJoined"
                 >
                   Date Joined
                 </SortableTh>
-                <th class="px-6 py-3 text-right">Actions</th>
+                <th class="px-6 py-3 w-[13%] text-right">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">

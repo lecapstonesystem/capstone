@@ -101,30 +101,30 @@
       <!-- Loans Table -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div class="table-scroll overflow-x-auto">
-          <table class="w-full min-w-[900px] text-sm">
+          <table class="w-full table-fixed min-w-[900px] text-sm">
             <thead>
               <tr
                 class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                <SortableTh class="px-6 py-3" :store="loansStore" sort-key="loanNo">
+                <SortableTh class="px-6 py-3 w-[11%]" :store="loansStore" sort-key="loanNo">
                   Loan No
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="loansStore" sort-key="memberName">
+                <SortableTh class="px-6 py-3 w-[26%]" :store="loansStore" sort-key="memberName">
                   Member
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="loansStore" sort-key="type">
+                <SortableTh class="px-6 py-3 w-[17%]" :store="loansStore" sort-key="type">
                   Type
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="loansStore" sort-key="principal">
+                <SortableTh class="px-6 py-3 w-[14%]" :store="loansStore" sort-key="principal">
                   Principal
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="loansStore" sort-key="balance">
+                <SortableTh class="px-6 py-3 w-[12%]" :store="loansStore" sort-key="balance">
                   Balance
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="loansStore" sort-key="status">
+                <SortableTh class="px-6 py-3 w-[11%]" :store="loansStore" sort-key="status">
                   Status
                 </SortableTh>
-                <th class="px-6 py-3 text-right">Actions</th>
+                <th class="px-6 py-3 w-[13%] text-right">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">

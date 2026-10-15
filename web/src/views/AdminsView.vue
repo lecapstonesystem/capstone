@@ -50,27 +50,27 @@
       <!-- Admins Table -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div class="table-scroll overflow-x-auto">
-          <table class="w-full min-w-[820px] text-sm">
+          <table class="w-full table-fixed min-w-[820px] text-sm">
             <thead>
               <tr
                 class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                <SortableTh class="px-6 py-3" :store="adminsStore" sort-key="name">
+                <SortableTh class="px-6 py-3 w-[22%]" :store="adminsStore" sort-key="name">
                   Name
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="adminsStore" sort-key="email">
+                <SortableTh class="px-6 py-3 w-[28%]" :store="adminsStore" sort-key="email">
                   Email
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="adminsStore" sort-key="role">
+                <SortableTh class="px-6 py-3 w-[14%]" :store="adminsStore" sort-key="role">
                   Role
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="adminsStore" sort-key="login">
+                <SortableTh class="px-6 py-3 w-[12%]" :store="adminsStore" sort-key="login">
                   Login
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="adminsStore" sort-key="lastLogin">
+                <SortableTh class="px-6 py-3 w-[14%]" :store="adminsStore" sort-key="lastLogin">
                   Last Login
                 </SortableTh>
-                <th class="px-6 py-3 text-right">Actions</th>
+                <th class="px-6 py-3 w-[12%] text-right">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">

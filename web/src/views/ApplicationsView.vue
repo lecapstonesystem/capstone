@@ -80,28 +80,28 @@
       <!-- Applications Table -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div class="table-scroll overflow-x-auto">
-          <table class="w-full min-w-[880px] text-sm">
+          <table class="w-full table-fixed min-w-[880px] text-sm">
             <thead>
               <tr
                 class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                <SortableTh class="px-6 py-3" :store="appsStore" sort-key="appNo">
+                <SortableTh class="px-6 py-3 w-[10%]" :store="appsStore" sort-key="appNo">
                   App No
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="appsStore" sort-key="applicant">
+                <SortableTh class="px-6 py-3 w-[24%]" :store="appsStore" sort-key="applicant">
                   Applicant
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="appsStore" sort-key="source">
+                <SortableTh class="px-6 py-3 w-[12%]" :store="appsStore" sort-key="source">
                   Source
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="appsStore" sort-key="submitted">
+                <SortableTh class="px-6 py-3 w-[13%]" :store="appsStore" sort-key="submitted">
                   Submitted
                 </SortableTh>
-                <SortableTh class="px-6 py-3" :store="appsStore" sort-key="status">
+                <SortableTh class="px-6 py-3 w-[13%]" :store="appsStore" sort-key="status">
                   Status
                 </SortableTh>
-                <th class="px-6 py-3">Form</th>
-                <th class="px-6 py-3 text-right">Actions</th>
+                <th class="px-6 py-3 w-[13%]">Form</th>
+                <th class="px-6 py-3 w-[13%] text-right">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">

@@ -325,6 +325,46 @@
             </div>
           </div>
 
+          <!-- Loans -->
+          <div class="border-t border-gray-100 pt-4 space-y-3">
+            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">
+              Loans ({{ memberLoans.length }})
+            </p>
+            <p v-if="memberLoans.length === 0" class="text-sm text-gray-500">
+              No loans recorded for this member yet.
+            </p>
+            <div
+              v-for="loan in memberLoans"
+              :key="loan.id"
+              class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 space-y-1.5"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-sm font-medium text-gray-700">
+                  {{ loan.loanNo }} · {{ loanTypeLabel(loan.type) }}
+                </span>
+                <span
+                  class="px-2.5 py-1 rounded-full text-xs font-medium shrink-0"
+                  :class="loanStatusBadgeClass(loan.status)"
+                >
+                  {{ loan.status }}
+                </span>
+              </div>
+              <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                <span>
+                  {{ formatPeso(loan.principal) }} · {{ loan.termMonths }} mo ·
+                  {{ loan.ratePercent }}/mo
+                </span>
+                <span>Balance {{ formatPeso(loansStore.balanceOf(loan)) }}</span>
+                <span v-if="loan.payments.length > 0">
+                  {{ loan.payments.length }} payment{{ loan.payments.length > 1 ? 's' : '' }}
+                </span>
+                <span v-if="loansStore.isDelinquent(loan)" class="text-red-600 font-medium">
+                  Delinquent
+                </span>
+              </div>
+            </div>
+          </div>
+
           <!-- Account Management -->
           <div class="border-t border-gray-100 pt-4 space-y-3">
             <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Account</p>
@@ -759,8 +799,10 @@
 import { ref, reactive, computed } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import { useMembersStore } from '../stores/members'
+import { useLoansStore, LOAN_TYPES } from '../stores/loans'
 
 const membersStore = useMembersStore()
+const loansStore = useLoansStore()
 
 // "Showing 1–10 of 25 members"
 const paginationLabel = computed(() => {
@@ -886,6 +928,21 @@ const detailGovIds = computed(() => {
   if (member.philhealthNumber) lines.push(`PhilHealth ${member.philhealthNumber}`)
   return lines
 })
+
+// This member's loans, oldest first (live from the loans store)
+const memberLoans = computed(() =>
+  loansStore.loans.filter((loan) => loan.memberId === detailMember.value?.id),
+)
+
+const loanTypeLabel = (value) => LOAN_TYPES.find((item) => item.value === value)?.label || value
+
+function loanStatusBadgeClass(status) {
+  if (status === 'Paid') return 'bg-green-100 text-green-700'
+  if (status === 'Released') return 'bg-blue-100 text-blue-700'
+  if (status === 'Approved') return 'bg-emerald-100 text-emerald-700'
+  if (status === 'For Approval') return 'bg-amber-100 text-amber-700'
+  return 'bg-gray-100 text-gray-500'
+}
 
 function openDetails(member) {
   detailMember.value = member

@@ -983,11 +983,11 @@ function openDetails(loan) {
 // ---------- confirmation ----------
 const confirmAction = ref(null) // { title, message, confirmLabel, danger, run }
 
-function runConfirm() {
+async function runConfirm() {
   const action = confirmAction.value
   confirmAction.value = null
   if (!action) return
-  const result = action.run()
+  const result = await action.run()
   if (result && result.ok === false) actionError.value = result.message
 }
 
@@ -1062,8 +1062,8 @@ function closePayment() {
   payError.value = ''
 }
 
-function savePayment() {
-  const result = loansStore.recordPayment(detailLoan.value.id, {
+async function savePayment() {
+  const result = await loansStore.recordPayment(detailLoan.value.id, {
     amount: Number(payForm.amount),
     at: new Date(`${payForm.at}T12:00:00`).toISOString(),
     channel: payForm.channel,
@@ -1175,7 +1175,7 @@ function closeNew() {
   newFormError.value = ''
 }
 
-function submitLoan() {
+async function submitLoan() {
   if (!newForm.memberId) {
     newFormError.value = 'Select a member first.'
     return
@@ -1194,7 +1194,7 @@ function submitLoan() {
     return
   }
 
-  const result = loansStore.addLoan({
+  const result = await loansStore.addLoan({
     memberId: newForm.memberId,
     type: newForm.type,
     principal: amountNumber.value,

@@ -1,12 +1,14 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { supabase } from '../lib/supabase'
 import { useMembersStore } from './members'
+import { useAuthStore } from './auth'
 import { loanTotals } from '../utils/amortization'
 
 /**
- * Loans store — built from the client interview (docs/client-interview-1.md)
+ * Loans store — live Supabase data (swapped from mocks).
  *
- * Rules implemented (UCMS assumptions marked ⚠️):
+ * Rules implemented (client interview docs/client-interview-1.md):
  *   - 6 types: Salary/Regular, Education, Transportation, Gadget, Business,
  *     Emergency
  *   - Interest: 1.5% all types, 2.0% business ⚠️ assumed MONTHLY, on a
@@ -18,19 +20,35 @@ import { loanTotals } from '../utils/amortization'
  *   - New members: wait 2 months + financial literacy seminar (onsite);
  *     first loan capped at 80% until one loan is fully paid ⚠️ (80% of what
  *     exactly — ceiling or capital share — confirm with client)
- *   - Full capital (₱15k new / ₱20k old) required before loaning ⚠️ —
- *     using ₱15k as the bar for everyone until confirmed
+ *   - Full capital (₱15k new / ₱20k old) required before loaning ⚠__
  *   - Committee approval → release (cash/cheque, claimed in person)
  *   - Delinquent = 6 months with no payment → letter + text reminders
- *   - Penalties for late payment exist but the formula was NOT given by the
- *     client — not modeled yet (open question #3 in the interview doc)
+ *   - Penalties for late payment exist but the formula was NOT given ⚠__
  *
- * Mocked for now. Supabase swap points:
- *   - `loans` + `loan_payments` tables (payments should be append-only)
- *   - approve/release/payment actions → rpc/transaction so the member's
- *     balance and the loan can never drift apart
- *   - eligibility() runs against members.capital_share in SQL later
- * LoansView will NOT need to change.
+ * How the store maps to public.member/public.loan:
+ *   - loanNo has no column: derived from loan_id (LOAN-0001 style, the
+ *     same convention as KHS member numbers).
+ *   - interest_rate is stored as a FRACTION (0.015 — seed/CSV
+ *     convention, what the backend analytics compute with) and shown
+ *     as percent (1.5) in the UI; inserts write rate / 100.
+ *   - totalDue is recomputed by loanTotals() — the formula is
+ *     deterministic, nothing to store.
+ *   - Seeded loan_type is only Regular/Emergency (the old records
+ *     never had finer types); new loans use all six.
+ *   - date_issued is a placeholder at submission and moves to the
+ *     release date when cash/cheque is handed over (due_date =
+ *     issue + term, matching the seed); created_at keeps the true
+ *     submission time.
+ *   - payments come from public.payment (channel/note are 03 columns,
+ *     NULL on seeded rows); balances are summed client-side.
+ *   - co-makers live in public.co_maker by member_id: typed names are
+ *     matched against live members; names that match nobody stay on
+ *     the row until the page reloads (same session-only class as
+ *     history and the requirements checklist).
+ *
+ * Approve/release/payment are separate writes — a true transaction
+ * (rpc) so balance and status can never drift, is a later phase.
+ * LoansView only needed its three result handlers awaited.
  */
 
 export const LOAN_TYPES = [
@@ -56,17 +74,24 @@ export const DELINQUENT_MONTHS = 6
 
 const round2 = (value) => Math.round(value * 100) / 100
 
-// Relative dates keep the demo realistic no matter when it is opened
-const daysAgo = (n) => {
-  const date = new Date()
-  date.setDate(date.getDate() - n)
-  return date.toISOString()
+const pad2 = (value) => String(value).padStart(2, '0')
+
+// Local-date formatting — toISOString() would shift across timezones
+function todayLocal() {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
 
-const monthsAgo = (n) => {
-  const date = new Date()
-  date.setMonth(date.getMonth() - n)
-  return date.toISOString()
+function toLocalDate(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return todayLocal()
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
+function plusMonths(isoDate, months) {
+  const d = new Date(`${isoDate}T00:00:00`)
+  d.setMonth(d.getMonth() + Number(months || 0))
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
 
 function monthsSince(isoString) {
@@ -75,202 +100,65 @@ function monthsSince(isoString) {
   return (now.getFullYear() - from.getFullYear()) * 12 + (now.getMonth() - from.getMonth())
 }
 
-const req = (label, checked = true) => ({ label, checked })
+function errorMessage(error) {
+  return error?.message || String(error)
+}
 
-// Temporary sample data — delete once Supabase is connected.
-// Interest totals use the closed form: rate × principal × (months + 1) / 2
-const mockLoans = [
-  {
-    id: 1,
-    loanNo: 'LOAN-0001',
-    memberId: 1,
-    memberNo: 'KHS-0001',
-    memberName: 'Juan Dela Cruz',
-    type: 'Regular',
-    principal: 100000,
-    ratePercent: 1.5,
-    termMonths: 12,
-    totalDue: 109750, // 100,000 + 1.5% × 100,000 × 6.5
-    coMakers: ['Roberto Cruz', 'Teresa Lim'],
-    requirements: [req('Valid ID presented'), req('Proof of salary submitted')],
-    status: 'Released',
-    createdAt: monthsAgo(4),
-    releasedAt: monthsAgo(4),
-    releaseChannel: 'Cash',
-    payments: [
-      { id: 11, at: monthsAgo(3), amount: 9833.33, channel: 'ATM Deduction', note: '' },
-      { id: 12, at: monthsAgo(2), amount: 9708.33, channel: 'ATM Deduction', note: '' },
-      { id: 13, at: monthsAgo(1), amount: 9583.33, channel: 'GCash', note: 'paid via gcash' },
-    ],
-    remarks: '',
-    history: [
-      { at: monthsAgo(1), action: 'Payment recorded — ₱9,583.33 via GCash', by: 'Admin' },
-      { at: monthsAgo(2), action: 'Payment recorded — ₱9,708.33 via ATM Deduction', by: 'Admin' },
-      { at: monthsAgo(3), action: 'Payment recorded — ₱9,833.33 via ATM Deduction', by: 'Admin' },
-      { at: monthsAgo(4), action: 'Loan released via Cash — claimed in person', by: 'Admin' },
-      { at: monthsAgo(4), action: 'Approved by committee', by: 'Admin' },
-      {
-        at: monthsAgo(4),
-        action: 'Loan application submitted — Salary / Regular ₱100,000',
-        by: 'Admin',
-      },
-    ],
-  },
-  {
-    id: 2,
-    loanNo: 'LOAN-0002',
-    memberId: 5,
-    memberNo: 'KHS-0005',
-    memberName: 'Jose Mendoza',
-    type: 'Education',
-    principal: 40000,
-    ratePercent: 1.5,
-    termMonths: 12,
-    totalDue: 43900, // 40,000 + 1.5% × 40,000 × 6.5
-    coMakers: ['Juan Dela Cruz'],
-    requirements: [req('Valid ID presented')],
-    status: 'Released',
-    createdAt: monthsAgo(9),
-    releasedAt: monthsAgo(9),
-    releaseChannel: 'Cheque',
-    payments: [
-      { id: 21, at: monthsAgo(8), amount: 3933.33, channel: 'Cash', note: '' },
-      // last payment 7 months ago — no payment since = delinquent (6+ months)
-      { id: 22, at: monthsAgo(7), amount: 3883.33, channel: 'Cash', note: '' },
-    ],
-    remarks: '',
-    history: [
-      { at: monthsAgo(7), action: 'Payment recorded — ₱3,883.33 via Cash', by: 'Admin' },
-      { at: monthsAgo(8), action: 'Payment recorded — ₱3,933.33 via Cash', by: 'Admin' },
-      { at: monthsAgo(9), action: 'Loan released via Cheque — claimed in person', by: 'Admin' },
-      { at: monthsAgo(9), action: 'Approved by committee', by: 'Admin' },
-      { at: monthsAgo(9), action: 'Loan application submitted — Education ₱40,000', by: 'Admin' },
-    ],
-  },
-  {
-    id: 3,
-    loanNo: 'LOAN-0003',
-    memberId: 5,
-    memberNo: 'KHS-0005',
-    memberName: 'Jose Mendoza',
-    type: 'Emergency',
-    principal: 15000,
-    ratePercent: 1.5,
-    termMonths: 3,
-    totalDue: 15450, // 15,000 + 1.5% × 15,000 × 2
-    coMakers: ['Juan Dela Cruz'],
-    requirements: [req('Valid ID presented')],
-    status: 'Released',
-    createdAt: daysAgo(26),
-    releasedAt: daysAgo(25),
-    releaseChannel: 'Cash',
-    payments: [],
-    remarks: '',
-    history: [
-      { at: daysAgo(25), action: 'Loan released via Cash — claimed in person', by: 'Admin' },
-      { at: daysAgo(25), action: 'Approved by committee', by: 'Admin' },
-      { at: daysAgo(26), action: 'Loan application submitted — Emergency ₱15,000', by: 'Admin' },
-    ],
-  },
-  {
-    id: 4,
-    loanNo: 'LOAN-0004',
-    memberId: 1,
-    memberNo: 'KHS-0001',
-    memberName: 'Juan Dela Cruz',
-    type: 'Business',
-    principal: 120000,
-    ratePercent: 2.0,
-    termMonths: 18,
-    totalDue: 142800, // 120,000 + 2% × 120,000 × 9.5
-    coMakers: ['Elena Santos', 'Miguel Torres'],
-    requirements: [
-      req('Valid ID presented'),
-      req('Proof of salary submitted'),
-      req('Checking account submitted'),
-    ],
-    status: 'For Approval',
-    createdAt: daysAgo(3),
-    releasedAt: null,
-    releaseChannel: null,
-    payments: [],
-    remarks: '',
-    history: [
-      { at: daysAgo(3), action: 'Loan application submitted — Business ₱120,000', by: 'Admin' },
-    ],
-  },
-  {
-    id: 5,
-    loanNo: 'LOAN-0005',
-    memberId: 4,
-    memberNo: 'KHS-0004',
-    memberName: 'Ana Garcia',
-    type: 'Gadget',
-    principal: 12000,
-    ratePercent: 1.5,
-    termMonths: 6,
-    totalDue: 12630, // 12,000 + 1.5% × 12,000 × 3.5
-    coMakers: ['Maria Santos'],
-    requirements: [req('Valid ID presented')],
-    status: 'Paid',
-    createdAt: monthsAgo(14),
-    releasedAt: monthsAgo(14),
-    releaseChannel: 'Cash',
-    payments: [
-      { id: 51, at: monthsAgo(13), amount: 2180, channel: 'ATM Deduction', note: '' },
-      { id: 52, at: monthsAgo(12), amount: 2150, channel: 'ATM Deduction', note: '' },
-      { id: 53, at: monthsAgo(11), amount: 2120, channel: 'ATM Deduction', note: '' },
-      { id: 54, at: monthsAgo(10), amount: 2090, channel: 'ATM Deduction', note: '' },
-      { id: 55, at: monthsAgo(9), amount: 2060, channel: 'GCash', note: '' },
-      { id: 56, at: monthsAgo(8), amount: 2030, channel: 'GCash', note: 'final payment' },
-    ],
-    remarks: '',
-    history: [
-      { at: monthsAgo(8), action: 'Loan fully paid', by: 'Admin' },
-      { at: monthsAgo(8), action: 'Payment recorded — ₱2,030.00 via GCash', by: 'Admin' },
-      { at: monthsAgo(14), action: 'Loan released via Cash — claimed in person', by: 'Admin' },
-      { at: monthsAgo(14), action: 'Approved by committee', by: 'Admin' },
-      { at: monthsAgo(14), action: 'Loan application submitted — Gadget ₱12,000', by: 'Admin' },
-    ],
-  },
-  {
-    id: 6,
-    loanNo: 'LOAN-0006',
-    memberId: 1,
-    memberNo: 'KHS-0001',
-    memberName: 'Juan Dela Cruz',
-    type: 'Transportation',
-    principal: 150000,
-    ratePercent: 1.5,
-    termMonths: 24,
-    totalDue: 166500, // 150,000 + 1.5% × 150,000 × 11
-    coMakers: ['Roberto Cruz', 'Teresa Lim'],
-    requirements: [req('Valid ID presented'), req('Proof of salary submitted')],
-    status: 'Rejected',
-    createdAt: daysAgo(12),
-    releasedAt: null,
-    releaseChannel: null,
-    payments: [],
-    remarks:
-      'Salary proof insufficient — the member\u2019s payslip can only support up to ₱100,000.',
-    history: [
-      {
-        at: daysAgo(11),
-        action:
-          'Rejected — Salary proof insufficient — the member\u2019s payslip can only support up to ₱100,000.',
-        by: 'Admin',
-      },
-      {
-        at: daysAgo(12),
-        action: 'Loan application submitted — Transportation / Vehicle ₱150,000',
-        by: 'Admin',
-      },
-    ],
-  },
-]
+// Seeded rows always carry date_issued + due_date, so a NULL
+// term_months can still be recovered from them.
+function monthsBetween(fromIso, toIso) {
+  const from = new Date(fromIso)
+  const to = new Date(toIso)
+  const months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth())
+  return Math.max(1, months || 1)
+}
+
+function loanNoOf(loanId) {
+  return `LOAN-${String(loanId).padStart(4, '0')}`
+}
+
+function rowToLoan(row) {
+  const term =
+    row.term_months ??
+    (row.date_issued && row.due_date ? monthsBetween(row.date_issued, row.due_date) : 12)
+  const ratePercent = round2(Number(row.interest_rate || 0) * 100)
+  const principal = Number(row.amount || 0)
+  const payments = (row.payment || [])
+    .map((payment) => ({
+      id: payment.payment_id,
+      at: payment.date,
+      amount: Number(payment.amount || 0),
+      channel: payment.channel || '',
+      note: payment.note || '',
+    }))
+    .sort((a, b) => String(a.at).localeCompare(String(b.at)) || a.id - b.id)
+  return {
+    id: row.loan_id,
+    loanNo: loanNoOf(row.loan_id),
+    memberId: row.member_id,
+    memberNo: row.member?.member_no || '',
+    memberName: row.member?.name || '',
+    type: row.loan_type || 'Regular',
+    principal,
+    ratePercent,
+    termMonths: term,
+    totalDue: loanTotals(principal, ratePercent, term).totalDue,
+    coMakers: (row.co_maker || []).map((cm) => cm.member?.name).filter(Boolean),
+    requirements: [], // no column — the checklist is tracked in-session
+    status: row.status,
+    createdAt: row.created_at || row.date_issued || '',
+    releasedAt: row.status === 'Released' || row.status === 'Paid' ? row.date_issued : null,
+    releaseChannel: row.release_channel || null,
+    payments,
+    remarks: row.remarks || '',
+    history: [],
+  }
+}
 
 export const useLoansStore = defineStore('loans', () => {
-  const loans = ref([...mockLoans])
+  const loans = ref([])
+  const loading = ref(false)
+  const lastError = ref('')
   const search = ref('')
   const statusFilter = ref('All')
   const typeFilter = ref('All')
@@ -397,11 +285,23 @@ export const useLoansStore = defineStore('loans', () => {
     }
   }
 
-  // ---------- actions ----------
-  function generateLoanNo() {
-    const numbers = loans.value.map((loan) => Number.parseInt(loan.loanNo.split('-')[1], 10))
-    const next = (numbers.length ? Math.max(...numbers) : 0) + 1
-    return `LOAN-${String(next).padStart(4, '0')}`
+  // ---------- loading ----------
+  async function fetchLoans() {
+    loading.value = true
+    lastError.value = ''
+    try {
+      const { data, error } = await supabase
+        .from('loan')
+        .select('*,member(name,member_no),payment(*),co_maker(co_maker_id,member(name))')
+        .order('loan_id', { ascending: true })
+      if (error) throw error
+      loans.value = (data || []).map(rowToLoan)
+    } catch (error) {
+      lastError.value = errorMessage(error)
+      loans.value = []
+    } finally {
+      loading.value = false
+    }
   }
 
   function logAction(loan, action) {
@@ -409,7 +309,10 @@ export const useLoansStore = defineStore('loans', () => {
     loan.history.unshift({ at: new Date().toISOString(), action, by: 'Admin' })
   }
 
-  function addLoan({ memberId, type, principal, termMonths, coMakers, requirements }) {
+  // ---------- actions ----------
+  // Validation failures and database errors come back as
+  // { ok: false, message } so the dialogs can show them.
+  async function addLoan({ memberId, type, principal, termMonths, coMakers, requirements }) {
     if (!memberId) return { ok: false, message: 'Select a member first.' }
     const elig = eligibility(memberId, type)
     if (!elig.ok) return { ok: false, message: elig.reasons.join(' ') }
@@ -448,10 +351,58 @@ export const useLoansStore = defineStore('loans', () => {
     }
 
     const now = new Date().toISOString()
+    const today = todayLocal()
     const totals = loanTotals(amount, typeInfo.rate, termMonths)
+
+    const { data: row, error } = await supabase
+      .from('loan')
+      .insert({
+        member_id: memberId,
+        amount: round2(amount),
+        interest_rate: typeInfo.rate / 100, // fraction — seed/CSV convention
+        date_issued: today, // moves to the release date below
+        due_date: plusMonths(today, termMonths),
+        status: 'For Approval',
+        created_at: now,
+        term_months: Number(termMonths),
+        loan_type: type,
+      })
+      .select()
+      .single()
+    if (error) return { ok: false, message: errorMessage(error) }
+
+    // Co-makers must be members (public.co_maker references member_id):
+    // typed names are matched against live members; no match stays
+    // on the row only, until the page reloads.
+    const membersStore = useMembersStore()
+    const coMakerRows = []
+    const displayNames = []
+    for (const raw of filledCoMakers) {
+      const norm = raw.trim().toLowerCase().replace(/\s+/g, ' ')
+      const member = membersStore.members.find((cand) => {
+        const full = `${cand.firstName} ${cand.middleName} ${cand.lastName}`
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase()
+        const short = `${cand.firstName} ${cand.lastName}`.toLowerCase().replace(/\s+/g, ' ')
+        const memberNo = String(cand.memberNo || '').toLowerCase()
+        return full === norm || short === norm || (memberNo && memberNo === norm)
+      })
+      if (member) {
+        coMakerRows.push({ loan_id: row.loan_id, member_id: member.id, signed_at: today })
+        displayNames.push(`${member.firstName} ${member.lastName}`)
+      } else {
+        displayNames.push(raw.trim())
+      }
+    }
+    if (coMakerRows.length) {
+      const { error: coMakerError } = await supabase.from('co_maker').insert(coMakerRows)
+      if (coMakerError) lastError.value = errorMessage(coMakerError) // loan itself is safe
+    }
+
     const loan = {
-      id: Date.now(), // temporary id — Supabase will generate the real one
-      loanNo: generateLoanNo(),
+      id: row.loan_id,
+      loanNo: loanNoOf(row.loan_id),
       memberId,
       memberNo: elig.member.memberNo,
       memberName: `${elig.member.firstName} ${elig.member.lastName}`,
@@ -460,7 +411,7 @@ export const useLoansStore = defineStore('loans', () => {
       ratePercent: typeInfo.rate,
       termMonths: Number(termMonths),
       totalDue: totals.totalDue, // frozen here — diminishing total
-      coMakers: filledCoMakers,
+      coMakers: displayNames,
       requirements: [...requirements],
       status: 'For Approval',
       createdAt: now,
@@ -480,18 +431,24 @@ export const useLoansStore = defineStore('loans', () => {
     return { ok: true, loan }
   }
 
-  function approveLoan(id) {
+  async function approveLoan(id) {
     const loan = loans.value.find((item) => item.id === id)
     if (!loan) return { ok: false, message: 'Loan not found.' }
     if (loan.status !== 'For Approval') {
       return { ok: false, message: 'Only loans under review can be approved.' }
     }
+    const auth = useAuthStore()
+    const { error } = await supabase
+      .from('loan')
+      .update({ status: 'Approved', approved_by: auth.profile?.admin_id ?? null })
+      .eq('loan_id', id)
+    if (error) return { ok: false, message: errorMessage(error) }
     loan.status = 'Approved'
     logAction(loan, 'Approved by committee')
     return { ok: true }
   }
 
-  function rejectLoan(id, remarks) {
+  async function rejectLoan(id, remarks) {
     const loan = loans.value.find((item) => item.id === id)
     if (!loan) return { ok: false, message: 'Loan not found.' }
     if (loan.status !== 'For Approval') {
@@ -500,14 +457,20 @@ export const useLoansStore = defineStore('loans', () => {
     if (!remarks || !remarks.trim()) {
       return { ok: false, message: 'Remarks are required when rejecting a loan.' }
     }
+    const trimmed = remarks.trim()
+    const { error } = await supabase
+      .from('loan')
+      .update({ status: 'Rejected', remarks: trimmed })
+      .eq('loan_id', id)
+    if (error) return { ok: false, message: errorMessage(error) }
     loan.status = 'Rejected'
-    loan.remarks = remarks.trim()
-    logAction(loan, `Rejected — ${remarks.trim()}`)
+    loan.remarks = trimmed
+    logAction(loan, `Rejected — ${trimmed}`)
     return { ok: true }
   }
 
   // Release = member comes in person, cash or cheque (Landbank) — client rule
-  function releaseLoan(id, channel) {
+  async function releaseLoan(id, channel) {
     const loan = loans.value.find((item) => item.id === id)
     if (!loan) return { ok: false, message: 'Loan not found.' }
     if (loan.status !== 'Approved') {
@@ -516,14 +479,25 @@ export const useLoansStore = defineStore('loans', () => {
     if (!RELEASE_CHANNELS.includes(channel)) {
       return { ok: false, message: 'Choose how the loan will be released (Cash or Cheque).' }
     }
+    const today = todayLocal()
+    const { error } = await supabase
+      .from('loan')
+      .update({
+        status: 'Released',
+        date_issued: today,
+        due_date: plusMonths(today, loan.termMonths),
+        release_channel: channel,
+      })
+      .eq('loan_id', id)
+    if (error) return { ok: false, message: errorMessage(error) }
     loan.status = 'Released'
-    loan.releasedAt = new Date().toISOString()
+    loan.releasedAt = today
     loan.releaseChannel = channel
     logAction(loan, `Loan released via ${channel} — claimed in person`)
     return { ok: true }
   }
 
-  function recordPayment(id, { amount, at, channel, note }) {
+  async function recordPayment(id, { amount, at, channel, note }) {
     const loan = loans.value.find((item) => item.id === id)
     if (!loan) return { ok: false, message: 'Loan not found.' }
     if (loan.status !== 'Released') {
@@ -538,14 +512,41 @@ export const useLoansStore = defineStore('loans', () => {
         message: `Payment exceeds the remaining balance of ₱${balance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}.`,
       }
     }
+
+    const date = toLocalDate(at)
+    const { data: row, error } = await supabase
+      .from('payment')
+      .insert({
+        loan_id: loan.id,
+        member_id: loan.memberId,
+        amount: round2(value),
+        date,
+        channel,
+        note: note || '',
+        status: 'Recorded',
+      })
+      .select()
+      .single()
+    if (error) return { ok: false, message: errorMessage(error) }
+
     loan.payments.push({
-      id: Date.now(),
-      at: at || new Date().toISOString(),
+      id: row.payment_id,
+      at: date,
       amount: round2(value),
       channel,
       note: note || '',
     })
+    loan.payments.sort((a, b) => String(a.at).localeCompare(String(b.at)) || a.id - b.id)
+
     if (balanceOf(loan) <= 0.01) {
+      const { error: statusError } = await supabase
+        .from('loan')
+        .update({ status: 'Paid' })
+        .eq('loan_id', id)
+      if (statusError) {
+        lastError.value = errorMessage(statusError)
+        return { ok: false, message: errorMessage(statusError) }
+      }
       loan.status = 'Paid'
       logAction(loan, 'Loan fully paid')
     } else {
@@ -565,8 +566,13 @@ export const useLoansStore = defineStore('loans', () => {
     return { ok: true }
   }
 
+  // Load once, when the store is first used (LoansView mounts).
+  fetchLoans()
+
   return {
     loans,
+    loading,
+    lastError,
     search,
     statusFilter,
     typeFilter,

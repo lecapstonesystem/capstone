@@ -83,12 +83,44 @@
               <tr
                 class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                <th class="px-6 py-3">Member No.</th>
-                <th class="px-6 py-3">Name</th>
-                <th v-if="columns.contact" class="px-6 py-3">Contact</th>
-                <th v-if="columns.address" class="px-6 py-3">Address</th>
-                <th v-if="columns.status" class="px-6 py-3">Status</th>
-                <th v-if="columns.dateJoined" class="px-6 py-3">Date Joined</th>
+                <SortableTh class="px-6 py-3" :store="membersStore" sort-key="memberNo">
+                  Member No.
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="membersStore" sort-key="name">
+                  Name
+                </SortableTh>
+                <SortableTh
+                  v-if="columns.contact"
+                  class="px-6 py-3"
+                  :store="membersStore"
+                  sort-key="contact"
+                >
+                  Contact
+                </SortableTh>
+                <SortableTh
+                  v-if="columns.address"
+                  class="px-6 py-3"
+                  :store="membersStore"
+                  sort-key="address"
+                >
+                  Address
+                </SortableTh>
+                <SortableTh
+                  v-if="columns.status"
+                  class="px-6 py-3"
+                  :store="membersStore"
+                  sort-key="status"
+                >
+                  Status
+                </SortableTh>
+                <SortableTh
+                  v-if="columns.dateJoined"
+                  class="px-6 py-3"
+                  :store="membersStore"
+                  sort-key="dateJoined"
+                >
+                  Date Joined
+                </SortableTh>
                 <th class="px-6 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -798,6 +830,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
+import SortableTh from '../components/SortableTh.vue'
 import { useMembersStore } from '../stores/members'
 import { useLoansStore, LOAN_TYPES } from '../stores/loans'
 

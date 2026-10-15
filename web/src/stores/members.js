@@ -2,6 +2,7 @@ import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '../lib/supabase'
 import { randomPassword } from '../utils/password'
+import { toggleSort, sortRows } from '../utils/tableSort'
 
 /**
  * Members store — live Supabase data (swapped from mocks).
@@ -124,10 +125,22 @@ export const useMembersStore = defineStore('members', () => {
   const search = ref('')
   const statusFilter = ref('All')
 
+  // Column sorting — header click toggles ascending/descending (SortableTh)
+  const sortKey = ref('memberNo')
+  const sortDir = ref('asc')
+  const accessors = {
+    memberNo: (member) => member.memberNo,
+    name: (member) => `${member.firstName} ${member.lastName}`,
+    contact: (member) => member.phone,
+    address: (member) => member.address,
+    status: (member) => member.status,
+    dateJoined: (member) => member.dateJoined,
+  }
+
   // Search matches name, member number, or email; status filter applies on top
   const filteredMembers = computed(() => {
     const query = search.value.trim().toLowerCase()
-    return members.value.filter((member) => {
+    const filtered = members.value.filter((member) => {
       const matchesStatus = statusFilter.value === 'All' || member.status === statusFilter.value
       const fullName = `${member.firstName} ${member.lastName}`.toLowerCase()
       const matchesSearch =
@@ -137,6 +150,7 @@ export const useMembersStore = defineStore('members', () => {
         member.email.toLowerCase().includes(query)
       return matchesStatus && matchesSearch
     })
+    return sortRows(filtered, sortKey.value, sortDir.value, accessors)
   })
 
   const totalCount = computed(() => members.value.length)
@@ -165,6 +179,17 @@ export const useMembersStore = defineStore('members', () => {
   function setPageSize(size) {
     pageSize.value = size
     page.value = 1
+  }
+
+  function setSort(key) {
+    const next = toggleSort(sortKey.value, sortDir.value, key)
+    sortKey.value = next.key
+    sortDir.value = next.dir
+    page.value = 1 // sorting restarts from the first page
+  }
+
+  function sortState(key) {
+    return sortKey.value === key ? sortDir.value : null
   }
 
   // New search/filter results always start from page 1
@@ -384,6 +409,10 @@ export const useMembersStore = defineStore('members', () => {
     search,
     statusFilter,
     filteredMembers,
+    sortKey,
+    sortDir,
+    setSort,
+    sortState,
     totalCount,
     activeCount,
     page,

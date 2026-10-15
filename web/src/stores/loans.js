@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useMembersStore } from './members'
 import { useAuthStore } from './auth'
 import { loanTotals } from '../utils/amortization'
+import { toggleSort, sortRows } from '../utils/tableSort'
 
 /**
  * Loans store — live Supabase data (swapped from mocks).
@@ -163,17 +164,30 @@ export const useLoansStore = defineStore('loans', () => {
   const statusFilter = ref('All')
   const typeFilter = ref('All')
 
+  // Column sorting — header click toggles ascending/descending (SortableTh).
+  // Default keeps the old order: newest created first. balanceOf runs in
+  // the getter, after the store has finished setting up.
+  const sortKey = ref('createdAt')
+  const sortDir = ref('desc')
+  const accessors = {
+    loanNo: (loan) => loan.loanNo,
+    memberName: (loan) => loan.memberName,
+    type: (loan) => loan.type,
+    principal: (loan) => loan.principal,
+    balance: (loan) => balanceOf(loan),
+    status: (loan) => loan.status,
+  }
+
   const filteredLoans = computed(() => {
     const query = search.value.trim().toLowerCase()
-    return loans.value
-      .filter((loan) => {
-        const matchesStatus = statusFilter.value === 'All' || loan.status === statusFilter.value
-        const matchesType = typeFilter.value === 'All' || loan.type === typeFilter.value
-        const haystack = `${loan.loanNo} ${loan.memberName} ${loan.memberNo}`.toLowerCase()
-        const matchesSearch = !query || haystack.includes(query)
-        return matchesStatus && matchesType && matchesSearch
-      })
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    const filtered = loans.value.filter((loan) => {
+      const matchesStatus = statusFilter.value === 'All' || loan.status === statusFilter.value
+      const matchesType = typeFilter.value === 'All' || loan.type === typeFilter.value
+      const haystack = `${loan.loanNo} ${loan.memberName} ${loan.memberNo}`.toLowerCase()
+      const matchesSearch = !query || haystack.includes(query)
+      return matchesStatus && matchesType && matchesSearch
+    })
+    return sortRows(filtered, sortKey.value, sortDir.value, accessors)
   })
 
   // ---------- money helpers (used by the view for each row) ----------
@@ -283,6 +297,16 @@ export const useLoansStore = defineStore('loans', () => {
       hasEmergency,
       member,
     }
+  }
+
+  function setSort(key) {
+    const next = toggleSort(sortKey.value, sortDir.value, key)
+    sortKey.value = next.key
+    sortDir.value = next.dir
+  }
+
+  function sortState(key) {
+    return sortKey.value === key ? sortDir.value : null
   }
 
   // ---------- loading ----------
@@ -577,6 +601,10 @@ export const useLoansStore = defineStore('loans', () => {
     statusFilter,
     typeFilter,
     filteredLoans,
+    sortKey,
+    sortDir,
+    setSort,
+    sortState,
     forApprovalCount,
     activeCount,
     delinquentCount,

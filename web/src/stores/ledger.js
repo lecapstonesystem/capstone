@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { toggleSort, sortRows } from '../utils/tableSort'
 
 /**
  * Ledger store
@@ -134,6 +135,19 @@ export const useLedgerStore = defineStore('ledger', () => {
   const search = ref('')
   const typeFilter = ref('All')
 
+  // Column sorting — header click toggles ascending/descending (SortableTh).
+  // Default keeps the old order: newest date first.
+  const sortKey = ref('date')
+  const sortDir = ref('desc')
+  const accessors = {
+    refNo: (txn) => txn.refNo,
+    date: (txn) => txn.date,
+    type: (txn) => txn.type,
+    category: (txn) => txn.category,
+    description: (txn) => txn.description,
+    amount: (txn) => txn.amount,
+  }
+
   // Search matches ref no., description, or category; type filter applies on top
   const filteredTransactions = computed(() => {
     const query = search.value.trim().toLowerCase()
@@ -146,9 +160,18 @@ export const useLedgerStore = defineStore('ledger', () => {
         txn.category.toLowerCase().includes(query)
       return matchesType && matchesSearch
     })
-    // Newest entries first
-    return [...filtered].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
+    return sortRows(filtered, sortKey.value, sortDir.value, accessors)
   })
+
+  function setSort(key) {
+    const next = toggleSort(sortKey.value, sortDir.value, key)
+    sortKey.value = next.key
+    sortDir.value = next.dir
+  }
+
+  function sortState(key) {
+    return sortKey.value === key ? sortDir.value : null
+  }
 
   const totalIncome = computed(() =>
     transactions.value
@@ -197,6 +220,10 @@ export const useLedgerStore = defineStore('ledger', () => {
     search,
     typeFilter,
     filteredTransactions,
+    sortKey,
+    sortDir,
+    setSort,
+    sortState,
     totalIncome,
     totalExpense,
     netBalance,

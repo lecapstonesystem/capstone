@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { toggleSort, sortRows } from '../utils/tableSort'
 import { useMembersStore } from './members'
 
 /**
@@ -179,21 +180,41 @@ export const useApplicationsStore = defineStore('applications', () => {
   const search = ref('')
   const statusFilter = ref('All')
 
+  // Column sorting — header click toggles ascending/descending (SortableTh).
+  // Default keeps the old order: newest application first.
+  const sortKey = ref('submitted')
+  const sortDir = ref('desc')
+  const accessors = {
+    appNo: (application) => application.appNo,
+    applicant: (application) => `${application.firstName} ${application.lastName}`,
+    source: (application) => application.source,
+    submitted: (application) => application.submittedAt,
+    status: (application) => application.status,
+  }
+
   // Search matches applicant name or application number; status filter on top.
-  // Newest submissions first.
   const filteredApplications = computed(() => {
     const query = search.value.trim().toLowerCase()
-    return applications.value
-      .filter((application) => {
-        const matchesStatus =
-          statusFilter.value === 'All' || application.status === statusFilter.value
-        const fullName = `${application.firstName} ${application.lastName}`.toLowerCase()
-        const matchesSearch =
-          !query || fullName.includes(query) || application.appNo.toLowerCase().includes(query)
-        return matchesStatus && matchesSearch
-      })
-      .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
+    const filtered = applications.value.filter((application) => {
+      const matchesStatus =
+        statusFilter.value === 'All' || application.status === statusFilter.value
+      const fullName = `${application.firstName} ${application.lastName}`.toLowerCase()
+      const matchesSearch =
+        !query || fullName.includes(query) || application.appNo.toLowerCase().includes(query)
+      return matchesStatus && matchesSearch
+    })
+    return sortRows(filtered, sortKey.value, sortDir.value, accessors)
   })
+
+  function setSort(key) {
+    const next = toggleSort(sortKey.value, sortDir.value, key)
+    sortKey.value = next.key
+    sortDir.value = next.dir
+  }
+
+  function sortState(key) {
+    return sortKey.value === key ? sortDir.value : null
+  }
 
   const pendingCount = computed(
     () => applications.value.filter((application) => application.status === 'Pending').length,
@@ -337,6 +358,10 @@ export const useApplicationsStore = defineStore('applications', () => {
     search,
     statusFilter,
     filteredApplications,
+    sortKey,
+    sortDir,
+    setSort,
+    sortState,
     pendingCount,
     underReviewCount,
     approvedCount,

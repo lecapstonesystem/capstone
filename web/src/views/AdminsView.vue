@@ -55,11 +55,21 @@
               <tr
                 class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                <th class="px-6 py-3">Name</th>
-                <th class="px-6 py-3">Email</th>
-                <th class="px-6 py-3">Role</th>
-                <th class="px-6 py-3">Login</th>
-                <th class="px-6 py-3">Last Login</th>
+                <SortableTh class="px-6 py-3" :store="adminsStore" sort-key="name">
+                  Name
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="adminsStore" sort-key="email">
+                  Email
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="adminsStore" sort-key="role">
+                  Role
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="adminsStore" sort-key="login">
+                  Login
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="adminsStore" sort-key="lastLogin">
+                  Last Login
+                </SortableTh>
                 <th class="px-6 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -456,6 +466,7 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
+import SortableTh from '../components/SortableTh.vue'
 import { useAdminsStore } from '../stores/admins'
 
 const adminsStore = useAdminsStore()

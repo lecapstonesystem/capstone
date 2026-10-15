@@ -106,12 +106,24 @@
               <tr
                 class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                <th class="px-6 py-3">Loan No</th>
-                <th class="px-6 py-3">Member</th>
-                <th class="px-6 py-3">Type</th>
-                <th class="px-6 py-3">Principal</th>
-                <th class="px-6 py-3">Balance</th>
-                <th class="px-6 py-3">Status</th>
+                <SortableTh class="px-6 py-3" :store="loansStore" sort-key="loanNo">
+                  Loan No
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="loansStore" sort-key="memberName">
+                  Member
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="loansStore" sort-key="type">
+                  Type
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="loansStore" sort-key="principal">
+                  Principal
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="loansStore" sort-key="balance">
+                  Balance
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="loansStore" sort-key="status">
+                  Status
+                </SortableTh>
                 <th class="px-6 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -876,6 +888,7 @@
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
+import SortableTh from '../components/SortableTh.vue'
 import {
   useLoansStore,
   LOAN_TYPES,

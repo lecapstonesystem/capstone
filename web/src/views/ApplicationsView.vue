@@ -85,11 +85,21 @@
               <tr
                 class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                <th class="px-6 py-3">App No</th>
-                <th class="px-6 py-3">Applicant</th>
-                <th class="px-6 py-3">Source</th>
-                <th class="px-6 py-3">Submitted</th>
-                <th class="px-6 py-3">Status</th>
+                <SortableTh class="px-6 py-3" :store="appsStore" sort-key="appNo">
+                  App No
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="appsStore" sort-key="applicant">
+                  Applicant
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="appsStore" sort-key="source">
+                  Source
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="appsStore" sort-key="submitted">
+                  Submitted
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="appsStore" sort-key="status">
+                  Status
+                </SortableTh>
                 <th class="px-6 py-3">Form</th>
                 <th class="px-6 py-3 text-right">Actions</th>
               </tr>
@@ -657,6 +667,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
+import SortableTh from '../components/SortableTh.vue'
 import { useApplicationsStore } from '../stores/applications'
 
 const appsStore = useApplicationsStore()

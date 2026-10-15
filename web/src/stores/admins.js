@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { randomPassword } from '../utils/password'
+import { toggleSort, sortRows } from '../utils/tableSort'
 
 /**
  * Admins store — admin account management
@@ -101,16 +102,38 @@ export const useAdminsStore = defineStore('admins', () => {
   // The logged-in admin (mock — Supabase Auth will provide this later)
   const currentAdminId = ref(1)
 
+  // Column sorting — header click toggles ascending/descending (SortableTh)
+  const sortKey = ref('name')
+  const sortDir = ref('asc')
+  const accessors = {
+    name: (admin) => `${admin.firstName} ${admin.lastName}`,
+    email: (admin) => admin.email,
+    role: (admin) => admin.role,
+    login: (admin) => (admin.account.loginEnabled ? 'Enabled' : 'Disabled'),
+    lastLogin: (admin) => admin.lastLogin,
+  }
+
   const filteredAdmins = computed(() => {
     const query = search.value.trim().toLowerCase()
-    return admins.value.filter((admin) => {
+    const filtered = admins.value.filter((admin) => {
       const matchesRole = roleFilter.value === 'All' || admin.role === roleFilter.value
       const fullName = `${admin.firstName} ${admin.lastName}`.toLowerCase()
       const matchesSearch =
         !query || fullName.includes(query) || admin.email.toLowerCase().includes(query)
       return matchesRole && matchesSearch
     })
+    return sortRows(filtered, sortKey.value, sortDir.value, accessors)
   })
+
+  function setSort(key) {
+    const next = toggleSort(sortKey.value, sortDir.value, key)
+    sortKey.value = next.key
+    sortDir.value = next.dir
+  }
+
+  function sortState(key) {
+    return sortKey.value === key ? sortDir.value : null
+  }
 
   const currentAdmin = computed(
     () => admins.value.find((admin) => admin.id === currentAdminId.value) || null,
@@ -217,6 +240,10 @@ export const useAdminsStore = defineStore('admins', () => {
     search,
     roleFilter,
     filteredAdmins,
+    sortKey,
+    sortDir,
+    setSort,
+    sortState,
     currentAdmin,
     currentAdminId,
     superAdminCount,

@@ -75,12 +75,24 @@
               <tr
                 class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                <th class="px-6 py-3">Ref No.</th>
-                <th class="px-6 py-3">Date</th>
-                <th class="px-6 py-3">Type</th>
-                <th class="px-6 py-3">Category</th>
-                <th class="px-6 py-3">Description</th>
-                <th class="px-6 py-3 text-right">Amount</th>
+                <SortableTh class="px-6 py-3" :store="ledgerStore" sort-key="refNo">
+                  Ref No.
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="ledgerStore" sort-key="date">
+                  Date
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="ledgerStore" sort-key="type">
+                  Type
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="ledgerStore" sort-key="category">
+                  Category
+                </SortableTh>
+                <SortableTh class="px-6 py-3" :store="ledgerStore" sort-key="description">
+                  Description
+                </SortableTh>
+                <SortableTh class="px-6 py-3 text-right" :store="ledgerStore" sort-key="amount">
+                  Amount
+                </SortableTh>
                 <th class="px-6 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -284,6 +296,7 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
+import SortableTh from '../components/SortableTh.vue'
 import { useLedgerStore } from '../stores/ledger'
 
 const ledgerStore = useLedgerStore()

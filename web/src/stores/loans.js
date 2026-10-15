@@ -131,6 +131,7 @@ function rowToLoan(row) {
       amount: Number(payment.amount || 0),
       channel: payment.channel || '',
       note: payment.note || '',
+      status: payment.status || '',
     }))
     .sort((a, b) => String(a.at).localeCompare(String(b.at)) || a.id - b.id)
   return {
@@ -192,7 +193,11 @@ export const useLoansStore = defineStore('loans', () => {
 
   // ---------- money helpers (used by the view for each row) ----------
   function paidOf(loan) {
-    return round2(loan.payments.reduce((sum, payment) => sum + payment.amount, 0))
+    // Only ADMIN-VERIFIED money counts toward the balance.
+    // App-submitted receipts land as status 'Pending' (13_app_documents.sql)
+    // and are excluded until an admin records them.
+    const verified = loan.payments.filter((payment) => payment.status === 'Recorded')
+    return round2(verified.reduce((sum, payment) => sum + payment.amount, 0))
   }
 
   function balanceOf(loan) {
@@ -559,6 +564,7 @@ export const useLoansStore = defineStore('loans', () => {
       amount: round2(value),
       channel,
       note: note || '',
+      status: 'Recorded',
     })
     loan.payments.sort((a, b) => String(a.at).localeCompare(String(b.at)) || a.id - b.id)
 

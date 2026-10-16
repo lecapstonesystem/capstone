@@ -82,22 +82,39 @@ function defaultChecklist() {
   ]
 }
 
-// Review statuses = "not a member yet"
-const QUEUE_STATUSES = ['Pending', 'Under Review', 'Returned', 'Rejected']
+// Review statuses = "not a member yet". Compared in lowercase so
+// the filter survives any capitalization the database hands back.
+const QUEUE_STATUSES = ['pending', 'under review', 'returned', 'rejected']
+
+// Canonical labels for the UI — one place decides how each status
+// is spelled, so chips, filters, and guards always agree.
+const STATUS_LABELS = {
+  pending: 'Pending',
+  'under review': 'Under Review',
+  active: 'Approved', // approved applicant = Active member row
+  approved: 'Approved',
+  returned: 'Returned',
+  rejected: 'Rejected',
+}
+
+function rawStatus(row) {
+  return String(row.status || '')
+    .trim()
+    .toLowerCase()
+}
 
 // Which member rows this queue shows: applicants under review, plus
 // rows approved FROM this queue (they carry review events).
 function isQueueRow(row) {
-  const status = titleCase(row.status)
+  const status = rawStatus(row)
   if (QUEUE_STATUSES.includes(status)) return true
-  return status === 'Active' && Array.isArray(row.app_events) && row.app_events.length > 0
+  return status === 'active' && Array.isArray(row.app_events) && row.app_events.length > 0
 }
 
 // The UI speaks the application lifecycle: an approved applicant
 // shows "Approved" — the same row is "Active" in the Members module.
 function displayStatus(row) {
-  const status = titleCase(row.status)
-  return status === 'Active' ? 'Approved' : status
+  return STATUS_LABELS[rawStatus(row)] || titleCase(row.status)
 }
 
 // created_at is a naive UTC timestamp column — mark it UTC so the
@@ -148,7 +165,7 @@ function rowToApplication(row) {
     status: displayStatus(row),
     checklist: Array.isArray(row.app_checklist) ? row.app_checklist : defaultChecklist(),
     remarks: row.app_remarks || '',
-    memberId: titleCase(row.status) === 'Active' ? row.member_id : null,
+    memberId: rawStatus(row) === 'active' ? row.member_id : null,
     memberNo: row.member_no || '',
     history: historyOf(row),
     // Raw newest-first timeline as stored — the base of the next

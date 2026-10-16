@@ -203,8 +203,8 @@
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       @click.self="detailLoan = null"
     >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <div class="flex items-center gap-3 flex-wrap">
             <h2 class="text-lg font-semibold text-gray-800">{{ detailLoan.loanNo }}</h2>
             <span
@@ -228,7 +228,7 @@
           </button>
         </div>
 
-        <div class="px-6 py-5 space-y-5">
+        <div class="px-6 py-5 space-y-5 overflow-y-auto flex-1 min-h-0">
           <!-- Error message -->
           <div
             v-if="actionError"
@@ -479,7 +479,7 @@
         </div>
 
         <!-- Footer actions -->
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 flex-wrap">
+        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 flex-wrap shrink-0">
           <template v-if="detailLoan.status === 'For Approval'">
             <button
               @click="detailLoan = null"
@@ -542,15 +542,15 @@
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       @click.self="closeNew"
     >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <h2 class="text-lg font-semibold text-gray-800">New Loan Application</h2>
           <button @click="closeNew" class="text-gray-400 hover:text-gray-600 text-xl leading-none">
             &times;
           </button>
         </div>
 
-        <div class="px-6 py-4 space-y-4">
+        <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
           <!-- Error message -->
           <div
             v-if="newFormError"
@@ -735,7 +735,7 @@
           </div>
         </div>
 
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
           <button
             @click="closeNew"
             class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
@@ -759,7 +759,7 @@
       @click.self="closePayment"
     >
       <div class="bg-white rounded-xl shadow-lg w-full max-w-md">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <h2 class="text-lg font-semibold text-gray-800">Record Payment</h2>
           <button
             @click="closePayment"
@@ -769,7 +769,7 @@
           </button>
         </div>
 
-        <div class="px-6 py-4 space-y-4">
+        <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
           <div
             v-if="payError"
             class="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm"
@@ -833,7 +833,7 @@
           </div>
         </div>
 
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
           <button
             @click="closePayment"
             class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"

@@ -186,8 +186,8 @@
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       @click.self="detailApp = null"
     >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <div class="flex items-center gap-3">
             <h2 class="text-lg font-semibold text-gray-800">Review — {{ detailApp.appNo }}</h2>
             <span
@@ -205,7 +205,7 @@
           </button>
         </div>
 
-        <div class="px-6 py-5 space-y-5">
+        <div class="px-6 py-5 space-y-5 overflow-y-auto flex-1 min-h-0">
           <!-- Error message -->
           <div
             v-if="reviewError"
@@ -330,7 +330,7 @@
         </div>
 
         <!-- Footer actions -->
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
           <template v-if="detailApp.status === 'Approved' || detailApp.status === 'Rejected'">
             <button
               @click="detailApp = null"
@@ -383,8 +383,8 @@
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       @click.self="closeModal"
     >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <h2 class="text-lg font-semibold text-gray-800">New Walk-in Application</h2>
           <button
             @click="closeModal"
@@ -394,7 +394,7 @@
           </button>
         </div>
 
-        <div class="px-6 py-4 space-y-4">
+        <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
           <!-- Error message -->
           <div
             v-if="formError"
@@ -466,7 +466,7 @@
           </div>
         </div>
 
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
           <button
             @click="closeModal"
             class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
@@ -489,8 +489,8 @@
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       @click.self="previewApp = null"
     >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <h2 class="text-lg font-semibold text-gray-800">
             Application Form — {{ previewApp.appNo }}
           </h2>
@@ -502,7 +502,7 @@
           </button>
         </div>
 
-        <div class="p-6">
+        <div class="p-6 overflow-y-auto flex-1 min-h-0">
           <!-- Mock paper form -->
           <div class="border border-gray-300 rounded-lg p-6 text-sm bg-white">
             <div class="text-center border-b border-gray-300 pb-4 mb-4">
@@ -563,7 +563,7 @@
           </p>
         </div>
 
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end">
+        <div class="px-6 py-4 border-t border-gray-100 flex justify-end shrink-0">
           <button
             @click="previewApp = null"
             class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"

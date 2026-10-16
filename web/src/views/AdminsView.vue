@@ -153,8 +153,8 @@
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       @click.self="detailAdmin = null"
     >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-md max-h-[90vh] flex flex-col">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <h2 class="text-lg font-semibold text-gray-800">Manage Admin</h2>
           <button
             @click="detailAdmin = null"
@@ -164,7 +164,7 @@
           </button>
         </div>
 
-        <div class="px-6 py-5 space-y-5">
+        <div class="px-6 py-5 space-y-5 overflow-y-auto flex-1 min-h-0">
           <!-- Identity -->
           <div class="flex items-center gap-4">
             <div
@@ -315,7 +315,7 @@
           </div>
         </div>
 
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
           <button
             @click="openEditModal(detailAdmin)"
             class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
@@ -338,8 +338,8 @@
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       @click.self="closeModal"
     >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <h2 class="text-lg font-semibold text-gray-800">
             {{ modalMode === 'add' ? 'Add Admin' : 'Edit Admin' }}
           </h2>
@@ -351,7 +351,7 @@
           </button>
         </div>
 
-        <div class="px-6 py-4 space-y-4">
+        <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
           <!-- Error message -->
           <div
             v-if="formError"
@@ -411,7 +411,7 @@
           </div>
         </div>
 
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
           <button
             @click="closeModal"
             class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"

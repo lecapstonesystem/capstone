@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '../lib/supabase'
+import { errorMessage } from '../utils/errorText'
 import { randomPassword } from '../utils/password'
 import { toggleSort, sortRows } from '../utils/tableSort'
 import { useMembersStore } from './members'
@@ -47,10 +48,6 @@ import { useMembersStore } from './members'
  * Actions return { ok, message? } and ApplicationsView awaits them;
  * the dialogs stay open and show message on failure.
  */
-
-function errorMessage(error) {
-  return error?.message || String(error)
-}
 
 function titleCase(value) {
   if (!value) return ''

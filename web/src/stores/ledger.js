@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from './auth'
+import { errorMessage } from '../utils/errorText'
 import { toggleSort, sortRows } from '../utils/tableSort'
 
 /**
@@ -24,10 +25,6 @@ import { toggleSort, sortRows } from '../utils/tableSort'
  * Actions return { ok, message? } and LedgerView awaits them; the
  * dialogs keep themselves open and show message on failure.
  */
-
-function errorMessage(error) {
-  return error?.message || String(error)
-}
 
 function refNoOf(ledgerId) {
   return `LDG-${String(ledgerId).padStart(4, '0')}`

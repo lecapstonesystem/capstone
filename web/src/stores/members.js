@@ -1,6 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '../lib/supabase'
+import { errorMessage } from '../utils/errorText'
 import { randomPassword } from '../utils/password'
 import { toggleSort, sortRows } from '../utils/tableSort'
 
@@ -205,10 +206,6 @@ export const useMembersStore = defineStore('members', () => {
   watch(totalPages, (count) => {
     if (page.value > count) page.value = count
   })
-
-  function errorMessage(error) {
-    return error?.message || String(error)
-  }
 
   // KHS-0001, KHS-0002, ... — highest printed number, floored at the
   // highest member_id so NULL member_no rows can't collide.

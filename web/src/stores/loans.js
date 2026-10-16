@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useMembersStore } from './members'
 import { useAuthStore } from './auth'
 import { loanTotals } from '../utils/amortization'
+import { errorMessage } from '../utils/errorText'
 import { toggleSort, sortRows } from '../utils/tableSort'
 
 /**
@@ -99,10 +100,6 @@ function monthsSince(isoString) {
   const from = new Date(isoString)
   const now = new Date()
   return (now.getFullYear() - from.getFullYear()) * 12 + (now.getMonth() - from.getMonth())
-}
-
-function errorMessage(error) {
-  return error?.message || String(error)
 }
 
 // Seeded rows always carry date_issued + due_date, so a NULL

@@ -52,7 +52,7 @@ const SELECT_COLUMNS =
 export const useAdminsStore = defineStore('admins', () => {
   const admins = ref([])
   const search = ref('')
-  const roleFilter = ref('All Roles')
+  const roleFilter = ref('All')
   const loading = ref(false)
   const lastError = ref('')
 
@@ -92,7 +92,7 @@ export const useAdminsStore = defineStore('admins', () => {
         !query ||
         `${admin.firstName} ${admin.lastName}`.toLowerCase().includes(query) ||
         admin.email.toLowerCase().includes(query)
-      const matchesRole = roleFilter.value === 'All Roles' || admin.role === roleFilter.value
+      const matchesRole = roleFilter.value === 'All' || admin.role === roleFilter.value
       return matchesSearch && matchesRole
     })
 
@@ -113,7 +113,9 @@ export const useAdminsStore = defineStore('admins', () => {
     sortDir.value = result.dir
   }
 
-  const sortState = computed(() => ({ key: sortKey.value, dir: sortDir.value }))
+  function sortState(key) {
+    return sortKey.value === key ? sortDir.value : null
+  }
 
   /**
    * Split the single `name` column into first/last for the form.

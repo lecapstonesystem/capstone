@@ -1,139 +1,56 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { supabase } from '../lib/supabase'
+import { useAuthStore } from './auth'
 import { toggleSort, sortRows } from '../utils/tableSort'
 
 /**
- * Ledger store
+ * Ledger store — live Supabase data (swapped from mocks).
  *
- * Tracks income and expense transactions (canteen sales, fees,
- * utilities, etc.) using temporary mock data in memory.
+ * How the store maps to public.ledger (14_add_ledger_category.sql):
+ *   - refNo has no column: derived from ledger_id (LDG-0001 style,
+ *     the same convention as LOAN-0001 / KHS-0001).
+ *   - type holds the Income/Expense flag; category (14's column)
+ *     holds the coop's breakdown (Canteen Sales, Utilities, ...).
+ *   - admin_id is NOT NULL on the table, so every write stamps the
+ *     logged-in admin's profile.admin_id (06 "admin full access").
+ *   - amount arrives numeric, dates as 'YYYY-MM-DD' strings — the
+ *     exact shapes the form and Intl.NumberFormat expect.
  *
- * When the Supabase table is ready, replace the bodies of
- * addTransaction / updateTransaction / deleteTransaction with
- * supabase calls, e.g.:
+ * Starts EMPTY by decision (Oct 16): no seed — the table begins with
+ * the first entry the admin records. Dashboards/reports read this
+ * store too, so their cash-flow numbers are zero until then.
  *
- *   const { error } = await supabase.from('ledger').insert(data)
- *
- * The LedgerView component will NOT need to change.
+ * Actions return { ok, message? } and LedgerView awaits them; the
+ * dialogs keep themselves open and show message on failure.
  */
 
-// Temporary sample data — delete once Supabase is connected
-const mockTransactions = [
-  {
-    id: 1,
-    refNo: 'LDG-0001',
-    date: '2026-09-01',
-    type: 'Income',
-    category: 'Canteen Sales',
-    description: 'Daily canteen sales — Monday',
-    amount: 4500,
-  },
-  {
-    id: 2,
-    refNo: 'LDG-0002',
-    date: '2026-09-01',
-    type: 'Expense',
-    category: 'Supplies',
-    description: 'Canteen food supplies from supplier',
-    amount: 2100,
-  },
-  {
-    id: 3,
-    refNo: 'LDG-0003',
-    date: '2026-09-02',
-    type: 'Income',
-    category: 'Membership Fees',
-    description: 'New member registration fee — KHS-0005',
-    amount: 300, // ₱300 membership fee per client interview
-  },
-  {
-    id: 4,
-    refNo: 'LDG-0004',
-    date: '2026-09-03',
-    type: 'Expense',
-    category: 'Utilities',
-    description: 'Electricity bill — September',
-    amount: 3200,
-  },
-  {
-    id: 5,
-    refNo: 'LDG-0005',
-    date: '2026-09-05',
-    type: 'Income',
-    category: 'Canteen Sales',
-    description: 'Daily canteen sales — Friday',
-    amount: 5200,
-  },
-  {
-    id: 6,
-    refNo: 'LDG-0006',
-    date: '2026-09-08',
-    type: 'Expense',
-    category: 'Miscellaneous',
-    description: 'Canteen equipment repair (freezer)',
-    amount: 1500,
-  },
-  // Earlier months — gives the Reports cash-flow trend something to draw
-  {
-    id: 7,
-    refNo: 'LDG-0007',
-    date: '2026-06-04',
-    type: 'Income',
-    category: 'Canteen Sales',
-    description: 'Daily canteen sales — Wednesday',
-    amount: 4800,
-  },
-  {
-    id: 8,
-    refNo: 'LDG-0008',
-    date: '2026-06-15',
-    type: 'Expense',
-    category: 'Supplies',
-    description: 'Canteen food supplies from supplier',
-    amount: 2400,
-  },
-  {
-    id: 9,
-    refNo: 'LDG-0009',
-    date: '2026-07-08',
-    type: 'Income',
-    category: 'Canteen Sales',
-    description: 'Daily canteen sales — Wednesday',
-    amount: 5100,
-  },
-  {
-    id: 10,
-    refNo: 'LDG-0010',
-    date: '2026-07-22',
-    type: 'Expense',
-    category: 'Utilities',
-    description: 'Electricity bill — July',
-    amount: 3050,
-  },
-  {
-    id: 11,
-    refNo: 'LDG-0011',
-    date: '2026-08-06',
-    type: 'Income',
-    category: 'Canteen Sales',
-    description: 'Daily canteen sales — Thursday',
-    amount: 4900,
-  },
-  {
-    id: 12,
-    refNo: 'LDG-0012',
-    date: '2026-08-19',
-    type: 'Expense',
-    category: 'Miscellaneous',
-    description: 'Canteen equipment repair (freezer part)',
-    amount: 900,
-  },
-]
+function errorMessage(error) {
+  return error?.message || String(error)
+}
+
+function refNoOf(ledgerId) {
+  return `LDG-${String(ledgerId).padStart(4, '0')}`
+}
+
+function rowToTransaction(row) {
+  return {
+    id: row.ledger_id,
+    refNo: refNoOf(row.ledger_id),
+    date: row.date,
+    type: row.type,
+    category: row.category || '',
+    description: row.description || '',
+    amount: Number(row.amount || 0),
+  }
+}
 
 export const useLedgerStore = defineStore('ledger', () => {
-  const transactions = ref([...mockTransactions])
+  const transactions = ref([])
   const search = ref('')
   const typeFilter = ref('All')
+  const loading = ref(false)
+  const lastError = ref('')
 
   // Column sorting — header click toggles ascending/descending (SortableTh).
   // Default keeps the old order: newest date first.
@@ -189,36 +106,89 @@ export const useLedgerStore = defineStore('ledger', () => {
 
   const totalCount = computed(() => transactions.value.length)
 
-  // LDG-0001, LDG-0002, ... based on the highest number already used
-  function generateRefNo() {
-    const numbers = transactions.value.map((txn) => Number.parseInt(txn.refNo.split('-')[1], 10))
-    const next = (numbers.length ? Math.max(...numbers) : 0) + 1
-    return `LDG-${String(next).padStart(4, '0')}`
-  }
-
-  function addTransaction(data) {
-    transactions.value.push({
-      id: Date.now(), // temporary id — Supabase will generate the real one
-      refNo: generateRefNo(),
-      ...data,
-    })
-  }
-
-  function updateTransaction(id, data) {
-    const index = transactions.value.findIndex((txn) => txn.id === id)
-    if (index !== -1) {
-      transactions.value[index] = { ...transactions.value[index], ...data }
+  // ---------- loading ----------
+  async function fetchLedger() {
+    loading.value = true
+    lastError.value = ''
+    try {
+      const { data, error } = await supabase
+        .from('ledger')
+        .select('*')
+        .order('date', { ascending: false })
+        .order('ledger_id', { ascending: false })
+      if (error) throw error
+      transactions.value = (data || []).map(rowToTransaction)
+    } catch (error) {
+      lastError.value = errorMessage(error)
+      transactions.value = []
+    } finally {
+      loading.value = false
     }
   }
 
-  function deleteTransaction(id) {
-    transactions.value = transactions.value.filter((txn) => txn.id !== id)
+  // ---------- actions ----------
+  // Validation failures and database errors come back as
+  // { ok: false, message } so the dialogs can show them.
+  async function addTransaction(data) {
+    const auth = useAuthStore()
+    const adminId = auth.profile?.admin_id ?? null
+    if (!adminId) {
+      return {
+        ok: false,
+        message: 'This session is not linked to an admin record — sign out and back in.',
+      }
+    }
+    const { data: row, error } = await supabase
+      .from('ledger')
+      .insert({
+        date: data.date,
+        type: data.type,
+        category: data.category,
+        description: data.description,
+        amount: data.amount,
+        admin_id: adminId,
+      })
+      .select()
+      .single()
+    if (error) return { ok: false, message: errorMessage(error) }
+    transactions.value.push(rowToTransaction(row))
+    return { ok: true }
   }
+
+  async function updateTransaction(id, data) {
+    const { data: row, error } = await supabase
+      .from('ledger')
+      .update({
+        date: data.date,
+        type: data.type,
+        category: data.category,
+        description: data.description,
+        amount: data.amount,
+      })
+      .eq('ledger_id', id)
+      .select()
+      .single()
+    if (error) return { ok: false, message: errorMessage(error) }
+    const index = transactions.value.findIndex((txn) => txn.id === id)
+    if (index !== -1) transactions.value[index] = rowToTransaction(row)
+    return { ok: true }
+  }
+
+  async function deleteTransaction(id) {
+    const { error } = await supabase.from('ledger').delete().eq('ledger_id', id)
+    if (error) return { ok: false, message: errorMessage(error) }
+    transactions.value = transactions.value.filter((txn) => txn.id !== id)
+    return { ok: true }
+  }
+
+  fetchLedger()
 
   return {
     transactions,
     search,
     typeFilter,
+    loading,
+    lastError,
     filteredTransactions,
     sortKey,
     sortDir,
@@ -228,6 +198,7 @@ export const useLedgerStore = defineStore('ledger', () => {
     totalExpense,
     netBalance,
     totalCount,
+    fetchLedger,
     addTransaction,
     updateTransaction,
     deleteTransaction,

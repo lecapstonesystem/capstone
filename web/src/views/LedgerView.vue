@@ -278,6 +278,7 @@
           <span class="font-medium text-gray-700">{{ txnToDelete.refNo }}</span>
           ({{ txnToDelete.description }})? This action cannot be undone.
         </p>
+        <p v-if="deleteError" class="text-sm text-red-600 mb-4">{{ deleteError }}</p>
         <div class="flex justify-end gap-3">
           <button
             @click="txnToDelete = null"
@@ -311,6 +312,7 @@ const modalMode = ref('add') // 'add' | 'edit'
 const editingId = ref(null)
 const formError = ref('')
 const txnToDelete = ref(null)
+const deleteError = ref('')
 
 // Form model
 const emptyForm = {
@@ -349,7 +351,7 @@ function closeModal() {
   formError.value = ''
 }
 
-function saveTransaction() {
+async function saveTransaction() {
   // Validation
   if (!form.date) {
     formError.value = 'Date is required.'
@@ -372,10 +374,14 @@ function saveTransaction() {
     amount: Number(form.amount),
   }
 
-  if (modalMode.value === 'add') {
-    ledgerStore.addTransaction(data)
-  } else {
-    ledgerStore.updateTransaction(editingId.value, data)
+  const result =
+    modalMode.value === 'add'
+      ? await ledgerStore.addTransaction(data)
+      : await ledgerStore.updateTransaction(editingId.value, data)
+  if (!result.ok) {
+    // Keep the dialog open and show why (no toast layer in this view).
+    formError.value = result.message || 'Could not save the transaction.'
+    return
   }
 
   closeModal()
@@ -383,10 +389,16 @@ function saveTransaction() {
 
 function openDeleteModal(txn) {
   txnToDelete.value = txn
+  deleteError.value = ''
 }
 
-function confirmDelete() {
-  ledgerStore.deleteTransaction(txnToDelete.value.id)
+async function confirmDelete() {
+  const result = await ledgerStore.deleteTransaction(txnToDelete.value.id)
+  if (!result.ok) {
+    // Keep the confirmation open and show why.
+    deleteError.value = result.message || 'Could not delete the transaction.'
+    return
+  }
   txnToDelete.value = null
 }
 

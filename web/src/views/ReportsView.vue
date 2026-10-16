@@ -647,11 +647,14 @@ const delinquentAmount = computed(() =>
   delinquentLoans.value.reduce((sum, loan) => sum + loansStore.balanceOf(loan), 0),
 )
 
+// Counted exactly like the loans store's paidOf: only Recorded
+// payments are money the coop has verified — Pending app receipts
+// must not inflate the collections figure.
 const collectedInRange = computed(() => {
   let total = 0
   loansStore.loans.forEach((loan) => {
     loan.payments.forEach((payment) => {
-      if (inRange(payment.at)) total += payment.amount
+      if (payment.status === 'Recorded' && inRange(payment.at)) total += payment.amount
     })
   })
   return Math.round(total * 100) / 100

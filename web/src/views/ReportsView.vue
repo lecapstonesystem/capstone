@@ -53,19 +53,25 @@
             </p>
             <div
               v-if="growthSeries.length > 0"
-              class="flex items-end gap-3 h-44 border-b border-gray-100 pb-1"
+              class="flex items-end gap-1 h-44 border-b border-gray-100 pb-1"
             >
               <div
                 v-for="point in growthSeries"
                 :key="point.label"
                 class="flex-1 flex flex-col items-center gap-1 min-w-0"
+                :title="point.label"
               >
                 <span class="text-xs font-medium text-gray-600">{{ point.count }}</span>
                 <div
                   class="w-full bg-green-500 rounded-t"
                   :style="{ height: growthBarPx(point.count) + 'px' }"
                 ></div>
-                <span class="text-xs text-gray-400 truncate">{{ point.label }}</span>
+                <!-- Month over 2-digit year — one line per month can't
+                     fit side by side at this many bars -->
+                <div class="w-full text-center leading-tight overflow-hidden">
+                  <span class="block text-[10px] text-gray-500">{{ point.mon }}</span>
+                  <span class="block text-[10px] text-gray-400">{{ point.yr }}</span>
+                </div>
               </div>
             </div>
             <p v-else class="text-sm text-gray-400 py-8 text-center">
@@ -344,12 +350,13 @@
             </p>
             <div
               v-if="flowSeries.length > 0"
-              class="flex items-end gap-4 h-44 border-b border-gray-100 pb-1"
+              class="flex items-end gap-1 h-44 border-b border-gray-100 pb-1"
             >
               <div
                 v-for="point in flowSeries"
                 :key="point.label"
                 class="flex-1 flex flex-col items-center gap-1 min-w-0"
+                :title="point.label"
               >
                 <div class="w-full flex items-end justify-center gap-1 h-32">
                   <div
@@ -363,7 +370,11 @@
                     :title="`Expenses ${formatPeso(point.expense)}`"
                   ></div>
                 </div>
-                <span class="text-xs text-gray-400 truncate">{{ point.label }}</span>
+                <!-- Month over 2-digit year, same as the growth chart -->
+                <div class="w-full text-center leading-tight overflow-hidden">
+                  <span class="block text-[10px] text-gray-500">{{ point.mon }}</span>
+                  <span class="block text-[10px] text-gray-400">{{ point.yr }}</span>
+                </div>
               </div>
             </div>
             <p v-else class="text-sm text-gray-400 py-8 text-center">
@@ -505,6 +516,17 @@ function monthLabel(year, monthIndex) {
   })
 }
 
+// The same month split into two lines (name over 2-digit year) for
+// the bar charts: a flat "Jan 19" is wider than one bar column, so
+// at ~34 months the labels collide. CSV exports keep the flat label.
+function monthParts(year, monthIndex) {
+  const date = new Date(year, monthIndex, 1)
+  return {
+    mon: date.toLocaleDateString('en-PH', { month: 'short' }),
+    yr: date.toLocaleDateString('en-PH', { year: '2-digit' }),
+  }
+}
+
 // ---------- shared formatters ----------
 function formatPeso(amount) {
   const value = Number(amount) || 0
@@ -560,7 +582,7 @@ const growthSeries = computed(() => {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, count]) => {
       const [year, month] = key.split('-').map(Number)
-      return { label: monthLabel(year, month), count }
+      return { label: monthLabel(year, month), count, ...monthParts(year, month) }
     })
 })
 
@@ -717,6 +739,7 @@ const flowSeries = computed(() => {
     .sort((a, b) => a.year - b.year || a.month - b.month)
     .map((bucket) => ({
       label: monthLabel(bucket.year, bucket.month),
+      ...monthParts(bucket.year, bucket.month),
       income: bucket.income,
       expense: bucket.expense,
     }))

@@ -368,14 +368,43 @@ export const useAdminsStore = defineStore('admins', () => {
       if (error) throw error
       return { ok: true }
     } catch (error) {
+      console.error('[UCMS] reset email failed:', error)
       const message = String(error?.message || '').toLowerCase()
-      if (message.includes('rate limit') || message.includes('security purposes')) {
+      if (
+        message.includes('rate limit') ||
+        message.includes('security purposes') ||
+        message.includes('too many')
+      ) {
         return {
           ok: false,
-          message: 'Too many reset emails requested. Wait a minute, then try again.',
+          message: 'Too many reset emails requested. Wait a few minutes, then try again.',
         }
       }
-      if (message.includes('email') && (message.includes('not') || message.includes('invalid'))) {
+      if (message.includes('not confirmed')) {
+        return {
+          ok: false,
+          message:
+            'That account still needs its email confirmed. Confirm it in the Supabase dashboard (Authentication → Users), then try again.',
+        }
+      }
+      if (message.includes('redirect')) {
+        return {
+          ok: false,
+          message:
+            'The reset link address is not allowed yet. Add http://localhost:5173/reset-password to Redirect URLs in the Supabase dashboard (Authentication → URL Configuration).',
+        }
+      }
+      if (
+        message.includes('smtp') ||
+        message.includes('error sending') ||
+        message.includes('fail')
+      ) {
+        return {
+          ok: false,
+          message: 'The reset email could not be sent. Wait a few minutes and try again.',
+        }
+      }
+      if (message.includes('not found')) {
         return {
           ok: false,
           message: 'No login was found for that email address. Check the address.',

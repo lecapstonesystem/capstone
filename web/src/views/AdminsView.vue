@@ -24,7 +24,8 @@
         class="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg mb-6 text-sm"
       >
         New admins receive a <strong>temporary password</strong> to hand over face-to-face and must
-        change it on first login. Only a <strong>Super Admin</strong> can manage accounts.
+        change it on first login. A forgotten password is reset by <strong>email link</strong>. Only
+        a <strong>Super Admin</strong> can manage accounts.
       </div>
 
       <!-- Search + Role Filter -->
@@ -196,6 +197,14 @@
             class="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm"
           >
             {{ detailsError }}
+          </div>
+
+          <!-- Confirmation notice (e.g. reset email sent) -->
+          <div
+            v-if="detailsNotice"
+            class="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm"
+          >
+            {{ detailsNotice }}
           </div>
 
           <!-- Account Management -->
@@ -387,8 +396,12 @@
               v-model="form.email"
               type="email"
               placeholder="admin@ucms.com"
-              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              :disabled="modalMode === 'edit'"
+              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-50 disabled:cursor-not-allowed"
             />
+            <p v-if="modalMode === 'edit'" class="text-xs text-gray-400 mt-1">
+              The email is the login and cannot be changed here.
+            </p>
           </div>
 
           <div>
@@ -474,24 +487,26 @@ const adminsStore = useAdminsStore()
 // Details modal state
 const detailAdmin = ref(null)
 const detailsError = ref('')
+const detailsNotice = ref('') // green confirmation (e.g. reset email sent)
 const copied = ref(false)
 const roleSelectKey = ref(0) // bump to reset the role <select> after a rejected change
 
 function openDetails(admin) {
   detailAdmin.value = admin
   detailsError.value = ''
+  detailsNotice.value = ''
 }
 
 // Generic confirmation state
 const confirmAction = ref(null) // { title, message, confirmLabel, danger, run, revert }
 
-function runConfirm() {
+async function runConfirm() {
   if (!confirmAction.value) return
-  const result = confirmAction.value.run()
+  const result = await confirmAction.value.run()
   if (result && result.ok === false) {
     // Store rejected it (e.g. self-lockout or last Super Admin) — show the reason
     detailsError.value = result.message
-    if (confirmAction.value.revert) confirmAction.value.revert()
+    if (confirmAction.value?.revert) confirmAction.value.revert()
   } else {
     detailsError.value = ''
   }
@@ -508,13 +523,15 @@ function requestResetPassword(admin) {
   const name = `${admin.firstName} ${admin.lastName}`
   confirmAction.value = {
     title: 'Reset Password?',
-    message: `A new temporary password will be generated for ${name}. They must change it on their next login.`,
-    confirmLabel: 'Reset Password',
+    message: `Send ${name} an email with a link to set a new password? The link goes to ${admin.email}.`,
+    confirmLabel: 'Send Reset Email',
     danger: false,
-    run: () => {
-      adminsStore.resetPassword(admin.id)
-      copied.value = false
-      return { ok: true }
+    run: async () => {
+      const result = await adminsStore.resetPassword(admin.email)
+      if (result.ok) {
+        detailsNotice.value = `Reset email sent to ${admin.email}. ${name} opens the link and chooses a new password.`
+      }
+      return result
     },
   }
 }
@@ -548,7 +565,6 @@ function requestRoleChange(admin, newRole) {
       adminsStore.updateAdmin(admin.id, {
         firstName: admin.firstName,
         lastName: admin.lastName,
-        email: admin.email,
         role: newRole,
       }),
     revert: () => {
@@ -608,32 +624,33 @@ function closeModal() {
   formError.value = ''
 }
 
-function saveAdmin() {
+async function saveAdmin() {
   // Validation
   if (!form.firstName.trim() || !form.lastName.trim()) {
     formError.value = 'First name and last name are required.'
     return
   }
-  if (!form.email.trim()) {
+  if (modalMode.value === 'add' && !form.email.trim()) {
     formError.value = 'Email is required.'
     return
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+  if (modalMode.value === 'add' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
     formError.value = 'Please enter a valid email address.'
     return
   }
 
+  // Email is the login identity — it can only be set when the account
+  // is created (changing it later needs access we do not ship).
   const data = {
     firstName: form.firstName.trim(),
     lastName: form.lastName.trim(),
-    email: form.email.trim(),
     role: form.role,
   }
 
   const result =
     modalMode.value === 'add'
-      ? adminsStore.addAdmin(data)
-      : adminsStore.updateAdmin(editingId.value, data)
+      ? await adminsStore.addAdmin({ ...data, email: form.email.trim() })
+      : await adminsStore.updateAdmin(editingId.value, data)
 
   if (!result.ok) {
     formError.value = result.message

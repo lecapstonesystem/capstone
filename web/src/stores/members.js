@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase'
 import { errorMessage } from '../utils/errorText'
 import { randomPassword } from '../utils/password'
 import { toggleSort, sortRows } from '../utils/tableSort'
-import { useApplicationsStore } from './applications'
 
 /**
  * Members store — live Supabase data (swapped from mocks).
@@ -399,22 +398,10 @@ export const useMembersStore = defineStore('members', () => {
     return true
   }
 
-  async function deleteMember(id) {
-    const { error } = await supabase.from('member').delete().eq('member_id', id)
-    if (error) {
-      // Typical cause: the member still has loans (FK protects the record)
-      lastError.value = errorMessage(error)
-      return
-    }
-    members.value = members.value.filter((member) => member.id !== id)
-    // An approved applicant IS their member row — clear it from the
-    // Applications store too, or the deleted record lingers there
-    // until a full reload. (Deferred call: the two stores import
-    // each other, which ES modules resolve as long as the function
-    // bodies don't run at load time.)
-    const apps = useApplicationsStore()
-    apps.applications = apps.applications.filter((application) => application.id !== id)
-  }
+  // No deleteMember: cooperatives must keep member records (RA 9520,
+  // AMLA), so the portal offers Suspend/Drop only — both keep the
+  // row. Permanent deletion is a deliberate backend action (service_role
+  // / SQL), never a click here.
 
   // Load once, when the store is first used (MembersView mounts).
   fetchMembers()
@@ -444,6 +431,6 @@ export const useMembersStore = defineStore('members', () => {
     issueTempPassword,
     setLoginEnabled,
     addCapital,
-    deleteMember,
+    // deleteMember intentionally absent — see note above
   }
 })

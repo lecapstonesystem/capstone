@@ -490,12 +490,6 @@
               >
                 Drop Member
               </button>
-              <button
-                @click="requestDelete(detailMember)"
-                class="text-red-400 hover:text-red-600 text-xs font-medium ml-auto"
-              >
-                Delete permanently…
-              </button>
             </div>
           </div>
 
@@ -792,7 +786,7 @@
       </div>
     </div>
 
-    <!-- Confirmation Modal (status changes & delete) -->
+    <!-- Confirmation Modal (status changes) -->
     <div
       v-if="confirmAction"
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
@@ -892,19 +886,6 @@ function requestStatusChange(member, newStatus) {
   confirmAction.value = {
     ...presets[newStatus],
     run: () => membersStore.setStatus(member.id, newStatus),
-  }
-}
-
-function requestDelete(member) {
-  confirmAction.value = {
-    title: 'Delete Permanently?',
-    message: `${member.firstName} ${member.lastName} and their history will be permanently removed. Prefer suspending or dropping — coops should keep records.`,
-    confirmLabel: 'Delete',
-    danger: true,
-    run: () => {
-      membersStore.deleteMember(member.id)
-      detailMember.value = null
-    },
   }
 }
 

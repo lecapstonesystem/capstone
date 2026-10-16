@@ -24,6 +24,10 @@ import { toggleSort, sortRows } from '../utils/tableSort'
  *   generateMemberNo floors at max(member_id) either way.
  *   status/member_type are stored lowercase by DEFAULT but matched
  *   Title Case in the UI — normalized on read, written Title Case.
+ *   Registration-queue applicants (member rows in Pending / Under
+ *   Review / Returned / Rejected — 15_registration_queue.sql) are
+ *   excluded from this store: they are not members until the
+ *   Applications module approves them (status Active).
  *
  * capitalShare lives in share_capital (sum of amount), read in a
  * second query and summed client-side.
@@ -243,7 +247,15 @@ export const useMembersStore = defineStore('members', () => {
     lastError.value = ''
     try {
       const [membersRes, capitalRes] = await Promise.all([
-        supabase.from('member').select('*').order('member_id', { ascending: true }),
+        supabase
+          .from('member')
+          .select('*')
+          // Registration-queue rows (15) are applicants, not members —
+          // the Applications module owns them until approval flips
+          // them to Active. Seeds store lowercase statuses; queue
+          // rows are always written Title Case.
+          .not('status', 'in', '("Pending","Under Review","Returned","Rejected")')
+          .order('member_id', { ascending: true }),
         supabase.from('share_capital').select('member_id, amount'),
       ])
       if (membersRes.error) throw membersRes.error

@@ -90,6 +90,7 @@ await supabase.from('member').insert({
   'middle_name': middleName,           // optional
   'last_name': lastName,
   'status': 'Pending',                 // FORCED by RLS — anything else fails
+  'app_source': 'App',                 // shows as "Mobile App" in the portal queue
   'id_photo_url': path,
   'date_joined': DateTime.now().toIso8601String().split('T').first,
   // optional profile the form collects:
@@ -104,10 +105,13 @@ await supabase.from('member').insert({
 
 **Never send:** `member_no` (portal assigns on approval), `member_id`,
 `login_enabled`, `must_change_password`, `temp_password`, `created_at`
-(has default), or any `status` other than `'Pending'`.
+(has default), `app_checklist` / `app_events` / `app_remarks`
+(portal-managed: checklist and timeline have defaults, remarks are
+the admin's), or any `status` other than `'Pending'`.
 
-4. Track the result: re-read your own row — `status` flips
-   `Pending → Active` (approved, `member_no` assigned) or `→ Rejected`.
+4. Track the result: re-read your own row — `status` moves
+   `Pending → Under Review → Active` (approved, `member_no`
+   assigned), or `→ Returned` (fix and re-submit) / `→ Rejected`.
 
 ```dart
 final me = await supabase.from('member')

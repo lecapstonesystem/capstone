@@ -687,12 +687,13 @@ const verifiedCount = computed(() =>
   detailApp.value ? detailApp.value.checklist.filter((item) => item.checked).length : 0,
 )
 
-function openReview(application) {
+async function openReview(application) {
   detailApp.value = application
   reviewError.value = ''
   remarksDraft.value = application.remarks || ''
   // Pending / Returned move into Under Review as soon as the admin opens them
-  appsStore.startReview(application.id)
+  const result = await appsStore.startReview(application.id)
+  if (result && result.ok === false) reviewError.value = result.message
 }
 
 // Form preview (mock paper form; real PDF comes from Supabase Storage later)
@@ -705,11 +706,11 @@ function viewForm(application) {
 // Generic confirmation state
 const confirmAction = ref(null) // { title, message, confirmLabel, danger, run }
 
-function runConfirm() {
+async function runConfirm() {
   const action = confirmAction.value
   confirmAction.value = null
   if (!action) return
-  const result = action.run()
+  const result = await action.run()
   // Store rejected it (e.g. unverified requirements) — show the reason in the review modal
   if (result && result.ok === false) reviewError.value = result.message
 }
@@ -725,8 +726,8 @@ function requestApprove() {
     message: `${application.appNo} will be approved and a member record will be created automatically (status Active, temporary password issued to hand over in person).`,
     confirmLabel: 'Approve & Create Member',
     danger: false,
-    run: () => {
-      const result = appsStore.approveApplication(application.id)
+    run: async () => {
+      const result = await appsStore.approveApplication(application.id, remarksDraft.value)
       if (!result.ok) return result
       credentials.value = {
         memberNo: result.member.memberNo,
@@ -747,8 +748,8 @@ function requestReturn() {
     message: `${application.appNo} will be returned to the applicant to complete the requirements.`,
     confirmLabel: 'Return',
     danger: false,
-    run: () => {
-      const result = appsStore.returnApplication(application.id, remarksDraft.value)
+    run: async () => {
+      const result = await appsStore.returnApplication(application.id, remarksDraft.value)
       if (result.ok) detailApp.value = null
       return result
     },
@@ -762,8 +763,8 @@ function requestReject() {
     message: `${application.appNo} will be rejected. The applicant can file a new application later.`,
     confirmLabel: 'Reject',
     danger: true,
-    run: () => {
-      const result = appsStore.rejectApplication(application.id, remarksDraft.value)
+    run: async () => {
+      const result = await appsStore.rejectApplication(application.id, remarksDraft.value)
       if (result.ok) detailApp.value = null
       return result
     },
@@ -809,7 +810,7 @@ function sanitizePhone() {
   form.phone = form.phone.replace(/\D/g, '').slice(0, 11)
 }
 
-function saveApplication() {
+async function saveApplication() {
   if (!form.firstName.trim() || !form.lastName.trim()) {
     formError.value = 'First name and last name are required.'
     return
@@ -827,17 +828,22 @@ function saveApplication() {
     return
   }
 
-  const result = appsStore.addApplication({
+  const result = await appsStore.addApplication({
     firstName: form.firstName.trim(),
     lastName: form.lastName.trim(),
     phone: form.phone,
     address: form.address.trim(),
     email: form.email.trim(),
   })
+  if (!result.ok) {
+    // Keep the modal open and show why (RLS/network failure)
+    formError.value = result.message || 'Could not save the application.'
+    return
+  }
 
   closeModal()
   // Jump straight into reviewing the application the admin just created
-  openReview(result.application)
+  await openReview(result.application)
 }
 
 function statusClass(status) {

@@ -100,6 +100,16 @@ function displayStatus(row) {
   return status === 'Active' ? 'Approved' : status
 }
 
+// created_at is a naive UTC timestamp column — mark it UTC so the
+// browser shows the real local time instead of reading it 8 hours
+// off (Manila). Fallback: noon of date_joined, which can't shift
+// the displayed date a day either way.
+function receivedAtOf(row) {
+  if (row.created_at) return `${String(row.created_at).replace(/Z$/, '')}Z`
+  if (row.date_joined) return `${row.date_joined}T12:00:00`
+  return ''
+}
+
 // Newest first; the "received" entry is synthesized from created_at
 // so Flutter-filed rows have a timeline before the admin acts.
 function historyOf(row) {
@@ -111,7 +121,7 @@ function historyOf(row) {
   )
   if (!hasReceived) {
     events.push({
-      at: row.created_at || row.date_joined || '',
+      at: receivedAtOf(row),
       action:
         row.app_source === 'App'
           ? 'Application received (via mobile app PDF)'
@@ -134,7 +144,7 @@ function rowToApplication(row) {
     phone: row.contact_number || '',
     address: row.address || '',
     source: row.app_source === 'App' ? 'App' : 'Walk-in',
-    submittedAt: row.created_at || row.date_joined || '',
+    submittedAt: receivedAtOf(row),
     status: displayStatus(row),
     checklist: Array.isArray(row.app_checklist) ? row.app_checklist : defaultChecklist(),
     remarks: row.app_remarks || '',

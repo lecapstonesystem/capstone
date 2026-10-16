@@ -394,6 +394,13 @@ export const useAdminsStore = defineStore('admins', () => {
             'The reset link address is not allowed yet. Add http://localhost:5173/reset-password to Redirect URLs in the Supabase dashboard (Authentication → URL Configuration).',
         }
       }
+      if (message.includes('is invalid') && message.includes('email')) {
+        return {
+          ok: false,
+          message:
+            "That email address is not on the project's allowed list. In the Supabase dashboard (Authentication → Sign In / Providers → Email), clear or update the email allow list, then try again.",
+        }
+      }
       if (
         message.includes('smtp') ||
         message.includes('error sending') ||

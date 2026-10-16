@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { errorMessage } from '../utils/errorText'
 import { randomPassword } from '../utils/password'
 import { toggleSort, sortRows } from '../utils/tableSort'
+import { useApplicationsStore } from './applications'
 
 /**
  * Members store — live Supabase data (swapped from mocks).
@@ -406,6 +407,13 @@ export const useMembersStore = defineStore('members', () => {
       return
     }
     members.value = members.value.filter((member) => member.id !== id)
+    // An approved applicant IS their member row — clear it from the
+    // Applications store too, or the deleted record lingers there
+    // until a full reload. (Deferred call: the two stores import
+    // each other, which ES modules resolve as long as the function
+    // bodies don't run at load time.)
+    const apps = useApplicationsStore()
+    apps.applications = apps.applications.filter((application) => application.id !== id)
   }
 
   // Load once, when the store is first used (MembersView mounts).

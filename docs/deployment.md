@@ -8,10 +8,9 @@ static files.
 ## 1. Deploy the web app (Cloudflare Pages)
 
 **Standard route: Wrangler CLI (from the laptop).** This is the
-project's official deployment path — the repo (`potchiloco-stack/
-capstone`) is personal to a team member, so Git auto-deploy would
-require the owner's GitHub identity in Cloudflare; Wrangler keeps
-hosting fully under the deployer's own account.
+project's official deployment path — it needs no GitHub wiring in
+Cloudflare at all, and keeps hosting fully under the deployer's own
+account.
 
 1. One-time: `npx wrangler login` → browser → **Allow**.
 2. One-time (project already exists — skip):
@@ -29,12 +28,14 @@ client-side.
 
 ### Optional: Git auto-deploy
 
-Only possible by authorizing Cloudflare with the **repo owner's**
-GitHub account (Cloudflare → project → Settings → Build → Git
-repository → Connect → Git account → Add account — owner logs in
-once). If ever connected: build settings `web` / `npm run build` /
-`dist` and env vars `NODE_VERSION=22`, `VITE_SUPABASE_URL`,
-`VITE_SUPABASE_ANON_KEY`; deploys then run on every push to `main`.
+The repo lives in the team org (`lecapstonesystem`). Once you're an
+org member and the **Cloudflare GitHub App is installed on the org**
+with `capstone` selected (org Settings → GitHub Apps → Cloudflare
+Workers & Pages), connect in Cloudflare: project → Settings →
+Build → Git repository → Connect → pick the repo. Build settings
+`web` / `npm run build` / `dist` and env vars `NODE_VERSION=22`,
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`; deploys then run on
+every push to `main`.
 
 ## 2. Point Supabase Auth at the live URL (required!)
 

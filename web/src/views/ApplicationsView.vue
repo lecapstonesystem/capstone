@@ -264,9 +264,11 @@
             {{ reviewError }}
           </div>
 
-          <!-- ID photo (uploaded through the member app) -->
+          <!-- Profile photo (uploaded through the member app) -->
           <div v-if="detailApp.idPhoto">
-            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">ID Photo</p>
+            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
+              Profile Photo
+            </p>
             <PhotoPreview :path="detailApp.idPhoto" />
           </div>
 

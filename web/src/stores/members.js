@@ -88,7 +88,7 @@ function rowToMember(row, capitals, entries) {
     dateJoined: (row.date_joined || '').slice(0, 10),
     capitalShare: capitals.get(row.member_id) || 0,
     capitalEntries: entries.get(row.member_id) || [],
-    // Storage path of the registration ID photo (member-documents
+    // Storage path of the member's profile photo (member-documents
     // bucket); PhotoPreview signs a URL to display it.
     idPhoto: row.id_photo_url || '',
     account: {
@@ -463,11 +463,12 @@ export const useMembersStore = defineStore('members', () => {
     return { ok: true }
   }
 
-  // ---------- ID photo (staff upload from the portal) ----------
-  // Walk-in members never go through the app, so their physical ID
-  // gets photographed at the desk and uploaded here. Both actions
-  // leave an audit note; replacing/removing also deletes the old
-  // file from storage (best-effort — the row is the truth).
+  // ---------- Profile photo (staff upload from the portal) ----------
+  // Walk-in members never go through the app, so their picture is
+  // taken at the desk and uploaded here — counter staff match the
+  // face to the record. Both actions leave an audit note;
+  // replacing/removing also deletes the old file from storage
+  // (best-effort — the row is the truth).
   async function uploadIdPhoto(id, file) {
     const current = members.value.find((item) => item.id === id)
     if (!current) {
@@ -485,7 +486,7 @@ export const useMembersStore = defineStore('members', () => {
     }
     const previous = current.idPhoto
     current.idPhoto = uploaded.path
-    logAction(current, previous ? 'ID photo replaced' : 'ID photo uploaded')
+    logAction(current, previous ? 'Profile photo replaced' : 'Profile photo uploaded')
     if (previous) removeDocumentPhoto(previous)
     return { ok: true }
   }
@@ -500,7 +501,7 @@ export const useMembersStore = defineStore('members', () => {
       .eq('member_id', id)
     if (error) return { ok: false, message: errorMessage(error) }
     current.idPhoto = ''
-    logAction(current, 'ID photo removed')
+    logAction(current, 'Profile photo removed')
     removeDocumentPhoto(previous)
     return { ok: true }
   }

@@ -66,7 +66,7 @@ final uid = res.user!.id; // null only if email confirmation is still ON
 ## 5. Flow 1 — member registration (with photo)
 
 1. `signUp` → `uid`
-2. Pick + compress the ID photo (bucket caps: **5 MB**, jpeg/png/webp only —
+2. Pick + compress the profile photo (bucket caps: **5 MB**, jpeg/png/webp only —
    compress to ~200–300 KB so uploads stay fast on mobile data)
 
 ```dart

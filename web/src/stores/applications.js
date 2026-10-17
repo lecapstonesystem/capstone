@@ -18,7 +18,7 @@ import { useMembersStore } from './members'
  * Client rule: there is NO online registration. Two ways in:
  *   1. 🚶 Walk-in — an admin types the applicant's details here
  *   2. 📱 Flutter app — the app inserts the member row directly
- *      with status 'Pending' + app_source 'App' + the ID photo
+ *      with status 'Pending' + app_source 'App' + the profile photo
  *      (13_app_documents.sql / docs/flutter_app_contract.md)
  *
  * Status lifecycle (member.status):
@@ -77,7 +77,7 @@ function defaultChecklist() {
   return [
     { label: 'Signed application form', checked: false },
     { label: 'Photocopy of valid ID', checked: false },
-    { label: '1x1 ID photo', checked: false },
+    { label: '1x1 photo', checked: false },
     { label: 'Membership fee paid', checked: false },
   ]
 }
@@ -161,7 +161,7 @@ function rowToApplication(row) {
     phone: row.contact_number || '',
     address: row.address || '',
     source: row.app_source === 'App' ? 'App' : 'Walk-in',
-    // Storage path of the registration ID photo (App sources only)
+    // Storage path of the profile photo (App sources only)
     idPhoto: row.id_photo_url || '',
     submittedAt: receivedAtOf(row),
     status: displayStatus(row),

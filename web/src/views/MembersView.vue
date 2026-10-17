@@ -269,7 +269,7 @@
           <div class="grid grid-cols-1 gap-4 text-sm">
             <div>
               <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-                ID Photo
+                Profile Photo
               </p>
               <div class="flex items-start gap-3">
                 <PhotoPreview v-if="detailMember.idPhoto" :path="detailMember.idPhoto" />
@@ -976,8 +976,9 @@ function requestRemoveCapital(member, entry) {
   }
 }
 
-// ID photo — staff photograph the physical ID at the desk (walk-in
-// members); replace/remove both land in the activity trail.
+// Profile photo — staff photograph the member at the desk (walk-ins)
+// so counter staff can match the face to the record; replace/remove
+// both land in the activity trail.
 const idPhotoInput = ref(null)
 const photoError = ref('')
 
@@ -997,8 +998,8 @@ async function onIdPhotoPicked(event) {
 function requestRemovePhoto() {
   confirmReason.value = ''
   confirmAction.value = {
-    title: 'Remove ID Photo?',
-    message: `${detailMember.value.firstName} ${detailMember.value.lastName}'s ID photo will be removed from the record. You can upload a new one anytime.`,
+    title: 'Remove Profile Photo?',
+    message: `${detailMember.value.firstName} ${detailMember.value.lastName}'s profile photo will be removed from the record. You can upload a new one anytime.`,
     confirmLabel: 'Remove',
     danger: true,
     run: async () => {

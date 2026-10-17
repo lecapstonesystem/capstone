@@ -124,7 +124,7 @@
             </thead>
             <tbody class="divide-y divide-gray-100">
               <tr
-                v-for="admin in adminsStore.filteredAdmins"
+                v-for="admin in adminsStore.paginatedAdmins"
                 :key="admin.id"
                 class="hover:bg-gray-50 transition duration-150"
               >
@@ -194,6 +194,45 @@
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Pagination -->
+        <div
+          class="px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3"
+        >
+          <div class="flex items-center gap-2 text-sm text-gray-500">
+            <span>Show</span>
+            <select
+              :value="adminsStore.pageSize"
+              @change="adminsStore.setPageSize(Number($event.target.value))"
+              class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            >
+              <option :value="10">10</option>
+              <option :value="20">20</option>
+              <option :value="50">50</option>
+            </select>
+            <span>per page · {{ paginationLabel }}</span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button
+              @click="adminsStore.setPage(adminsStore.page - 1)"
+              :disabled="adminsStore.page <= 1"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ← Prev
+            </button>
+            <span class="text-sm text-gray-600 px-2 whitespace-nowrap">
+              Page {{ adminsStore.page }} of {{ adminsStore.totalPages }}
+            </span>
+            <button
+              @click="adminsStore.setPage(adminsStore.page + 1)"
+              :disabled="adminsStore.page >= adminsStore.totalPages"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next →
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -642,6 +681,15 @@ async function copyTempPassword() {
 }
 
 // Add / Edit modal state
+// "Showing 1–10 of 25 admins"
+const paginationLabel = computed(() => {
+  const total = adminsStore.filteredAdmins.length
+  if (total === 0) return 'No admins found'
+  const start = (adminsStore.page - 1) * adminsStore.pageSize + 1
+  const end = Math.min(adminsStore.page * adminsStore.pageSize, total)
+  return `Showing ${start}–${end} of ${total} admins`
+})
+
 const showModal = ref(false)
 const modalMode = ref('add') // 'add' | 'edit'
 const editingId = ref(null)

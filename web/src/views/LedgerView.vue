@@ -150,7 +150,7 @@
             </thead>
             <tbody class="divide-y divide-gray-100">
               <tr
-                v-for="txn in ledgerStore.filteredTransactions"
+                v-for="txn in ledgerStore.paginatedTransactions"
                 :key="txn.id"
                 class="hover:bg-gray-50 transition duration-150"
               >
@@ -204,6 +204,45 @@
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Pagination -->
+        <div
+          class="px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3"
+        >
+          <div class="flex items-center gap-2 text-sm text-gray-500">
+            <span>Show</span>
+            <select
+              :value="ledgerStore.pageSize"
+              @change="ledgerStore.setPageSize(Number($event.target.value))"
+              class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            >
+              <option :value="10">10</option>
+              <option :value="20">20</option>
+              <option :value="50">50</option>
+            </select>
+            <span>per page · {{ paginationLabel }}</span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button
+              @click="ledgerStore.setPage(ledgerStore.page - 1)"
+              :disabled="ledgerStore.page <= 1"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ← Prev
+            </button>
+            <span class="text-sm text-gray-600 px-2 whitespace-nowrap">
+              Page {{ ledgerStore.page }} of {{ ledgerStore.totalPages }}
+            </span>
+            <button
+              @click="ledgerStore.setPage(ledgerStore.page + 1)"
+              :disabled="ledgerStore.page >= ledgerStore.totalPages"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next →
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -375,6 +414,15 @@ const showColumnPicker = ref(false)
 const visibleColumnCount = computed(() => 4 + Object.values(columns).filter(Boolean).length)
 
 // Modal state
+// "Showing 1–10 of 25 entries"
+const paginationLabel = computed(() => {
+  const total = ledgerStore.filteredTransactions.length
+  if (total === 0) return 'No transactions found'
+  const start = (ledgerStore.page - 1) * ledgerStore.pageSize + 1
+  const end = Math.min(ledgerStore.page * ledgerStore.pageSize, total)
+  return `Showing ${start}–${end} of ${total} entries`
+})
+
 const showModal = ref(false)
 const modalMode = ref('add') // 'add' | 'edit'
 const editingId = ref(null)

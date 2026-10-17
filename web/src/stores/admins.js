@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '../lib/supabase'
 import { errorMessage } from '../utils/errorText'
@@ -108,10 +108,43 @@ export const useAdminsStore = defineStore('admins', () => {
     return sortRows(rows, sortKey.value, sortDir.value, accessors)
   })
 
+  // Pagination
+  const page = ref(1)
+  const pageSize = ref(10)
+
+  const totalPages = computed(() =>
+    Math.max(1, Math.ceil(filteredAdmins.value.length / pageSize.value)),
+  )
+
+  const paginatedAdmins = computed(() => {
+    const start = (page.value - 1) * pageSize.value
+    return filteredAdmins.value.slice(start, start + pageSize.value)
+  })
+
+  function setPage(newPage) {
+    page.value = Math.min(Math.max(1, newPage), totalPages.value)
+  }
+
+  function setPageSize(size) {
+    pageSize.value = size
+    page.value = 1
+  }
+
+  // New search results always start from page 1
+  watch(search, () => {
+    page.value = 1
+  })
+
+  // If the current page no longer exists (e.g. after a delete), step back
+  watch(totalPages, (count) => {
+    if (page.value > count) page.value = count
+  })
+
   function setSort(key) {
     const result = toggleSort(sortKey.value, sortDir.value, key)
     sortKey.value = result.key
     sortDir.value = result.dir
+    page.value = 1 // sorting restarts from the first page
   }
 
   function sortState(key) {
@@ -462,6 +495,12 @@ export const useAdminsStore = defineStore('admins', () => {
     currentAdmin,
     superAdminCount,
     filteredAdmins,
+    paginatedAdmins,
+    page,
+    pageSize,
+    totalPages,
+    setPage,
+    setPageSize,
     setSort,
     sortState,
   }

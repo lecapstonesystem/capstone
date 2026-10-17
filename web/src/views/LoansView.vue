@@ -198,7 +198,7 @@
             </thead>
             <tbody class="divide-y divide-gray-100">
               <tr
-                v-for="loan in loansStore.filteredLoans"
+                v-for="loan in loansStore.paginatedLoans"
                 :key="loan.id"
                 class="hover:bg-gray-50 transition duration-150"
               >
@@ -268,6 +268,45 @@
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Pagination -->
+        <div
+          class="px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3"
+        >
+          <div class="flex items-center gap-2 text-sm text-gray-500">
+            <span>Show</span>
+            <select
+              :value="loansStore.pageSize"
+              @change="loansStore.setPageSize(Number($event.target.value))"
+              class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            >
+              <option :value="10">10</option>
+              <option :value="20">20</option>
+              <option :value="50">50</option>
+            </select>
+            <span>per page · {{ paginationLabel }}</span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button
+              @click="loansStore.setPage(loansStore.page - 1)"
+              :disabled="loansStore.page <= 1"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ← Prev
+            </button>
+            <span class="text-sm text-gray-600 px-2 whitespace-nowrap">
+              Page {{ loansStore.page }} of {{ loansStore.totalPages }}
+            </span>
+            <button
+              @click="loansStore.setPage(loansStore.page + 1)"
+              :disabled="loansStore.page >= loansStore.totalPages"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next →
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1179,6 +1218,15 @@ function requestReminder() {
     run: () => loansStore.sendReminder(loan.id),
   }
 }
+
+// "Showing 1–10 of 25 loans"
+const paginationLabel = computed(() => {
+  const total = loansStore.filteredLoans.length
+  if (total === 0) return 'No loans found'
+  const start = (loansStore.page - 1) * loansStore.pageSize + 1
+  const end = Math.min(loansStore.page * loansStore.pageSize, total)
+  return `Showing ${start}–${end} of ${total} loans`
+})
 
 // ---------- record payment ----------
 const showPayment = ref(false)

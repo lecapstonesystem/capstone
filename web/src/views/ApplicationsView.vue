@@ -154,7 +154,7 @@
             </thead>
             <tbody class="divide-y divide-gray-100">
               <tr
-                v-for="application in appsStore.filteredApplications"
+                v-for="application in appsStore.paginatedApplications"
                 :key="application.id"
                 class="hover:bg-gray-50 transition duration-150"
               >
@@ -226,6 +226,45 @@
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Pagination -->
+        <div
+          class="px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3"
+        >
+          <div class="flex items-center gap-2 text-sm text-gray-500">
+            <span>Show</span>
+            <select
+              :value="appsStore.pageSize"
+              @change="appsStore.setPageSize(Number($event.target.value))"
+              class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            >
+              <option :value="10">10</option>
+              <option :value="20">20</option>
+              <option :value="50">50</option>
+            </select>
+            <span>per page · {{ paginationLabel }}</span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button
+              @click="appsStore.setPage(appsStore.page - 1)"
+              :disabled="appsStore.page <= 1"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ← Prev
+            </button>
+            <span class="text-sm text-gray-600 px-2 whitespace-nowrap">
+              Page {{ appsStore.page }} of {{ appsStore.totalPages }}
+            </span>
+            <button
+              @click="appsStore.setPage(appsStore.page + 1)"
+              :disabled="appsStore.page >= appsStore.totalPages"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next →
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -911,6 +950,15 @@ async function copyTempPassword() {
 }
 
 // New Application (Walk-in) modal state
+// "Showing 1–10 of 25 applications"
+const paginationLabel = computed(() => {
+  const total = appsStore.filteredApplications.length
+  if (total === 0) return 'No applications found'
+  const start = (appsStore.page - 1) * appsStore.pageSize + 1
+  const end = Math.min(appsStore.page * appsStore.pageSize, total)
+  return `Showing ${start}–${end} of ${total} applications`
+})
+
 const showModal = ref(false)
 const formError = ref('')
 

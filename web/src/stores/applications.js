@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '../lib/supabase'
 import { errorMessage } from '../utils/errorText'
@@ -212,10 +212,43 @@ export const useApplicationsStore = defineStore('applications', () => {
     return sortRows(filtered, sortKey.value, sortDir.value, accessors)
   })
 
+  // Pagination
+  const page = ref(1)
+  const pageSize = ref(10)
+
+  const totalPages = computed(() =>
+    Math.max(1, Math.ceil(filteredApplications.value.length / pageSize.value)),
+  )
+
+  const paginatedApplications = computed(() => {
+    const start = (page.value - 1) * pageSize.value
+    return filteredApplications.value.slice(start, start + pageSize.value)
+  })
+
+  function setPage(newPage) {
+    page.value = Math.min(Math.max(1, newPage), totalPages.value)
+  }
+
+  function setPageSize(size) {
+    pageSize.value = size
+    page.value = 1
+  }
+
+  // New search/filter results always start from page 1
+  watch([search, statusFilter], () => {
+    page.value = 1
+  })
+
+  // If the current page no longer exists (e.g. after a delete), step back
+  watch(totalPages, (count) => {
+    if (page.value > count) page.value = count
+  })
+
   function setSort(key) {
     const next = toggleSort(sortKey.value, sortDir.value, key)
     sortKey.value = next.key
     sortDir.value = next.dir
+    page.value = 1 // sorting restarts from the first page
   }
 
   function sortState(key) {
@@ -494,5 +527,11 @@ export const useApplicationsStore = defineStore('applications', () => {
     rejectApplication,
     uploadAppPhoto,
     removeAppPhoto,
+    paginatedApplications,
+    page,
+    pageSize,
+    totalPages,
+    setPage,
+    setPageSize,
   }
 })

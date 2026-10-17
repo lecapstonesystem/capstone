@@ -6,6 +6,7 @@ import { useAuthStore } from './auth'
 import { loanTotals } from '../utils/amortization'
 import { errorMessage } from '../utils/errorText'
 import { toggleSort, sortRows } from '../utils/tableSort'
+import { useAuditStore } from './audit'
 
 /**
  * Loans store — live Supabase data (swapped from mocks).
@@ -322,6 +323,14 @@ export const useLoansStore = defineStore('loans', () => {
         .order('loan_id', { ascending: true })
       if (error) throw error
       loans.value = (data || []).map(rowToLoan)
+      // Fill each loan's Activity list from the durable audit trail.
+      const histories = await useAuditStore().loadHistories(
+        'loan',
+        loans.value.map((loan) => String(loan.id)),
+      )
+      loans.value.forEach((loan) => {
+        loan.history = histories.get(String(loan.id)) || []
+      })
     } catch (error) {
       lastError.value = errorMessage(error)
       loans.value = []
@@ -330,9 +339,11 @@ export const useLoansStore = defineStore('loans', () => {
     }
   }
 
+  // Kept on the row for display; written to the audit_log table in
+  // the background (see stores/audit.js).
   function logAction(loan, action) {
     if (!loan.history) loan.history = []
-    loan.history.unshift({ at: new Date().toISOString(), action, by: 'Admin' })
+    loan.history.unshift(useAuditStore().record('loan', loan.id, action))
   }
 
   // ---------- actions ----------
@@ -445,15 +456,13 @@ export const useLoansStore = defineStore('loans', () => {
       releaseChannel: null,
       payments: [],
       remarks: '',
-      history: [
-        {
-          at: now,
-          action: `Loan application submitted — ${typeInfo.label} ₱${round2(amount).toLocaleString('en-PH')}`,
-          by: 'Admin',
-        },
-      ],
+      history: [],
     }
     loans.value.push(loan)
+    logAction(
+      loan,
+      `Loan application submitted — ${typeInfo.label} ₱${round2(amount).toLocaleString('en-PH')}`,
+    )
     return { ok: true, loan }
   }
 

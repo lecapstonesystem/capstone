@@ -5,6 +5,7 @@ import { errorMessage } from '../utils/errorText'
 import { useAuthStore } from './auth'
 import { randomPassword } from '../utils/password'
 import { toggleSort, sortRows } from '../utils/tableSort'
+import { useAuditStore } from './audit'
 
 /**
  * Admins store — live Supabase (public.admin, linked to Supabase Auth
@@ -146,8 +147,7 @@ export const useAdminsStore = defineStore('admins', () => {
         tempPassword: null,
       },
       lastLogin: row.last_login ? ensureUtc(row.last_login) : null,
-      // Session-only trail. Wiring audit_log (durable who-did-what) is
-      // a separate module — same state the Members page is in.
+      // Filled from the durable audit_log trail in fetchAdmins().
       history: [],
     }
   }
@@ -158,16 +158,10 @@ export const useAdminsStore = defineStore('admins', () => {
     return /[zZ]|[+-]\d{2}:?\d{2}$/.test(value) ? value : `${value}Z`
   }
 
-  function actor() {
-    return auth.profile?.name || 'Signed-in admin'
-  }
-
+  // Kept on the row for display; written to the audit_log table in
+  // the background (see stores/audit.js).
   function logAction(admin, action) {
-    admin.history.unshift({
-      at: new Date().toISOString(),
-      action,
-      by: actor(),
-    })
+    admin.history.unshift(useAuditStore().record('admin', admin.id, action))
   }
 
   async function fetchAdmins() {
@@ -180,6 +174,14 @@ export const useAdminsStore = defineStore('admins', () => {
         .order('admin_id', { ascending: true })
       if (error) throw error
       admins.value = (data || []).map(rowToAdmin)
+      // Fill each admin's Activity list from the durable audit trail.
+      const histories = await useAuditStore().loadHistories(
+        'admin',
+        admins.value.map((admin) => String(admin.id)),
+      )
+      admins.value.forEach((admin) => {
+        admin.history = histories.get(String(admin.id)) || []
+      })
     } catch (error) {
       lastError.value = errorMessage(error)
       admins.value = []

@@ -11,6 +11,7 @@ import { useLoansStore } from './stores/loans'
 import { useLedgerStore } from './stores/ledger'
 import { useApplicationsStore } from './stores/applications'
 import { useAdminsStore } from './stores/admins'
+import { useAuditStore } from './stores/audit'
 
 /**
  * Fresh-data layer. Every store fetches once on first use and then
@@ -45,6 +46,7 @@ function refresh() {
   useLedgerStore().fetchLedger()
   useApplicationsStore().fetchApplications()
   useAdminsStore().fetchAdmins()
+  useAuditStore().fetchRecent()
 }
 
 function scheduleRefresh() {

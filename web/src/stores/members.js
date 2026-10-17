@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { errorMessage } from '../utils/errorText'
 import { randomPassword } from '../utils/password'
 import { toggleSort, sortRows } from '../utils/tableSort'
+import { useAuditStore } from './audit'
 
 /**
  * Members store — live Supabase data (swapped from mocks).
@@ -90,6 +91,9 @@ function rowToMember(row, capitals) {
       mustChangePassword: row.must_change_password === true,
       tempPassword: row.temp_password || null,
     },
+    // Registration-queue timeline kept on the member row (15) —
+    // merged with the audit_log trail in fetchMembers().
+    appEvents: Array.isArray(row.app_events) ? row.app_events : [],
     history: [],
   }
 }
@@ -219,10 +223,11 @@ export const useMembersStore = defineStore('members', () => {
     return `KHS-${String(max + 1).padStart(4, '0')}`
   }
 
-  // Newest first — client-side only until audit history gets a table
+  // Newest first — kept on the row for display and written to the
+  // audit_log table in the background (see stores/audit.js).
   function logAction(member, action) {
     if (!member.history) member.history = []
-    member.history.unshift({ at: new Date().toISOString(), action, by: 'Admin' })
+    member.history.unshift(useAuditStore().record('member', member.id, action))
   }
 
   // detailMember holds a direct reference to the row object, so
@@ -263,6 +268,19 @@ export const useMembersStore = defineStore('members', () => {
         }
       }
       members.value = (membersRes.data || []).map((row) => rowToMember(row, capitals))
+      // Fill each member's Activity list from the durable audit
+      // trail, merged with the registration timeline kept on the
+      // row itself — newest first.
+      const histories = await useAuditStore().loadHistories(
+        'member',
+        members.value.map((member) => String(member.id)),
+      )
+      members.value.forEach((member) => {
+        const fromAudit = histories.get(String(member.id)) || []
+        member.history = [...fromAudit, ...member.appEvents].sort(
+          (a, b) => new Date(b.at) - new Date(a.at),
+        )
+      })
     } catch (error) {
       lastError.value = errorMessage(error)
       members.value = []

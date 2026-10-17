@@ -95,6 +95,7 @@
                 <p class="text-sm truncate">
                   <span class="font-medium text-gray-800">{{ entry.label }}</span>
                   <span class="text-gray-500"> — {{ entry.action }}</span>
+                  <span v-if="entry.actor" class="text-gray-400"> · {{ entry.actor }}</span>
                 </p>
               </div>
               <span class="text-xs text-gray-400 whitespace-nowrap shrink-0">
@@ -116,11 +117,15 @@ import { useMembersStore } from '../stores/members'
 import { useApplicationsStore } from '../stores/applications'
 import { useLoansStore } from '../stores/loans'
 import { useLedgerStore } from '../stores/ledger'
+import { useAdminsStore } from '../stores/admins'
+import { useAuditStore } from '../stores/audit'
 
 const membersStore = useMembersStore()
 const appsStore = useApplicationsStore()
 const loansStore = useLoansStore()
 const ledgerStore = useLedgerStore()
+const adminsStore = useAdminsStore()
+const auditStore = useAuditStore()
 
 const todayLong = new Date().toLocaleDateString('en-PH', {
   weekday: 'long',
@@ -182,31 +187,17 @@ const attentionItems = computed(() => {
   return items
 })
 
-// Aggregated history from every module, newest first
+// Recent activity: the durable audit trail (members, loans, admins)
+// plus application review timelines (kept on the member row as
+// app_events) and ledger postings — newest first.
 const recentActivity = computed(() => {
-  const entries = []
-
-  membersStore.members.forEach((member) => {
-    member.history?.forEach((entry) => {
-      entries.push({
-        at: entry.at,
-        label: `${member.memberNo} · ${member.firstName} ${member.lastName}`,
-        action: entry.action,
-        kind: 'member',
-      })
-    })
-  })
-
-  loansStore.loans.forEach((loan) => {
-    loan.history?.forEach((entry) => {
-      entries.push({
-        at: entry.at,
-        label: `${loan.loanNo} · ${loan.memberName}`,
-        action: entry.action,
-        kind: 'loan',
-      })
-    })
-  })
+  const entries = auditStore.recent.map((row) => ({
+    at: row.created_at,
+    label: auditLabel(row),
+    action: row.action,
+    actor: row.actor,
+    kind: KIND_META[row.entity_type] ? row.entity_type : 'ledger',
+  }))
 
   appsStore.applications.forEach((application) => {
     application.history?.forEach((entry) => {
@@ -214,6 +205,7 @@ const recentActivity = computed(() => {
         at: entry.at,
         label: `${application.appNo} · ${application.firstName} ${application.lastName}`,
         action: entry.action,
+        actor: entry.by,
         kind: 'application',
       })
     })
@@ -224,6 +216,7 @@ const recentActivity = computed(() => {
       at: `${txn.date}T12:00:00`,
       label: txn.refNo,
       action: `${txn.type} — ${txn.description} (${formatPeso(txn.amount)})`,
+      actor: '',
       kind: 'ledger',
     })
   })
@@ -231,10 +224,29 @@ const recentActivity = computed(() => {
   return entries.sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 8)
 })
 
+/** Human label for an audit row, looked up in the live stores. */
+function auditLabel(row) {
+  const id = String(row.entity_id)
+  if (row.entity_type === 'member') {
+    const member = membersStore.members.find((item) => String(item.id) === id)
+    return member ? `${member.memberNo} · ${member.firstName} ${member.lastName}` : `Member #${id}`
+  }
+  if (row.entity_type === 'loan') {
+    const loan = loansStore.loans.find((item) => String(item.id) === id)
+    return loan ? `${loan.loanNo} · ${loan.memberName}` : `Loan #${id}`
+  }
+  if (row.entity_type === 'admin') {
+    const admin = adminsStore.admins.find((item) => String(item.id) === id)
+    return admin ? `${admin.firstName} ${admin.lastName}` : 'Admin account'
+  }
+  return row.entity_type
+}
+
 const KIND_META = {
   member: { bg: 'bg-green-500' },
   loan: { bg: 'bg-blue-500' },
   application: { bg: 'bg-amber-500' },
+  admin: { bg: 'bg-purple-500' },
   ledger: { bg: 'bg-gray-400' },
 }
 

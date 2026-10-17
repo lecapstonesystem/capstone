@@ -14,7 +14,9 @@ static files.
    - **Root directory:** `web`
    - **Build command:** `npm run build`
    - **Build output directory:** `dist`
-4. Environment variables (build-time, both are client-safe):
+4. Environment variables (build-time, all client-safe):
+   - `NODE_VERSION` = `22` — the project requires Node ^22.18;
+     Cloudflare's default build image is older
    - `VITE_SUPABASE_URL` — Supabase Dashboard → Project Settings →
      API Keys → Project URL
    - `VITE_SUPABASE_ANON_KEY` — the **anon / publishable** key
@@ -25,6 +27,27 @@ static files.
 `web/public/_redirects` (already in the repo) makes every route
 (`/members`, `/loans`, …) work on refresh — Vue Router handles them
 client-side.
+
+### Backup route: deploy from the laptop (Wrangler CLI)
+
+If the GitHub link ever breaks (repo access revoked, app
+uninstalled), the same site can be pushed straight to the same
+Cloudflare project — no GitHub involved:
+
+1. One-time: `npx wrangler login` → browser opens → **Allow**
+   (uses your own Cloudflare account).
+2. Build locally — `npm run build` in `web/`; the local `.env`
+   bakes the Supabase variables in.
+3. Deploy:
+   `npx wrangler pages deploy dist --project-name <name> --branch main`
+   (run in `web/`; `<name>` = the Pages project name).
+
+Rules:
+
+- Deploy only from a **clean, pushed tree** — the live site must
+  never contain work that isn't in the repo.
+- Both routes write to the same project's deploy history; the
+  newest deploy wins.
 
 ## 2. Point Supabase Auth at the live URL (required!)
 

@@ -241,7 +241,7 @@
               v-model.number="form.amount"
               type="number"
               min="0"
-              step="0.01"
+              step="1"
               placeholder="0.00"
               class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
@@ -383,7 +383,9 @@ async function saveTransaction() {
     type: form.type,
     category: form.category,
     description: form.description.trim(),
-    amount: Number(form.amount),
+    // Rounded to centavos: the money column stores 2 decimals, so
+    // 2.999 typed by hand would be rejected by the database.
+    amount: Math.round(Number(form.amount) * 100) / 100,
   }
 
   const result =

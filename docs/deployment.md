@@ -7,47 +7,34 @@ static files.
 
 ## 1. Deploy the web app (Cloudflare Pages)
 
-1. Push the repo (`potchiloco-stack/capstone`, stays **private**).
-2. Cloudflare Dashboard → **Workers & Pages → Create → Pages →
-   Connect to Git** → pick the repo.
-3. Build settings:
-   - **Root directory:** `web`
-   - **Build command:** `npm run build`
-   - **Build output directory:** `dist`
-4. Environment variables (build-time, all client-safe):
-   - `NODE_VERSION` = `22` — the project requires Node ^22.18;
-     Cloudflare's default build image is older
-   - `VITE_SUPABASE_URL` — Supabase Dashboard → Project Settings →
-     API Keys → Project URL
-   - `VITE_SUPABASE_ANON_KEY` — the **anon / publishable** key
-     (never the service_role key — it must never reach a browser)
-5. Deploy. The site gets a URL like
-   `https://ucms-admin.pages.dev`.
+**Standard route: Wrangler CLI (from the laptop).** This is the
+project's official deployment path — the repo (`potchiloco-stack/
+capstone`) is personal to a team member, so Git auto-deploy would
+require the owner's GitHub identity in Cloudflare; Wrangler keeps
+hosting fully under the deployer's own account.
+
+1. One-time: `npx wrangler login` → browser → **Allow**.
+2. One-time (project already exists — skip):
+   `npx wrangler pages project create ucms-admin --production-branch main`
+3. Every release:
+   - `npm run build` in `web/` — the local `.env` bakes in
+     `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`.
+   - `npx wrangler pages deploy dist --project-name ucms-admin --branch main`
+4. Deploy only from a **clean, pushed tree** — the live site must
+   never contain work that isn't in the repo.
 
 `web/public/_redirects` (already in the repo) makes every route
 (`/members`, `/loans`, …) work on refresh — Vue Router handles them
 client-side.
 
-### Backup route: deploy from the laptop (Wrangler CLI)
+### Optional: Git auto-deploy
 
-If the GitHub link ever breaks (repo access revoked, app
-uninstalled), the same site can be pushed straight to the same
-Cloudflare project — no GitHub involved:
-
-1. One-time: `npx wrangler login` → browser opens → **Allow**
-   (uses your own Cloudflare account).
-2. Build locally — `npm run build` in `web/`; the local `.env`
-   bakes the Supabase variables in.
-3. Deploy:
-   `npx wrangler pages deploy dist --project-name <name> --branch main`
-   (run in `web/`; `<name>` = the Pages project name).
-
-Rules:
-
-- Deploy only from a **clean, pushed tree** — the live site must
-  never contain work that isn't in the repo.
-- Both routes write to the same project's deploy history; the
-  newest deploy wins.
+Only possible by authorizing Cloudflare with the **repo owner's**
+GitHub account (Cloudflare → project → Settings → Build → Git
+repository → Connect → Git account → Add account — owner logs in
+once). If ever connected: build settings `web` / `npm run build` /
+`dist` and env vars `NODE_VERSION=22`, `VITE_SUPABASE_URL`,
+`VITE_SUPABASE_ANON_KEY`; deploys then run on every push to `main`.
 
 ## 2. Point Supabase Auth at the live URL (required!)
 

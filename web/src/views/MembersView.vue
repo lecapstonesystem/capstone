@@ -297,6 +297,9 @@
                 class="hidden"
                 @change="onIdPhotoPicked"
               />
+              <p class="text-xs text-gray-400 mt-1">
+                JPEG, PNG or WebP — large photos are resized automatically.
+              </p>
               <p v-if="photoError" class="text-xs text-red-600 mt-1">{{ photoError }}</p>
             </div>
             <div>

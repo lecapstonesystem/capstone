@@ -939,7 +939,8 @@
               </button>
             </div>
             <p class="text-xs text-gray-400 mt-1">
-              JPEG, PNG or WebP — up to 5 MB. Shows in the payment history.
+              JPEG, PNG or WebP — large photos are resized automatically. Shows in the payment
+              history.
             </p>
           </div>
         </div>

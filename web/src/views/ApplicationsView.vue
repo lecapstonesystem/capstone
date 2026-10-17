@@ -75,12 +75,45 @@
           <option value="Returned">Returned</option>
           <option value="Rejected">Rejected</option>
         </select>
+
+        <!-- Column visibility -->
+        <div class="relative">
+          <button
+            @click="showColumnPicker = !showColumnPicker"
+            class="border border-gray-300 rounded-lg px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition duration-200 w-full sm:w-auto"
+          >
+            ▦ Columns
+          </button>
+          <div
+            v-if="showColumnPicker"
+            class="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-20 space-y-2"
+          >
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.source" type="checkbox" class="accent-green-600" />
+              Source
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.submitted" type="checkbox" class="accent-green-600" />
+              Submitted
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.status" type="checkbox" class="accent-green-600" />
+              Status
+            </label>
+          </div>
+        </div>
       </div>
+      <!-- Click outside to close the Columns dropdown -->
+      <div
+        v-if="showColumnPicker"
+        class="fixed inset-0 z-10"
+        @click="showColumnPicker = false"
+      ></div>
 
       <!-- Applications Table -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div class="table-scroll overflow-x-auto">
-          <table class="w-full table-fixed min-w-[880px] text-sm">
+          <table class="w-full table-fixed text-sm" :style="{ minWidth: tableMinWidth }">
             <thead>
               <tr
                 class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -91,13 +124,28 @@
                 <SortableTh class="px-6 py-3 w-[24%]" :store="appsStore" sort-key="applicant">
                   Applicant
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[12%]" :store="appsStore" sort-key="source">
+                <SortableTh
+                  v-if="columns.source"
+                  class="px-6 py-3 w-[12%]"
+                  :store="appsStore"
+                  sort-key="source"
+                >
                   Source
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[13%]" :store="appsStore" sort-key="submitted">
+                <SortableTh
+                  v-if="columns.submitted"
+                  class="px-6 py-3 w-[13%]"
+                  :store="appsStore"
+                  sort-key="submitted"
+                >
                   Submitted
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[13%]" :store="appsStore" sort-key="status">
+                <SortableTh
+                  v-if="columns.status"
+                  class="px-6 py-3 w-[13%]"
+                  :store="appsStore"
+                  sort-key="status"
+                >
                   Status
                 </SortableTh>
                 <th class="px-6 py-3 w-[13%]">Form</th>
@@ -123,7 +171,7 @@
                     </span>
                   </div>
                 </td>
-                <td class="px-6 py-4">
+                <td v-if="columns.source" class="px-6 py-4">
                   <span
                     class="px-2.5 py-1 rounded-full text-xs font-medium"
                     :class="
@@ -135,8 +183,10 @@
                     {{ application.source === 'App' ? 'Mobile App' : 'Walk-in' }}
                   </span>
                 </td>
-                <td class="px-6 py-4 text-gray-500">{{ formatDate(application.submittedAt) }}</td>
-                <td class="px-6 py-4">
+                <td v-if="columns.submitted" class="px-6 py-4 text-gray-500">
+                  {{ formatDate(application.submittedAt) }}
+                </td>
+                <td v-if="columns.status" class="px-6 py-4">
                   <span
                     class="px-2.5 py-1 rounded-full text-xs font-medium"
                     :class="statusClass(application.status)"
@@ -170,7 +220,7 @@
 
               <!-- Empty state -->
               <tr v-if="appsStore.filteredApplications.length === 0">
-                <td colspan="7" class="px-6 py-10 text-center text-gray-400">
+                <td :colspan="visibleColumnCount" class="px-6 py-10 text-center text-gray-400">
                   No applications found.
                 </td>
               </tr>
@@ -671,6 +721,13 @@ import SortableTh from '../components/SortableTh.vue'
 import { useApplicationsStore } from '../stores/applications'
 
 const appsStore = useApplicationsStore()
+
+// Column visibility — App No, Applicant, Form and Actions always show
+const columns = reactive({ source: true, submitted: true, status: true })
+const showColumnPicker = ref(false)
+const visibleColumnCount = computed(() => 4 + Object.values(columns).filter(Boolean).length)
+// Only force horizontal scroll when the wide columns are visible
+const tableMinWidth = computed(() => (columns.source || columns.submitted ? '880px' : '700px'))
 
 // Review modal state
 const detailApp = ref(null)

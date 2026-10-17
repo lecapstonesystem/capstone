@@ -96,12 +96,53 @@
             {{ type.label }}
           </option>
         </select>
+
+        <!-- Column visibility -->
+        <div class="relative">
+          <button
+            @click="showColumnPicker = !showColumnPicker"
+            class="border border-gray-300 rounded-lg px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition duration-200 w-full sm:w-auto"
+          >
+            ▦ Columns
+          </button>
+          <div
+            v-if="showColumnPicker"
+            class="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-20 space-y-2"
+          >
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.type" type="checkbox" class="accent-green-600" />
+              Type
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.principal" type="checkbox" class="accent-green-600" />
+              Principal
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.balance" type="checkbox" class="accent-green-600" />
+              Balance
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.status" type="checkbox" class="accent-green-600" />
+              Status
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.date" type="checkbox" class="accent-green-600" />
+              Date
+            </label>
+          </div>
+        </div>
       </div>
+      <!-- Click outside to close the Columns dropdown -->
+      <div
+        v-if="showColumnPicker"
+        class="fixed inset-0 z-10"
+        @click="showColumnPicker = false"
+      ></div>
 
       <!-- Loans Table -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div class="table-scroll overflow-x-auto">
-          <table class="w-full table-fixed min-w-[900px] text-sm">
+          <table class="w-full table-fixed text-sm" :style="{ minWidth: tableMinWidth }">
             <thead>
               <tr
                 class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -109,20 +150,48 @@
                 <SortableTh class="px-6 py-3 w-[11%]" :store="loansStore" sort-key="loanNo">
                   Loan No
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[26%]" :store="loansStore" sort-key="memberName">
+                <SortableTh class="px-6 py-3 w-[22%]" :store="loansStore" sort-key="memberName">
                   Member
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[17%]" :store="loansStore" sort-key="type">
+                <SortableTh
+                  v-if="columns.type"
+                  class="px-6 py-3 w-[15%]"
+                  :store="loansStore"
+                  sort-key="type"
+                >
                   Type
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[14%]" :store="loansStore" sort-key="principal">
+                <SortableTh
+                  v-if="columns.principal"
+                  class="px-6 py-3 w-[14%]"
+                  :store="loansStore"
+                  sort-key="principal"
+                >
                   Principal
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[12%]" :store="loansStore" sort-key="balance">
+                <SortableTh
+                  v-if="columns.balance"
+                  class="px-6 py-3 w-[12%]"
+                  :store="loansStore"
+                  sort-key="balance"
+                >
                   Balance
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[11%]" :store="loansStore" sort-key="status">
+                <SortableTh
+                  v-if="columns.status"
+                  class="px-6 py-3 w-[11%]"
+                  :store="loansStore"
+                  sort-key="status"
+                >
                   Status
+                </SortableTh>
+                <SortableTh
+                  v-if="columns.date"
+                  class="px-6 py-3 w-[10%]"
+                  :store="loansStore"
+                  sort-key="date"
+                >
+                  Date
                 </SortableTh>
                 <th class="px-6 py-3 w-[13%] text-right">Actions</th>
               </tr>
@@ -147,23 +216,24 @@
                     </div>
                   </div>
                 </td>
-                <td class="px-6 py-4">
+                <td v-if="columns.type" class="px-6 py-4">
                   <span
                     class="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600"
                   >
                     {{ typeMeta(loan.type).label }}
                   </span>
                 </td>
-                <td class="px-6 py-4 font-medium text-gray-800">
+                <td v-if="columns.principal" class="px-6 py-4 font-medium text-gray-800">
                   {{ formatPeso(loan.principal) }}
                 </td>
                 <td
+                  v-if="columns.balance"
                   class="px-6 py-4"
                   :class="isDelinquent(loan) ? 'text-red-600 font-semibold' : 'text-gray-500'"
                 >
                   {{ formatPeso(balanceOf(loan)) }}
                 </td>
-                <td class="px-6 py-4">
+                <td v-if="columns.status" class="px-6 py-4">
                   <span
                     class="px-2.5 py-1 rounded-full text-xs font-medium"
                     :class="statusClass(loan.status)"
@@ -177,6 +247,9 @@
                     Delinquent
                   </span>
                 </td>
+                <td v-if="columns.date" class="px-6 py-4 text-gray-500">
+                  {{ formatDate(loan.createdAt) }}
+                </td>
                 <td class="px-6 py-4 text-right whitespace-nowrap">
                   <button
                     @click="openDetails(loan)"
@@ -189,7 +262,9 @@
 
               <!-- Empty state -->
               <tr v-if="loansStore.filteredLoans.length === 0">
-                <td colspan="7" class="px-6 py-10 text-center text-gray-400">No loans found.</td>
+                <td :colspan="visibleColumnCount" class="px-6 py-10 text-center text-gray-400">
+                  No loans found.
+                </td>
               </tr>
             </tbody>
           </table>
@@ -903,6 +978,23 @@ import { loanTotals, buildSchedule, nextDue } from '../utils/amortization'
 
 const loansStore = useLoansStore()
 const membersStore = useMembersStore()
+
+// Column visibility — Loan No, Member and Actions always show
+const columns = reactive({
+  type: true,
+  principal: true,
+  balance: true,
+  status: true,
+  date: true,
+})
+const showColumnPicker = ref(false)
+
+// Counts the empty-state colspan; only force horizontal scroll when
+// enough columns are visible.
+const visibleColumnCount = computed(() => 3 + Object.values(columns).filter(Boolean).length)
+const tableMinWidth = computed(() =>
+  Object.values(columns).filter(Boolean).length >= 3 ? '960px' : '760px',
+)
 
 // ---------- helpers ----------
 function typeMeta(type) {

@@ -65,7 +65,40 @@
           <option value="Income">Income</option>
           <option value="Expense">Expense</option>
         </select>
+
+        <!-- Column visibility -->
+        <div class="relative">
+          <button
+            @click="showColumnPicker = !showColumnPicker"
+            class="border border-gray-300 rounded-lg px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition duration-200 w-full sm:w-auto"
+          >
+            ▦ Columns
+          </button>
+          <div
+            v-if="showColumnPicker"
+            class="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-20 space-y-2"
+          >
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.type" type="checkbox" class="accent-green-600" />
+              Type
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.category" type="checkbox" class="accent-green-600" />
+              Category
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.description" type="checkbox" class="accent-green-600" />
+              Description
+            </label>
+          </div>
+        </div>
       </div>
+      <!-- Click outside to close the Columns dropdown -->
+      <div
+        v-if="showColumnPicker"
+        class="fixed inset-0 z-10"
+        @click="showColumnPicker = false"
+      ></div>
 
       <!-- Transactions Table -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -81,13 +114,28 @@
                 <SortableTh class="px-6 py-3 w-[11%]" :store="ledgerStore" sort-key="date">
                   Date
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[10%]" :store="ledgerStore" sort-key="type">
+                <SortableTh
+                  v-if="columns.type"
+                  class="px-6 py-3 w-[10%]"
+                  :store="ledgerStore"
+                  sort-key="type"
+                >
                   Type
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[16%]" :store="ledgerStore" sort-key="category">
+                <SortableTh
+                  v-if="columns.category"
+                  class="px-6 py-3 w-[16%]"
+                  :store="ledgerStore"
+                  sort-key="category"
+                >
                   Category
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[29%]" :store="ledgerStore" sort-key="description">
+                <SortableTh
+                  v-if="columns.description"
+                  class="px-6 py-3 w-[29%]"
+                  :store="ledgerStore"
+                  sort-key="description"
+                >
                   Description
                 </SortableTh>
                 <SortableTh
@@ -108,7 +156,7 @@
               >
                 <td class="px-6 py-4 font-medium text-gray-800">{{ txn.refNo }}</td>
                 <td class="px-6 py-4 text-gray-500">{{ formatDate(txn.date) }}</td>
-                <td class="px-6 py-4">
+                <td v-if="columns.type" class="px-6 py-4">
                   <span
                     :class="
                       txn.type === 'Income'
@@ -120,8 +168,12 @@
                     {{ txn.type }}
                   </span>
                 </td>
-                <td class="px-6 py-4 text-gray-600">{{ txn.category }}</td>
-                <td class="px-6 py-4 text-gray-500 max-w-56 truncate">{{ txn.description }}</td>
+                <td v-if="columns.category" class="px-6 py-4 text-gray-600">
+                  {{ txn.category }}
+                </td>
+                <td v-if="columns.description" class="px-6 py-4 text-gray-500 max-w-56 truncate">
+                  {{ txn.description }}
+                </td>
                 <td
                   class="px-6 py-4 text-right font-semibold whitespace-nowrap"
                   :class="txn.type === 'Income' ? 'text-green-600' : 'text-red-600'"
@@ -146,7 +198,7 @@
 
               <!-- Empty state -->
               <tr v-if="ledgerStore.filteredTransactions.length === 0">
-                <td colspan="7" class="px-6 py-10 text-center text-gray-400">
+                <td :colspan="visibleColumnCount" class="px-6 py-10 text-center text-gray-400">
                   No transactions found.
                 </td>
               </tr>
@@ -310,12 +362,17 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import { useLedgerStore } from '../stores/ledger'
 
 const ledgerStore = useLedgerStore()
+
+// Column visibility — Ref No., Date, Amount and Actions always show
+const columns = reactive({ type: true, category: true, description: true })
+const showColumnPicker = ref(false)
+const visibleColumnCount = computed(() => 4 + Object.values(columns).filter(Boolean).length)
 
 // Modal state
 const showModal = ref(false)

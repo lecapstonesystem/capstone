@@ -46,12 +46,45 @@
           <option value="Super Admin">Super Admin</option>
           <option value="Admin">Admin</option>
         </select>
+
+        <!-- Column visibility -->
+        <div class="relative">
+          <button
+            @click="showColumnPicker = !showColumnPicker"
+            class="border border-gray-300 rounded-lg px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition duration-200 w-full sm:w-auto"
+          >
+            ▦ Columns
+          </button>
+          <div
+            v-if="showColumnPicker"
+            class="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-20 space-y-2"
+          >
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.email" type="checkbox" class="accent-green-600" />
+              Email
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.role" type="checkbox" class="accent-green-600" />
+              Role
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input v-model="columns.lastLogin" type="checkbox" class="accent-green-600" />
+              Last Login
+            </label>
+          </div>
+        </div>
       </div>
+      <!-- Click outside to close the Columns dropdown -->
+      <div
+        v-if="showColumnPicker"
+        class="fixed inset-0 z-10"
+        @click="showColumnPicker = false"
+      ></div>
 
       <!-- Admins Table -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div class="table-scroll overflow-x-auto">
-          <table class="w-full table-fixed min-w-[820px] text-sm">
+          <table class="w-full table-fixed text-sm" :style="{ minWidth: tableMinWidth }">
             <thead>
               <tr
                 class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -59,16 +92,31 @@
                 <SortableTh class="px-6 py-3 w-[22%]" :store="adminsStore" sort-key="name">
                   Name
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[28%]" :store="adminsStore" sort-key="email">
+                <SortableTh
+                  v-if="columns.email"
+                  class="px-6 py-3 w-[28%]"
+                  :store="adminsStore"
+                  sort-key="email"
+                >
                   Email
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[14%]" :store="adminsStore" sort-key="role">
+                <SortableTh
+                  v-if="columns.role"
+                  class="px-6 py-3 w-[14%]"
+                  :store="adminsStore"
+                  sort-key="role"
+                >
                   Role
                 </SortableTh>
                 <SortableTh class="px-6 py-3 w-[12%]" :store="adminsStore" sort-key="login">
                   Login
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[14%]" :store="adminsStore" sort-key="lastLogin">
+                <SortableTh
+                  v-if="columns.lastLogin"
+                  class="px-6 py-3 w-[14%]"
+                  :store="adminsStore"
+                  sort-key="lastLogin"
+                >
                   Last Login
                 </SortableTh>
                 <th class="px-6 py-3 w-[12%] text-right">Actions</th>
@@ -100,8 +148,8 @@
                     </div>
                   </div>
                 </td>
-                <td class="px-6 py-4 text-gray-500">{{ admin.email }}</td>
-                <td class="px-6 py-4">
+                <td v-if="columns.email" class="px-6 py-4 text-gray-500">{{ admin.email }}</td>
+                <td v-if="columns.role" class="px-6 py-4">
                   <span
                     :class="
                       admin.role === 'Super Admin'
@@ -125,7 +173,7 @@
                     {{ admin.account.loginEnabled ? 'Enabled' : 'Disabled' }}
                   </span>
                 </td>
-                <td class="px-6 py-4 text-gray-500">
+                <td v-if="columns.lastLogin" class="px-6 py-4 text-gray-500">
                   {{ admin.lastLogin ? formatDateTime(admin.lastLogin) : 'Never' }}
                 </td>
                 <td class="px-6 py-4 text-right whitespace-nowrap">
@@ -140,7 +188,9 @@
 
               <!-- Empty state -->
               <tr v-if="adminsStore.filteredAdmins.length === 0">
-                <td colspan="6" class="px-6 py-10 text-center text-gray-400">No admins found.</td>
+                <td :colspan="visibleColumnCount" class="px-6 py-10 text-center text-gray-400">
+                  No admins found.
+                </td>
               </tr>
             </tbody>
           </table>
@@ -477,12 +527,19 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import { useAdminsStore } from '../stores/admins'
 
 const adminsStore = useAdminsStore()
+
+// Column visibility — Name, Login status and Actions always show
+const columns = reactive({ email: true, role: true, lastLogin: true })
+const showColumnPicker = ref(false)
+const visibleColumnCount = computed(() => 3 + Object.values(columns).filter(Boolean).length)
+// Only force horizontal scroll when the wide columns are visible
+const tableMinWidth = computed(() => (columns.email || columns.lastLogin ? '820px' : '660px'))
 
 // Details modal state
 const detailAdmin = ref(null)

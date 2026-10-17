@@ -164,9 +164,10 @@ export const useLoansStore = defineStore('loans', () => {
   const typeFilter = ref('All')
 
   // Column sorting — header click toggles ascending/descending (SortableTh).
-  // Default keeps the old order: newest created first. balanceOf runs in
-  // the getter, after the store has finished setting up.
-  const sortKey = ref('createdAt')
+  // Default keeps the old order: newest applied first (the Date column's
+  // header lights up). balanceOf runs in the getter, after the store has
+  // finished setting up.
+  const sortKey = ref('date')
   const sortDir = ref('desc')
   const accessors = {
     loanNo: (loan) => loan.loanNo,
@@ -175,6 +176,7 @@ export const useLoansStore = defineStore('loans', () => {
     principal: (loan) => loan.principal,
     balance: (loan) => balanceOf(loan),
     status: (loan) => loan.status,
+    date: (loan) => loan.createdAt,
   }
 
   const filteredLoans = computed(() => {

@@ -240,9 +240,17 @@
         </div>
 
         <div class="px-6 py-5 space-y-5 overflow-y-auto flex-1 min-h-0">
-          <!-- Identity -->
+          <!-- Identity — photo on record takes the avatar spot so the
+               face, not initials, is what counter staff see. -->
           <div class="flex items-center gap-4">
+            <PhotoPreview
+              v-if="detailMember.idPhoto"
+              :path="detailMember.idPhoto"
+              avatar
+              class="shrink-0"
+            />
             <div
+              v-else
               class="w-14 h-14 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-lg font-bold shrink-0"
             >
               {{ detailMember.firstName.charAt(0) }}{{ detailMember.lastName.charAt(0) }}

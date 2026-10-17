@@ -648,6 +648,50 @@ export const useLoansStore = defineStore('loans', () => {
     return { ok: true, loan }
   }
 
+  // ---------- receipt photo on an existing payment ----------
+  // Receipts are attachments like everything else in the portal:
+  // attach or replace from the payment history, remove with a
+  // confirm. Each change lands in the audit trail and replaced or
+  // removed files are cleaned from storage.
+  async function attachReceipt(id, payment, file) {
+    const loan = loans.value.find((item) => item.id === id)
+    if (!loan) return { ok: false, message: 'Loan not found.' }
+    const uploaded = await uploadDocumentPhoto(file)
+    if (!uploaded.ok) return uploaded
+    const { error } = await supabase
+      .from('payment')
+      .update({ receipt_image_url: uploaded.path })
+      .eq('payment_id', payment.id)
+    if (error) {
+      removeDocumentPhoto(uploaded.path) // no orphan files
+      return { ok: false, message: errorMessage(error) }
+    }
+    const previous = payment.receiptPath
+    payment.receiptPath = uploaded.path
+    logAction(
+      loan,
+      `${previous ? 'Receipt replaced' : 'Receipt attached'} — ₱${round2(payment.amount).toLocaleString('en-PH')} payment`,
+    )
+    if (previous) removeDocumentPhoto(previous)
+    return { ok: true }
+  }
+
+  async function removeReceipt(id, payment) {
+    const loan = loans.value.find((item) => item.id === id)
+    if (!loan) return { ok: false, message: 'Loan not found.' }
+    if (!payment.receiptPath) return { ok: true }
+    const previous = payment.receiptPath
+    const { error } = await supabase
+      .from('payment')
+      .update({ receipt_image_url: null })
+      .eq('payment_id', payment.id)
+    if (error) return { ok: false, message: errorMessage(error) }
+    payment.receiptPath = ''
+    logAction(loan, `Receipt removed — ₱${round2(payment.amount).toLocaleString('en-PH')} payment`)
+    removeDocumentPhoto(previous)
+    return { ok: true }
+  }
+
   // Delinquent reminder — the client sends letter + text (6 months unpaid)
   function sendReminder(id) {
     const loan = loans.value.find((item) => item.id === id)
@@ -694,6 +738,8 @@ export const useLoansStore = defineStore('loans', () => {
     rejectLoan,
     releaseLoan,
     recordPayment,
+    attachReceipt,
+    removeReceipt,
     sendReminder,
   }
 })

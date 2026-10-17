@@ -486,8 +486,25 @@
                     <td class="py-2 pr-4 text-gray-600">{{ payment.channel }}</td>
                     <td class="py-2 pr-4 text-gray-400 text-xs">{{ payment.note || '—' }}</td>
                     <td class="py-2">
-                      <PhotoPreview v-if="payment.receiptPath" :path="payment.receiptPath" />
-                      <span v-else class="text-gray-300">—</span>
+                      <div class="flex items-start gap-2">
+                        <PhotoPreview v-if="payment.receiptPath" :path="payment.receiptPath" />
+                        <span v-else class="text-gray-300 self-center">—</span>
+                        <div class="flex flex-col gap-1 text-xs">
+                          <button
+                            @click="pickReceiptFor(payment)"
+                            class="text-green-700 hover:text-green-800 font-medium"
+                          >
+                            {{ payment.receiptPath ? 'Replace' : 'Attach' }}
+                          </button>
+                          <button
+                            v-if="payment.receiptPath"
+                            @click="requestRemoveReceipt(payment)"
+                            class="text-red-500 hover:text-red-700 font-medium"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 </tbody>
@@ -997,6 +1014,15 @@
       </div>
     </div>
 
+    <!-- Shared file picker for attaching or replacing a payment receipt -->
+    <input
+      ref="receiptInput"
+      type="file"
+      :accept="PHOTO_ACCEPT"
+      class="hidden"
+      @change="onReceiptPicked"
+    />
+
     <!-- Confirmation Modal -->
     <div
       v-if="confirmAction"
@@ -1250,6 +1276,36 @@ function onPayReceiptPicked(event) {
 function clearPayReceipt() {
   payReceiptFile.value = null
   payReceiptName.value = ''
+}
+
+// ---------- receipt attach / remove on an existing payment ----------
+const receiptInput = ref(null)
+const receiptTarget = ref(null) // payment whose receipt is being edited
+
+function pickReceiptFor(payment) {
+  receiptTarget.value = payment
+  receiptInput.value?.click()
+}
+
+async function onReceiptPicked(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  const payment = receiptTarget.value
+  receiptTarget.value = null
+  if (!file || !payment) return
+  actionError.value = ''
+  const result = await loansStore.attachReceipt(detailLoan.value.id, payment, file)
+  if (!result.ok) actionError.value = result.message
+}
+
+function requestRemoveReceipt(payment) {
+  confirmAction.value = {
+    title: 'Remove Receipt Photo?',
+    message: `The receipt photo for the ₱${payment.amount.toLocaleString('en-PH')} payment will be removed. You can attach a new one anytime.`,
+    confirmLabel: 'Remove',
+    danger: true,
+    run: () => loansStore.removeReceipt(detailLoan.value.id, payment),
+  }
 }
 
 const pendingBalance = computed(() => loanBalance.value)

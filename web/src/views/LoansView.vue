@@ -5,11 +5,7 @@
       <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h1 class="text-2xl font-bold text-gray-800">Loans</h1>
-          <p class="text-sm text-gray-500 mt-1">
-            {{ loansStore.loans.length }} loans ·
-            {{ formatPeso(loansStore.outstandingBalance) }} outstanding ·
-            {{ loansStore.delinquentCount }} delinquent
-          </p>
+          <p class="text-sm text-gray-500 mt-1">{{ loansStore.loans.length }} loans</p>
         </div>
         <button
           @click="openNewLoan"

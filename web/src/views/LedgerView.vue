@@ -102,8 +102,8 @@
 
       <!-- Transactions Table -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full table-fixed text-sm">
+        <div class="table-scroll overflow-x-auto">
+          <table class="w-full table-fixed text-sm" :style="{ minWidth: tableMinWidth }">
             <thead>
               <tr
                 class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -412,6 +412,10 @@ const ledgerStore = useLedgerStore()
 const columns = reactive({ type: true, category: true, description: true })
 const showColumnPicker = ref(false)
 const visibleColumnCount = computed(() => 4 + Object.values(columns).filter(Boolean).length)
+// Only force horizontal scroll when the wide columns are visible
+const tableMinWidth = computed(() =>
+  columns.type || columns.category || columns.description ? '880px' : '560px',
+)
 
 // Modal state
 // "Showing 1–10 of 25 entries"

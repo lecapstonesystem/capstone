@@ -142,6 +142,7 @@ function rowToLoan(row) {
     memberId: row.member_id,
     memberNo: row.member?.member_no || '',
     memberName: row.member?.name || '',
+    memberPhoto: row.member?.id_photo_url || '',
     type: row.loan_type || 'Regular',
     principal,
     ratePercent,
@@ -358,7 +359,9 @@ export const useLoansStore = defineStore('loans', () => {
     try {
       const { data, error } = await supabase
         .from('loan')
-        .select('*,member(name,member_no),payment(*),co_maker(co_maker_id,member(name))')
+        .select(
+          '*,member(name,member_no,id_photo_url),payment(*),co_maker(co_maker_id,member(name))',
+        )
         .order('loan_id', { ascending: true })
       if (error) throw error
       loans.value = (data || []).map(rowToLoan)

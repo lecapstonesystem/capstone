@@ -201,7 +201,13 @@
                 <td class="px-6 py-4 font-mono text-xs text-gray-500">{{ loan.loanNo }}</td>
                 <td class="px-6 py-4">
                   <div class="flex items-center gap-3">
+                    <PhotoPreview
+                      v-if="loan.memberPhoto"
+                      :path="loan.memberPhoto"
+                      variant="avatar-sm"
+                    />
                     <div
+                      v-else
                       class="w-8 h-8 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xs font-bold"
                     >
                       {{ initials(loan.memberName) }}
@@ -355,10 +361,17 @@
             No payment for 6+ months — delinquent per coop rules. Send a letter/text reminder.
           </div>
 
-          <!-- Member + type -->
+          <!-- Member + type — photo on record takes the avatar spot -->
           <div class="flex items-center gap-4">
+            <PhotoPreview
+              v-if="detailLoan.memberPhoto"
+              :path="detailLoan.memberPhoto"
+              variant="avatar-md"
+              class="shrink-0"
+            />
             <div
-              class="w-12 h-12 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+              v-else
+              class="w-14 h-14 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-lg font-bold shrink-0"
             >
               {{ initials(detailLoan.memberName) }}
             </div>

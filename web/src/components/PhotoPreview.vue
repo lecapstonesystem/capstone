@@ -1,17 +1,8 @@
 <template>
   <div>
     <!-- Thumbnail — signs a short-lived URL once, then shows the photo.
-         avatar variant: round and header-sized, for identity blocks. -->
-    <button
-      type="button"
-      :class="
-        avatar
-          ? 'block w-14 h-14 rounded-full overflow-hidden bg-gray-50 hover:ring-2 hover:ring-green-400 transition duration-200'
-          : 'block w-16 h-16 rounded-lg border border-gray-200 overflow-hidden bg-gray-50 hover:ring-2 hover:ring-green-400 transition duration-200'
-      "
-      title="Click to enlarge"
-      @click="open = true"
-    >
+         avatar variants: round identity avatars for headers and rows. -->
+    <button type="button" :class="variantClass" title="Click to enlarge" @click="open = true">
       <img v-if="url" :src="url" alt="Attachment preview" class="w-full h-full object-cover" />
       <span
         v-else
@@ -54,9 +45,20 @@ import { supabase } from '../lib/supabase'
  */
 const props = defineProps({
   path: { type: String, default: '' },
-  // Avatar variant: round and header-sized, used in identity blocks.
-  avatar: { type: Boolean, default: false },
+  // 'thumb' (default) = bordered thumbnail; 'avatar-md' / 'avatar-sm'
+  // = round identity avatars for detail headers and list rows.
+  variant: { type: String, default: 'thumb' },
 })
+
+const VARIANT_CLASSES = {
+  thumb:
+    'block w-16 h-16 rounded-lg border border-gray-200 overflow-hidden bg-gray-50 hover:ring-2 hover:ring-green-400 transition duration-200',
+  'avatar-md':
+    'block w-14 h-14 rounded-full overflow-hidden bg-gray-50 hover:ring-2 hover:ring-green-400 transition duration-200',
+  'avatar-sm':
+    'block w-8 h-8 rounded-full overflow-hidden bg-gray-50 hover:ring-2 hover:ring-green-400 transition duration-200',
+}
+const variantClass = VARIANT_CLASSES[props.variant] || VARIANT_CLASSES.thumb
 
 const url = ref('')
 const loading = ref(true)

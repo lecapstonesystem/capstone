@@ -133,7 +133,13 @@
                 <td class="px-6 py-4 font-medium text-gray-800">{{ member.memberNo }}</td>
                 <td class="px-6 py-4">
                   <div class="flex items-center gap-3">
+                    <PhotoPreview
+                      v-if="member.idPhoto"
+                      :path="member.idPhoto"
+                      variant="avatar-sm"
+                    />
                     <div
+                      v-else
                       class="w-8 h-8 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xs font-bold"
                     >
                       {{ member.firstName.charAt(0) }}{{ member.lastName.charAt(0) }}
@@ -246,7 +252,7 @@
             <PhotoPreview
               v-if="detailMember.idPhoto"
               :path="detailMember.idPhoto"
-              avatar
+              variant="avatar-md"
               class="shrink-0"
             />
             <div

@@ -62,7 +62,7 @@ function splitName(row) {
   return { first: parts[0], last: parts.slice(1).join(' ') }
 }
 
-function rowToMember(row, capitals) {
+function rowToMember(row, capitals, entries) {
   const names = splitName(row)
   return {
     id: row.member_id,
@@ -86,6 +86,7 @@ function rowToMember(row, capitals) {
     status: titleCase(row.status) || 'Active',
     dateJoined: (row.date_joined || '').slice(0, 10),
     capitalShare: capitals.get(row.member_id) || 0,
+    capitalEntries: entries.get(row.member_id) || [],
     account: {
       loginEnabled: row.login_enabled !== false,
       mustChangePassword: row.must_change_password === true,
@@ -258,16 +259,25 @@ export const useMembersStore = defineStore('members', () => {
           // rows are always written Title Case.
           .not('status', 'in', '("Pending","Under Review","Returned","Rejected")')
           .order('member_id', { ascending: true }),
-        supabase.from('share_capital').select('member_id, amount'),
+        supabase.from('share_capital').select('share_id, member_id, amount, date_recorded'),
       ])
       if (membersRes.error) throw membersRes.error
       const capitals = new Map()
+      const entries = new Map()
       if (!capitalRes.error) {
         for (const row of capitalRes.data || []) {
           capitals.set(row.member_id, (capitals.get(row.member_id) || 0) + Number(row.amount || 0))
+          const list = entries.get(row.member_id) || []
+          list.push({
+            shareId: row.share_id,
+            amount: Number(row.amount || 0),
+            date: row.date_recorded || '',
+          })
+          list.sort((a, b) => String(b.date).localeCompare(String(a.date)) || b.shareId - a.shareId)
+          entries.set(row.member_id, list)
         }
       }
-      members.value = (membersRes.data || []).map((row) => rowToMember(row, capitals))
+      members.value = (membersRes.data || []).map((row) => rowToMember(row, capitals, entries))
       // Fill each member's Activity list from the durable audit
       // trail, merged with the registration timeline kept on the
       // row itself — newest first.
@@ -402,18 +412,51 @@ export const useMembersStore = defineStore('members', () => {
   async function addCapital(id, amount) {
     const current = members.value.find((item) => item.id === id)
     if (!current || !(amount > 0)) return false
-    const { error } = await supabase.from('share_capital').insert({
-      member_id: id,
-      amount,
-      date_recorded: new Date().toISOString().slice(0, 10),
-    })
+    const { data: row, error } = await supabase
+      .from('share_capital')
+      .insert({
+        member_id: id,
+        amount,
+        date_recorded: new Date().toISOString().slice(0, 10),
+      })
+      .select()
+      .single()
     if (error) {
       lastError.value = errorMessage(error)
       return false
     }
     current.capitalShare = (current.capitalShare || 0) + amount
+    current.capitalEntries = [
+      { shareId: row.share_id, amount: Number(amount), date: row.date_recorded || '' },
+      ...(current.capitalEntries || []),
+    ]
     logAction(current, `Capital contribution — ₱${amount.toLocaleString('en-PH')}`)
     return true
+  }
+
+  // Capital corrections are bookkeeping, not member-record deletion:
+  // the mistaken contribution row is removed, but the removal itself
+  // is written to the audit trail with the typed reason, so the
+  // coop's who-did-what history stays intact (RA 9520 / AMLA).
+  async function removeCapital(id, entry, reason) {
+    const current = members.value.find((item) => item.id === id)
+    if (!current || !entry) {
+      return { ok: false, message: 'Contribution not found. Close and reopen the member details.' }
+    }
+    const { error } = await supabase.from('share_capital').delete().eq('share_id', entry.shareId)
+    if (error) {
+      lastError.value = errorMessage(error)
+      return { ok: false, message: errorMessage(error) }
+    }
+    current.capitalEntries = (current.capitalEntries || []).filter(
+      (item) => item.shareId !== entry.shareId,
+    )
+    current.capitalShare = Number(((current.capitalShare || 0) - entry.amount).toFixed(2))
+    logAction(
+      current,
+      `Capital contribution removed — ₱${entry.amount.toLocaleString('en-PH')} (reason: ${reason})`,
+    )
+    return { ok: true }
   }
 
   // No deleteMember: cooperatives must keep member records (RA 9520,
@@ -450,6 +493,7 @@ export const useMembersStore = defineStore('members', () => {
     issueTempPassword,
     setLoginEnabled,
     addCapital,
+    removeCapital,
     // deleteMember intentionally absent — see note above
   }
 })

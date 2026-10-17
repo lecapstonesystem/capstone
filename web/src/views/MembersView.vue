@@ -353,6 +353,27 @@
                   Cancel
                 </button>
               </div>
+              <ul
+                v-if="detailMember.capitalEntries?.length"
+                class="mt-2 space-y-1 max-h-32 overflow-y-auto"
+              >
+                <li
+                  v-for="entry in detailMember.capitalEntries"
+                  :key="entry.shareId"
+                  class="flex items-center justify-between text-xs text-gray-500"
+                >
+                  <span
+                    >{{ entry.date ? formatDate(entry.date) : '—' }} ·
+                    {{ formatPeso(entry.amount) }}</span
+                  >
+                  <button
+                    class="text-red-600 hover:text-red-700 font-medium"
+                    @click="requestRemoveCapital(detailMember, entry)"
+                  >
+                    Remove
+                  </button>
+                </li>
+              </ul>
               <p v-if="capitalError" class="text-xs text-red-600 mt-1">{{ capitalError }}</p>
             </div>
           </div>
@@ -794,9 +815,18 @@
     >
       <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
         <h2 class="text-lg font-semibold text-gray-800 mb-2">{{ confirmAction.title }}</h2>
-        <p class="text-sm text-gray-500 mb-6">
+        <p class="text-sm text-gray-500 mb-6" :class="confirmAction.reason ? 'mb-4' : ''">
           {{ confirmAction.message }}
         </p>
+        <div v-if="confirmAction.reason" class="mb-6">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Reason (required)</label>
+          <textarea
+            v-model="confirmReason"
+            rows="2"
+            placeholder="Why is this being corrected? e.g. Entered twice by mistake"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          ></textarea>
+        </div>
         <div class="flex justify-end gap-3">
           <button
             @click="confirmAction = null"
@@ -806,7 +836,8 @@
           </button>
           <button
             @click="runConfirm"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-white transition duration-200"
+            :disabled="confirmAction.reason && !confirmReason.trim()"
+            class="px-4 py-2 rounded-lg text-sm font-medium text-white transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             :class="
               confirmAction.danger
                 ? 'bg-red-600 hover:bg-red-700'
@@ -847,14 +878,17 @@ const editingId = ref(null)
 const formError = ref('')
 const copied = ref(false)
 
-// Generic confirmation state (status changes & delete)
-const confirmAction = ref(null) // { title, message, confirmLabel, danger, run }
+// Generic confirmation state (status changes & corrections)
+const confirmAction = ref(null) // { title, message, confirmLabel, danger, reason, run }
+const confirmReason = ref('')
 
 function runConfirm() {
-  if (confirmAction.value) {
-    confirmAction.value.run()
-    confirmAction.value = null
-  }
+  if (!confirmAction.value) return
+  // Corrections must say why — the reason goes into the audit trail.
+  if (confirmAction.value.reason && !confirmReason.value.trim()) return
+  confirmAction.value.run(confirmReason.value.trim())
+  confirmAction.value = null
+  confirmReason.value = ''
 }
 
 // Lifecycle actions and confirmations
@@ -886,6 +920,25 @@ function requestStatusChange(member, newStatus) {
   confirmAction.value = {
     ...presets[newStatus],
     run: () => membersStore.setStatus(member.id, newStatus),
+  }
+}
+
+// Capital corrections — the mistaken contribution is removed and the
+// typed reason is recorded in the member's activity history.
+function requestRemoveCapital(member, entry) {
+  const name = `${member.firstName} ${member.lastName}`
+  confirmReason.value = ''
+  capitalError.value = ''
+  confirmAction.value = {
+    title: 'Remove Contribution?',
+    message: `Remove the ${formatPeso(entry.amount)} capital contribution from ${name}? The member keeps their record and their remaining capital. The reason is added to the activity history.`,
+    confirmLabel: 'Remove',
+    danger: true,
+    reason: true,
+    run: async (reason) => {
+      const result = await membersStore.removeCapital(member.id, entry, reason)
+      capitalError.value = result.ok ? '' : result.message
+    },
   }
 }
 
@@ -961,6 +1014,7 @@ function loanStatusBadgeClass(status) {
 function openDetails(member) {
   detailMember.value = member
   showCapitalInput.value = false
+  capitalError.value = ''
   capitalDraft.value = ''
   capitalError.value = ''
 }

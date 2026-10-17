@@ -43,12 +43,19 @@ export const useAuthStore = defineStore('auth', () => {
       if (data.session) await loadProfile()
       // Inside this callback only assign refs — awaiting supabase.auth
       // calls here can deadlock the client. Profile fetch is fire-and-forget.
-      supabase.auth.onAuthStateChange((_event, next) => {
+      supabase.auth.onAuthStateChange((event, next) => {
         session.value = next
         if (!next) {
           profile.value = null
         } else if (!profile.value) {
           loadProfile()
+        }
+        // Real sign-ins only: SIGNED_IN = password form,
+        // PASSWORD_RECOVERY = emailed reset link. Refreshes arrive
+        // as INITIAL_SESSION / TOKEN_REFRESHED and must not
+        // rewrite the timestamp.
+        if (next && (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY')) {
+          stampLastLogin()
         }
       })
     })()
@@ -66,6 +73,29 @@ export const useAuthStore = defineStore('auth', () => {
     // An RLS error looks identical to "not linked": both mean no access.
     profile.value = error ? null : data
     return !error && !!data
+  }
+
+  /**
+   * Stamp the admin row's last_login. Called from the auth listener
+   * on every real sign-in — password form and emailed reset link
+   * alike (the recovery path establishes its session directly and
+   * never passes through signIn()). Waits for the profile when it
+   * isn't loaded yet; fire-and-forget — a failed write here must
+   * never block signing in.
+   */
+  function stampLastLogin() {
+    const write = () => {
+      if (!profile.value) return
+      supabase
+        .from('admin')
+        .update({ last_login: new Date().toISOString() })
+        .eq('admin_id', profile.value.admin_id)
+        .then(({ error }) => {
+          if (error) console.error('[UCMS] could not record last login:', error)
+        })
+    }
+    if (profile.value) write()
+    else loadProfile().then(write)
   }
 
   async function signIn(email, password) {
@@ -89,15 +119,8 @@ export const useAuthStore = defineStore('auth', () => {
           'This login cannot open the portal. It may be disabled, or it is not set up as an admin account yet. Ask your system administrator.',
       }
     }
-    // Stamp the last-login time. Fire-and-forget — a failed write here
-    // must never block signing in.
-    supabase
-      .from('admin')
-      .update({ last_login: new Date().toISOString() })
-      .eq('admin_id', profile.value.admin_id)
-      .then(({ error: stampError }) => {
-        if (stampError) console.error('[UCMS] could not record last login:', stampError)
-      })
+    // The last-login stamp happens in onAuthStateChange (SIGNED_IN)
+    // so both this path and the emailed reset link are covered.
     return { ok: true }
   }
 

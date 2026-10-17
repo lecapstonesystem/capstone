@@ -161,6 +161,8 @@ function rowToApplication(row) {
     phone: row.contact_number || '',
     address: row.address || '',
     source: row.app_source === 'App' ? 'App' : 'Walk-in',
+    // Storage path of the registration ID photo (App sources only)
+    idPhoto: row.id_photo_url || '',
     submittedAt: receivedAtOf(row),
     status: displayStatus(row),
     checklist: Array.isArray(row.app_checklist) ? row.app_checklist : defaultChecklist(),

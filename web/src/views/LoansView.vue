@@ -430,13 +430,14 @@
               Payment History
             </p>
             <div class="table-scroll overflow-x-auto max-h-40 overflow-y-auto">
-              <table class="w-full min-w-[420px] text-sm">
+              <table class="w-full min-w-[500px] text-sm">
                 <thead>
                   <tr class="text-left text-xs font-medium text-gray-400 uppercase">
                     <th class="py-2 pr-4">Date</th>
                     <th class="py-2 pr-4">Amount</th>
                     <th class="py-2 pr-4">Channel</th>
-                    <th class="py-2">Note</th>
+                    <th class="py-2 pr-4">Note</th>
+                    <th class="py-2">Receipt</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -448,7 +449,11 @@
                       {{ formatPeso(payment.amount) }}
                     </td>
                     <td class="py-2 pr-4 text-gray-600">{{ payment.channel }}</td>
-                    <td class="py-2 text-gray-400 text-xs">{{ payment.note || '—' }}</td>
+                    <td class="py-2 pr-4 text-gray-400 text-xs">{{ payment.note || '—' }}</td>
+                    <td class="py-2">
+                      <PhotoPreview v-if="payment.receiptPath" :path="payment.receiptPath" />
+                      <span v-else class="text-gray-300">—</span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -964,6 +969,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
+import PhotoPreview from '../components/PhotoPreview.vue'
 import {
   useLoansStore,
   LOAN_TYPES,

@@ -267,6 +267,12 @@
 
           <!-- Fields -->
           <div class="grid grid-cols-1 gap-4 text-sm">
+            <div v-if="detailMember.idPhoto">
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                ID Photo
+              </p>
+              <PhotoPreview :path="detailMember.idPhoto" />
+            </div>
             <div>
               <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Email</p>
               <p class="text-gray-700 break-all">{{ detailMember.email || '—' }}</p>
@@ -856,6 +862,7 @@
 import { ref, reactive, computed } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
+import PhotoPreview from '../components/PhotoPreview.vue'
 import { useMembersStore } from '../stores/members'
 import { useLoansStore, LOAN_TYPES } from '../stores/loans'
 

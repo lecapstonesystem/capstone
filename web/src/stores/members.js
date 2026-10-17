@@ -87,6 +87,9 @@ function rowToMember(row, capitals, entries) {
     dateJoined: (row.date_joined || '').slice(0, 10),
     capitalShare: capitals.get(row.member_id) || 0,
     capitalEntries: entries.get(row.member_id) || [],
+    // Storage path of the registration ID photo (member-documents
+    // bucket); PhotoPreview signs a URL to display it.
+    idPhoto: row.id_photo_url || '',
     account: {
       loginEnabled: row.login_enabled !== false,
       mustChangePassword: row.must_change_password === true,

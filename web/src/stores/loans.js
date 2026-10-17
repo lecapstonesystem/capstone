@@ -130,6 +130,9 @@ function rowToLoan(row) {
       channel: payment.channel || '',
       note: payment.note || '',
       status: payment.status || '',
+      // Storage path of the receipt photo uploaded by the member app
+      // (NULL for payments recorded in the portal).
+      receiptPath: payment.receipt_image_url || '',
     }))
     .sort((a, b) => String(a.at).localeCompare(String(b.at)) || a.id - b.id)
   return {

@@ -264,6 +264,12 @@
             {{ reviewError }}
           </div>
 
+          <!-- ID photo (uploaded through the member app) -->
+          <div v-if="detailApp.idPhoto">
+            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">ID Photo</p>
+            <PhotoPreview :path="detailApp.idPhoto" />
+          </div>
+
           <!-- Applicant info -->
           <div>
             <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Applicant</p>
@@ -718,6 +724,7 @@
 import { ref, reactive, computed } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
+import PhotoPreview from '../components/PhotoPreview.vue'
 import { useApplicationsStore } from '../stores/applications'
 
 const appsStore = useApplicationsStore()

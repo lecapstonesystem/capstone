@@ -264,12 +264,41 @@
             {{ reviewError }}
           </div>
 
-          <!-- Profile photo (uploaded through the member app) -->
-          <div v-if="detailApp.idPhoto">
+          <!-- Profile photo (app upload, or staff upload during review) -->
+          <div>
             <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
               Profile Photo
             </p>
-            <PhotoPreview :path="detailApp.idPhoto" />
+            <div class="flex items-start gap-3">
+              <PhotoPreview v-if="detailApp.idPhoto" :path="detailApp.idPhoto" />
+              <span v-else class="text-xs text-gray-400 py-2">No photo on file</span>
+              <div v-if="!isReadOnly" class="flex flex-col gap-1.5">
+                <button
+                  @click="pickAppPhoto"
+                  class="border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-100 transition duration-200"
+                >
+                  {{ detailApp.idPhoto ? 'Replace' : 'Upload' }}
+                </button>
+                <button
+                  v-if="detailApp.idPhoto"
+                  @click="requestRemoveAppPhoto"
+                  class="text-red-500 hover:text-red-700 text-xs font-medium"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+            <input
+              ref="appPhotoInput"
+              type="file"
+              :accept="PHOTO_ACCEPT"
+              class="hidden"
+              @change="onAppPhotoPicked"
+            />
+            <p v-if="!isReadOnly" class="text-xs text-gray-400 mt-1">
+              JPEG, PNG or WebP — large photos are resized automatically.
+            </p>
+            <p v-if="appPhotoError" class="text-xs text-red-600 mt-1">{{ appPhotoError }}</p>
           </div>
 
           <!-- Applicant info -->
@@ -727,6 +756,7 @@ import { ref, reactive, computed } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import PhotoPreview from '../components/PhotoPreview.vue'
+import { PHOTO_ACCEPT } from '../lib/documents'
 import { useApplicationsStore } from '../stores/applications'
 
 const appsStore = useApplicationsStore()
@@ -756,6 +786,7 @@ const verifiedCount = computed(() =>
 async function openReview(application) {
   detailApp.value = application
   reviewError.value = ''
+  appPhotoError.value = ''
   remarksDraft.value = application.remarks || ''
   // Pending / Returned move into Under Review as soon as the admin opens them
   const result = await appsStore.startReview(application.id)
@@ -771,6 +802,38 @@ function viewForm(application) {
 
 // Generic confirmation state
 const confirmAction = ref(null) // { title, message, confirmLabel, danger, run }
+
+// Profile photo — walk-in applicants get photographed at the desk
+// during review; every change lands in the review timeline.
+const appPhotoInput = ref(null)
+const appPhotoError = ref('')
+
+function pickAppPhoto() {
+  appPhotoError.value = ''
+  appPhotoInput.value?.click()
+}
+
+async function onAppPhotoPicked(event) {
+  const file = event.target.files?.[0]
+  event.target.value = '' // the same file can be re-chosen
+  if (!file) return
+  const result = await appsStore.uploadAppPhoto(detailApp.value.id, file)
+  appPhotoError.value = result.ok ? '' : result.message
+}
+
+function requestRemoveAppPhoto() {
+  const application = detailApp.value
+  confirmAction.value = {
+    title: 'Remove Profile Photo?',
+    message: `${application.firstName} ${application.lastName}'s profile photo will be removed from the application. You can upload a new one anytime.`,
+    confirmLabel: 'Remove',
+    danger: true,
+    run: async () => {
+      const result = await appsStore.removeAppPhoto(application.id)
+      appPhotoError.value = result.ok ? '' : result.message
+    },
+  }
+}
 
 async function runConfirm() {
   const action = confirmAction.value

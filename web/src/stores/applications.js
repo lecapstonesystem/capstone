@@ -5,6 +5,7 @@ import { errorMessage } from '../utils/errorText'
 import { randomPassword } from '../utils/password'
 import { toggleSort, sortRows } from '../utils/tableSort'
 import { useMembersStore } from './members'
+import { uploadDocumentPhoto, removeDocumentPhoto } from '../lib/documents'
 
 /**
  * Applications store — live Supabase data (swapped from mocks).
@@ -161,7 +162,8 @@ function rowToApplication(row) {
     phone: row.contact_number || '',
     address: row.address || '',
     source: row.app_source === 'App' ? 'App' : 'Walk-in',
-    // Storage path of the profile photo (App sources only)
+    // Storage path of the profile photo (app upload or staff
+    // upload during review)
     idPhoto: row.id_photo_url || '',
     submittedAt: receivedAtOf(row),
     status: displayStatus(row),
@@ -413,6 +415,58 @@ export const useApplicationsStore = defineStore('applications', () => {
     )
   }
 
+  // ---------- Profile photo (during review) ----------
+  // App-filed applicants arrive with one already; walk-in applicants
+  // get photographed at the desk while the review is open. Each
+  // change is appended to the review timeline (app_events), and
+  // replacing/removing also cleans up the old storage file.
+  async function uploadAppPhoto(id, file) {
+    const application = findApplication(id)
+    if (!application) return { ok: false, message: 'Application not found.' }
+    const uploaded = await uploadDocumentPhoto(file)
+    if (!uploaded.ok) return uploaded
+    const event = {
+      at: new Date().toISOString(),
+      action: application.idPhoto ? 'Profile photo replaced' : 'Profile photo uploaded',
+      by: 'Admin',
+    }
+    const { data: row, error } = await supabase
+      .from('member')
+      .update({ id_photo_url: uploaded.path, app_events: [event, ...application.dbEvents] })
+      .eq('member_id', application.id)
+      .select()
+      .single()
+    if (error) {
+      removeDocumentPhoto(uploaded.path) // no orphan files
+      return { ok: false, message: errorMessage(error) }
+    }
+    const previous = application.idPhoto
+    syncFromRow(application, row)
+    if (previous) removeDocumentPhoto(previous)
+    return { ok: true }
+  }
+
+  async function removeAppPhoto(id) {
+    const application = findApplication(id)
+    if (!application || !application.idPhoto) return { ok: true }
+    const previous = application.idPhoto
+    const event = {
+      at: new Date().toISOString(),
+      action: 'Profile photo removed',
+      by: 'Admin',
+    }
+    const { data: row, error } = await supabase
+      .from('member')
+      .update({ id_photo_url: null, app_events: [event, ...application.dbEvents] })
+      .eq('member_id', application.id)
+      .select()
+      .single()
+    if (error) return { ok: false, message: errorMessage(error) }
+    syncFromRow(application, row)
+    removeDocumentPhoto(previous)
+    return { ok: true }
+  }
+
   // Load once, when the store is first used (ApplicationsView mounts).
   fetchApplications()
 
@@ -438,5 +492,7 @@ export const useApplicationsStore = defineStore('applications', () => {
     approveApplication,
     returnApplication,
     rejectApplication,
+    uploadAppPhoto,
+    removeAppPhoto,
   }
 })

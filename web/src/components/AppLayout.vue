@@ -116,8 +116,10 @@
       @click="navOpen = false"
     ></div>
 
-    <!-- Main Content -->
-    <div class="flex-1 flex flex-col md:ml-64">
+    <!-- Main Content — min-w-0 lets this column shrink below the
+    data tables' min-width, so overflow-x-auto scrolls the table
+    sideways instead of widening the whole page (mobile). -->
+    <div class="flex-1 min-w-0 flex flex-col md:ml-64">
       <!-- Top Navbar -->
       <header
         class="bg-white shadow-sm px-4 md:px-6 py-4 flex items-center gap-3 sticky top-0 z-20"
@@ -153,7 +155,7 @@
       </header>
 
       <!-- Page Content -->
-      <main class="flex-1 overflow-y-auto p-4 md:p-6">
+      <main class="flex-1 min-w-0 overflow-y-auto p-4 md:p-6">
         <slot />
       </main>
     </div>

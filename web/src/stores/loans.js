@@ -7,6 +7,7 @@ import { loanTotals } from '../utils/amortization'
 import { errorMessage } from '../utils/errorText'
 import { toggleSort, sortRows } from '../utils/tableSort'
 import { useAuditStore } from './audit'
+import { uploadDocumentPhoto, removeDocumentPhoto } from '../lib/documents'
 
 /**
  * Loans store — live Supabase data (swapped from mocks).
@@ -537,7 +538,7 @@ export const useLoansStore = defineStore('loans', () => {
     return { ok: true }
   }
 
-  async function recordPayment(id, { amount, at, channel, note }) {
+  async function recordPayment(id, { amount, at, channel, note, receiptFile }) {
     const loan = loans.value.find((item) => item.id === id)
     if (!loan) return { ok: false, message: 'Loan not found.' }
     if (loan.status !== 'Released') {
@@ -553,6 +554,15 @@ export const useLoansStore = defineStore('loans', () => {
       }
     }
 
+    // Optional receipt photo (counter payments keep a paper trail
+    // too) — same private bucket the member app uploads into.
+    let receiptPath = ''
+    if (receiptFile) {
+      const uploaded = await uploadDocumentPhoto(receiptFile)
+      if (!uploaded.ok) return { ok: false, message: uploaded.message }
+      receiptPath = uploaded.path
+    }
+
     const date = toLocalDate(at)
     const { data: row, error } = await supabase
       .from('payment')
@@ -564,10 +574,14 @@ export const useLoansStore = defineStore('loans', () => {
         channel,
         note: note || '',
         status: 'Recorded',
+        receipt_image_url: receiptPath || null,
       })
       .select()
       .single()
-    if (error) return { ok: false, message: errorMessage(error) }
+    if (error) {
+      if (receiptPath) removeDocumentPhoto(receiptPath) // no orphan files
+      return { ok: false, message: errorMessage(error) }
+    }
 
     loan.payments.push({
       id: row.payment_id,
@@ -576,9 +590,11 @@ export const useLoansStore = defineStore('loans', () => {
       channel,
       note: note || '',
       status: 'Recorded',
+      receiptPath,
     })
     loan.payments.sort((a, b) => String(a.at).localeCompare(String(b.at)) || a.id - b.id)
 
+    const receiptNote = receiptPath ? ' — receipt attached' : ''
     if (balanceOf(loan) <= 0.01) {
       const { error: statusError } = await supabase
         .from('loan')
@@ -589,9 +605,12 @@ export const useLoansStore = defineStore('loans', () => {
         return { ok: false, message: errorMessage(statusError) }
       }
       loan.status = 'Paid'
-      logAction(loan, 'Loan fully paid')
+      logAction(loan, `Loan fully paid${receiptNote}`)
     } else {
-      logAction(loan, `Payment recorded — ₱${round2(value).toLocaleString('en-PH')} via ${channel}`)
+      logAction(
+        loan,
+        `Payment recorded — ₱${round2(value).toLocaleString('en-PH')} via ${channel}${receiptNote}`,
+      )
     }
     return { ok: true, loan }
   }

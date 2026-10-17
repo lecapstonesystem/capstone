@@ -911,6 +911,37 @@
               class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
           </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Receipt photo <span class="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <input
+              ref="payReceiptInput"
+              type="file"
+              :accept="PHOTO_ACCEPT"
+              class="hidden"
+              @change="onPayReceiptPicked"
+            />
+            <div class="flex items-center gap-2">
+              <button
+                @click="payReceiptInput?.click()"
+                class="border border-gray-300 text-gray-600 px-3 py-2 rounded-lg text-xs font-medium hover:bg-gray-100 transition duration-200 max-w-[220px] truncate"
+              >
+                {{ payReceiptName || '+ Choose photo' }}
+              </button>
+              <button
+                v-if="payReceiptName"
+                @click="clearPayReceipt"
+                class="text-red-500 hover:text-red-700 text-xs font-medium"
+              >
+                Remove
+              </button>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">
+              JPEG, PNG or WebP — up to 5 MB. Shows in the payment history.
+            </p>
+          </div>
         </div>
 
         <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
@@ -970,6 +1001,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import PhotoPreview from '../components/PhotoPreview.vue'
+import { PHOTO_ACCEPT } from '../lib/documents'
 import {
   useLoansStore,
   LOAN_TYPES,
@@ -1157,6 +1189,24 @@ const payForm = reactive({
   note: '',
 })
 
+// Optional receipt photo on the payment being recorded.
+const payReceiptInput = ref(null)
+const payReceiptFile = ref(null)
+const payReceiptName = ref('')
+
+function onPayReceiptPicked(event) {
+  const file = event.target.files?.[0]
+  event.target.value = '' // the same file can be re-chosen
+  if (!file) return
+  payReceiptFile.value = file
+  payReceiptName.value = file.name
+}
+
+function clearPayReceipt() {
+  payReceiptFile.value = null
+  payReceiptName.value = ''
+}
+
 const pendingBalance = computed(() => loanBalance.value)
 
 function openPayment() {
@@ -1165,6 +1215,7 @@ function openPayment() {
   payForm.at = new Date().toISOString().split('T')[0]
   payForm.channel = 'Cash'
   payForm.note = ''
+  clearPayReceipt()
   showPayment.value = true
 }
 
@@ -1179,6 +1230,7 @@ async function savePayment() {
     at: new Date(`${payForm.at}T12:00:00`).toISOString(),
     channel: payForm.channel,
     note: payForm.note.trim(),
+    receiptFile: payReceiptFile.value,
   })
   if (!result.ok) {
     payError.value = result.message

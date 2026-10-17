@@ -267,11 +267,37 @@
 
           <!-- Fields -->
           <div class="grid grid-cols-1 gap-4 text-sm">
-            <div v-if="detailMember.idPhoto">
+            <div>
               <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
                 ID Photo
               </p>
-              <PhotoPreview :path="detailMember.idPhoto" />
+              <div class="flex items-start gap-3">
+                <PhotoPreview v-if="detailMember.idPhoto" :path="detailMember.idPhoto" />
+                <span v-else class="text-xs text-gray-400 py-2">No photo on file</span>
+                <div class="flex flex-col gap-1.5">
+                  <button
+                    @click="pickIdPhoto"
+                    class="border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-100 transition duration-200"
+                  >
+                    {{ detailMember.idPhoto ? 'Replace' : 'Upload' }}
+                  </button>
+                  <button
+                    v-if="detailMember.idPhoto"
+                    @click="requestRemovePhoto"
+                    class="text-red-500 hover:text-red-700 text-xs font-medium"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+              <input
+                ref="idPhotoInput"
+                type="file"
+                :accept="PHOTO_ACCEPT"
+                class="hidden"
+                @change="onIdPhotoPicked"
+              />
+              <p v-if="photoError" class="text-xs text-red-600 mt-1">{{ photoError }}</p>
             </div>
             <div>
               <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Email</p>
@@ -863,6 +889,7 @@ import { ref, reactive, computed } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import PhotoPreview from '../components/PhotoPreview.vue'
+import { PHOTO_ACCEPT } from '../lib/documents'
 import { useMembersStore } from '../stores/members'
 import { useLoansStore, LOAN_TYPES } from '../stores/loans'
 
@@ -949,6 +976,38 @@ function requestRemoveCapital(member, entry) {
   }
 }
 
+// ID photo — staff photograph the physical ID at the desk (walk-in
+// members); replace/remove both land in the activity trail.
+const idPhotoInput = ref(null)
+const photoError = ref('')
+
+function pickIdPhoto() {
+  photoError.value = ''
+  idPhotoInput.value?.click()
+}
+
+async function onIdPhotoPicked(event) {
+  const file = event.target.files?.[0]
+  event.target.value = '' // the same file can be re-chosen
+  if (!file) return
+  const result = await membersStore.uploadIdPhoto(detailMember.value.id, file)
+  photoError.value = result.ok ? '' : result.message
+}
+
+function requestRemovePhoto() {
+  confirmReason.value = ''
+  confirmAction.value = {
+    title: 'Remove ID Photo?',
+    message: `${detailMember.value.firstName} ${detailMember.value.lastName}'s ID photo will be removed from the record. You can upload a new one anytime.`,
+    confirmLabel: 'Remove',
+    danger: true,
+    run: async () => {
+      const result = await membersStore.removeIdPhoto(detailMember.value.id)
+      photoError.value = result.ok ? '' : result.message
+    },
+  }
+}
+
 // Account actions
 function issueCredentials() {
   membersStore.issueTempPassword(detailMember.value.id)
@@ -1022,6 +1081,7 @@ function openDetails(member) {
   detailMember.value = member
   showCapitalInput.value = false
   capitalError.value = ''
+  photoError.value = ''
   capitalDraft.value = ''
   capitalError.value = ''
 }

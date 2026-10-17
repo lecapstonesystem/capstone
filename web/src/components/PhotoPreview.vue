@@ -36,15 +36,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { supabase } from '../lib/supabase'
 
 /**
  * Attachment preview for the private member-documents bucket
  * (13_app_documents.sql). Rows store the storage PATH (member
  * .id_photo_url, payment.receipt_image_url); the bucket is private,
- * so a short-lived signed URL is created once per mount and kept for
- * the session. Click the thumbnail for the full-size view.
+ * so a short-lived signed URL is created and kept for the session.
+ * Click the thumbnail for the full-size view. The path is watched,
+ * so swapping a photo (Upload/Replace) re-signs the new file.
  */
 const props = defineProps({
   path: { type: String, default: '' },
@@ -58,8 +59,9 @@ function onKeydown(event) {
   if (event.key === 'Escape') open.value = false
 }
 
-onMounted(async () => {
-  window.addEventListener('keydown', onKeydown)
+async function load() {
+  url.value = ''
+  loading.value = true
   if (!props.path) {
     loading.value = false
     return
@@ -69,7 +71,20 @@ onMounted(async () => {
     .createSignedUrl(props.path, 3600)
   url.value = error ? '' : data.signedUrl
   loading.value = false
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
+  load()
 })
+
+watch(
+  () => props.path,
+  () => {
+    open.value = false
+    load()
+  },
+)
 
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>

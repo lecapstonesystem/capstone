@@ -2,6 +2,7 @@ import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '../lib/supabase'
 import { errorMessage } from '../utils/errorText'
+import { uploadDocumentPhoto, removeDocumentPhoto } from '../lib/documents'
 import { randomPassword } from '../utils/password'
 import { toggleSort, sortRows } from '../utils/tableSort'
 import { useAuditStore } from './audit'
@@ -462,6 +463,48 @@ export const useMembersStore = defineStore('members', () => {
     return { ok: true }
   }
 
+  // ---------- ID photo (staff upload from the portal) ----------
+  // Walk-in members never go through the app, so their physical ID
+  // gets photographed at the desk and uploaded here. Both actions
+  // leave an audit note; replacing/removing also deletes the old
+  // file from storage (best-effort — the row is the truth).
+  async function uploadIdPhoto(id, file) {
+    const current = members.value.find((item) => item.id === id)
+    if (!current) {
+      return { ok: false, message: 'Member not found. Refresh the page and try again.' }
+    }
+    const uploaded = await uploadDocumentPhoto(file)
+    if (!uploaded.ok) return uploaded
+    const { error } = await supabase
+      .from('member')
+      .update({ id_photo_url: uploaded.path })
+      .eq('member_id', id)
+    if (error) {
+      removeDocumentPhoto(uploaded.path) // no orphan files
+      return { ok: false, message: errorMessage(error) }
+    }
+    const previous = current.idPhoto
+    current.idPhoto = uploaded.path
+    logAction(current, previous ? 'ID photo replaced' : 'ID photo uploaded')
+    if (previous) removeDocumentPhoto(previous)
+    return { ok: true }
+  }
+
+  async function removeIdPhoto(id) {
+    const current = members.value.find((item) => item.id === id)
+    if (!current || !current.idPhoto) return { ok: true }
+    const previous = current.idPhoto
+    const { error } = await supabase
+      .from('member')
+      .update({ id_photo_url: null })
+      .eq('member_id', id)
+    if (error) return { ok: false, message: errorMessage(error) }
+    current.idPhoto = ''
+    logAction(current, 'ID photo removed')
+    removeDocumentPhoto(previous)
+    return { ok: true }
+  }
+
   // No deleteMember: cooperatives must keep member records (RA 9520,
   // AMLA), so the portal offers Suspend/Drop only — both keep the
   // row. Permanent deletion is a deliberate backend action (service_role
@@ -497,6 +540,8 @@ export const useMembersStore = defineStore('members', () => {
     setLoginEnabled,
     addCapital,
     removeCapital,
+    uploadIdPhoto,
+    removeIdPhoto,
     // deleteMember intentionally absent — see note above
   }
 })

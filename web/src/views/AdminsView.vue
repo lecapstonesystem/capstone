@@ -329,6 +329,10 @@
                 <p class="font-mono text-sm font-semibold text-gray-800 truncate">
                   {{ detailAdmin.account.tempPassword }}
                 </p>
+                <p class="text-xs text-amber-600 mt-1">
+                  Shown once and never stored — copy it now. If it's lost, use Reset Password to
+                  email a new sign-in link.
+                </p>
               </div>
               <button
                 @click="copyTempPassword"

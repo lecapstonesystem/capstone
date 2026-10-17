@@ -38,9 +38,12 @@ export const useAuthStore = defineStore('auth', () => {
     initPromise = (async () => {
       // Drop the pre-Supabase flag if it's still sitting in storage.
       localStorage.removeItem('ucms-auth')
-      const { data } = await supabase.auth.getSession()
-      session.value = data.session
-      if (data.session) await loadProfile()
+      // Subscribe BEFORE touching the session: opening an emailed
+      // reset link exchanges the recovery token while the client
+      // finishes booting, and that notification fires during the
+      // first getSession() — a listener attached afterwards would
+      // never see PASSWORD_RECOVERY, leaving last_login un-stamped
+      // on exactly the reset-link login path it exists to cover.
       // Inside this callback only assign refs — awaiting supabase.auth
       // calls here can deadlock the client. Profile fetch is fire-and-forget.
       supabase.auth.onAuthStateChange((event, next) => {
@@ -58,6 +61,9 @@ export const useAuthStore = defineStore('auth', () => {
           stampLastLogin()
         }
       })
+      const { data } = await supabase.auth.getSession()
+      session.value = data.session
+      if (data.session) await loadProfile()
     })()
     return initPromise
   }

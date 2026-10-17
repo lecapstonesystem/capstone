@@ -273,11 +273,21 @@
     >
       <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
         <h2 class="text-lg font-semibold text-gray-800 mb-2">Delete Transaction?</h2>
-        <p class="text-sm text-gray-500 mb-6">
+        <p class="text-sm text-gray-500 mb-4">
           Are you sure you want to delete
           <span class="font-medium text-gray-700">{{ txnToDelete.refNo }}</span>
-          ({{ txnToDelete.description }})? This action cannot be undone.
+          ({{ txnToDelete.description }})? The entry leaves the ledger, but the removal — including
+          your reason — is kept in the activity trail.
         </p>
+        <div class="mb-6">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Reason (required)</label>
+          <textarea
+            v-model="deleteReason"
+            rows="2"
+            placeholder="Why is this entry being removed? e.g. Recorded under the wrong category"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          ></textarea>
+        </div>
         <p v-if="deleteError" class="text-sm text-red-600 mb-4">{{ deleteError }}</p>
         <div class="flex justify-end gap-3">
           <button
@@ -288,7 +298,8 @@
           </button>
           <button
             @click="confirmDelete"
-            class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition duration-200"
+            :disabled="!deleteReason.trim()"
+            class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Delete
           </button>
@@ -313,6 +324,7 @@ const editingId = ref(null)
 const formError = ref('')
 const txnToDelete = ref(null)
 const deleteError = ref('')
+const deleteReason = ref('')
 
 // Form model
 const emptyForm = {
@@ -390,10 +402,17 @@ async function saveTransaction() {
 function openDeleteModal(txn) {
   txnToDelete.value = txn
   deleteError.value = ''
+  deleteReason.value = ''
 }
 
 async function confirmDelete() {
-  const result = await ledgerStore.deleteTransaction(txnToDelete.value.id)
+  // The reason is required and travels with the deletion into the
+  // audit trail (same rule as capital corrections in MembersView).
+  if (!deleteReason.value.trim()) return
+  const result = await ledgerStore.deleteTransaction(
+    txnToDelete.value.id,
+    deleteReason.value.trim(),
+  )
   if (!result.ok) {
     // Keep the confirmation open and show why.
     deleteError.value = result.message || 'Could not delete the transaction.'

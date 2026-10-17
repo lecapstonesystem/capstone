@@ -187,9 +187,10 @@ const attentionItems = computed(() => {
   return items
 })
 
-// Recent activity: the durable audit trail (members, loans, admins)
+// Recent activity: the durable audit trail (members, loans, admins,
+// ledger postings and corrections — every line names who did it)
 // plus application review timelines (kept on the member row as
-// app_events) and ledger postings — newest first.
+// app_events) — newest first.
 const recentActivity = computed(() => {
   const entries = auditStore.recent.map((row) => ({
     at: row.created_at,
@@ -211,16 +212,6 @@ const recentActivity = computed(() => {
     })
   })
 
-  ledgerStore.transactions.forEach((txn) => {
-    entries.push({
-      at: `${txn.date}T12:00:00`,
-      label: txn.refNo,
-      action: `${txn.type} — ${txn.description} (${formatPeso(txn.amount)})`,
-      actor: '',
-      kind: 'ledger',
-    })
-  })
-
   return entries.sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 8)
 })
 
@@ -238,6 +229,10 @@ function auditLabel(row) {
   if (row.entity_type === 'admin') {
     const admin = adminsStore.admins.find((item) => String(item.id) === id)
     return admin ? `${admin.firstName} ${admin.lastName}` : 'Admin account'
+  }
+  if (row.entity_type === 'ledger') {
+    const txn = ledgerStore.transactions.find((item) => String(item.id) === id)
+    return txn ? `${txn.refNo} · ${txn.description}` : `Ledger entry #${id}`
   }
   return row.entity_type
 }

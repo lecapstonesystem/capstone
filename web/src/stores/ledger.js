@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from './auth'
 import { errorMessage } from '../utils/errorText'
 import { toggleSort, sortRows } from '../utils/tableSort'
+import { useAuditStore } from './audit'
 
 /**
  * Ledger store — live Supabase data (swapped from mocks).
@@ -148,11 +149,18 @@ export const useLedgerStore = defineStore('ledger', () => {
       .select()
       .single()
     if (error) return { ok: false, message: errorMessage(error) }
-    transactions.value.push(rowToTransaction(row))
+    const txn = rowToTransaction(row)
+    transactions.value.push(txn)
+    useAuditStore().record(
+      'ledger',
+      txn.id,
+      `Recorded ${txn.type} — ₱${txn.amount.toLocaleString('en-PH')} (${txn.category})`,
+    )
     return { ok: true }
   }
 
   async function updateTransaction(id, data) {
+    const before = transactions.value.find((txn) => txn.id === id)
     const { data: row, error } = await supabase
       .from('ledger')
       .update({
@@ -166,15 +174,46 @@ export const useLedgerStore = defineStore('ledger', () => {
       .select()
       .single()
     if (error) return { ok: false, message: errorMessage(error) }
+    const after = rowToTransaction(row)
     const index = transactions.value.findIndex((txn) => txn.id === id)
-    if (index !== -1) transactions.value[index] = rowToTransaction(row)
+    if (index !== -1) transactions.value[index] = after
+    // The trail spells out exactly what changed (old → new values).
+    if (before) {
+      const peso = (value) => `₱${Number(value).toLocaleString('en-PH')}`
+      const changes = []
+      if (before.date !== after.date) changes.push(`Date ${before.date} → ${after.date}`)
+      if (before.type !== after.type) changes.push(`Type ${before.type} → ${after.type}`)
+      if (before.category !== after.category) {
+        changes.push(`Category "${before.category}" → "${after.category}"`)
+      }
+      if (before.description !== after.description) {
+        changes.push(`Description "${before.description}" → "${after.description}"`)
+      }
+      if (before.amount !== after.amount) {
+        changes.push(`Amount ${peso(before.amount)} → ${peso(after.amount)}`)
+      }
+      if (changes.length) {
+        useAuditStore().record('ledger', id, `Edited ${after.refNo} — ${changes.join('; ')}`)
+      }
+    }
     return { ok: true }
   }
 
-  async function deleteTransaction(id) {
+  // Ledger deletions are bookkeeping corrections: the row goes, but
+  // the trail keeps who removed it, what it was, and why (the dialog
+  // requires the reason before the button unlocks).
+  async function deleteTransaction(id, reason) {
+    const before = transactions.value.find((txn) => txn.id === id)
     const { error } = await supabase.from('ledger').delete().eq('ledger_id', id)
     if (error) return { ok: false, message: errorMessage(error) }
     transactions.value = transactions.value.filter((txn) => txn.id !== id)
+    if (before) {
+      useAuditStore().record(
+        'ledger',
+        id,
+        `Deleted ${before.refNo} — ${before.type} ₱${before.amount.toLocaleString('en-PH')} (${before.category}: ${before.description}) (reason: ${reason})`,
+      )
+    }
     return { ok: true }
   }
 

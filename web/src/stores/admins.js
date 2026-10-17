@@ -398,7 +398,7 @@ export const useAdminsStore = defineStore('admins', () => {
         return {
           ok: false,
           message:
-            "That email address is not on the project's allowed list. In the Supabase dashboard (Authentication → Sign In / Providers → Email), clear or update the email allow list, then try again.",
+            'That email address cannot receive mail. Supabase refuses to send reset emails to fake or test addresses — the account must use a real, working email. Create a new admin with a real email address, then remove this account.',
         }
       }
       if (

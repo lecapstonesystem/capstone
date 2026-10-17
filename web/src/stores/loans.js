@@ -600,6 +600,7 @@ export const useLoansStore = defineStore('loans', () => {
     loans,
     loading,
     lastError,
+    fetchLoans,
     search,
     statusFilter,
     typeFilter,

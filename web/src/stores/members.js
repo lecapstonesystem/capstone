@@ -410,6 +410,7 @@ export const useMembersStore = defineStore('members', () => {
     members,
     loading,
     lastError,
+    fetchMembers,
     search,
     statusFilter,
     filteredMembers,

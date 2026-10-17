@@ -1,7 +1,10 @@
 <template>
   <div class="flex h-screen bg-gray-100 overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-64 bg-green-800 text-white flex flex-col fixed h-full z-10">
+    <aside
+      class="w-64 bg-green-800 text-white flex flex-col fixed h-full z-40 transition-transform duration-200 md:translate-x-0"
+      :class="navOpen ? 'translate-x-0' : '-translate-x-full'"
+    >
       <!-- Logo -->
       <div class="px-6 py-5 border-b border-green-700">
         <h1 class="text-xl font-bold">UCMS</h1>
@@ -106,27 +109,51 @@
       </div>
     </aside>
 
+    <!-- Backdrop behind the slide-in sidebar (phones/tablets only) -->
+    <div
+      v-if="navOpen"
+      class="fixed inset-0 bg-black/50 z-30 md:hidden"
+      @click="navOpen = false"
+    ></div>
+
     <!-- Main Content -->
-    <div class="flex-1 flex flex-col ml-64">
+    <div class="flex-1 flex flex-col md:ml-64">
       <!-- Top Navbar -->
       <header
-        class="bg-white shadow-sm px-6 py-4 flex items-center justify-between sticky top-0 z-10"
+        class="bg-white shadow-sm px-4 md:px-6 py-4 flex items-center gap-3 sticky top-0 z-20"
       >
-        <h2 class="text-lg font-semibold text-gray-700 capitalize">
+        <button
+          class="md:hidden text-gray-600 hover:text-gray-800 shrink-0"
+          aria-label="Open menu"
+          @click="navOpen = true"
+        >
+          <svg
+            class="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <h2 class="text-lg font-semibold text-gray-700 capitalize flex-1 min-w-0 truncate">
           {{ currentPageTitle }}
         </h2>
         <div class="flex items-center gap-3">
           <div
-            class="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white text-sm font-bold"
+            class="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
           >
             {{ avatarInitials }}
           </div>
-          <span class="text-sm text-gray-600 font-medium">{{ auth.displayName }}</span>
+          <span class="hidden sm:inline text-sm text-gray-600 font-medium">
+            {{ auth.displayName }}
+          </span>
         </div>
       </header>
 
       <!-- Page Content -->
-      <main class="flex-1 overflow-y-auto p-6">
+      <main class="flex-1 overflow-y-auto p-4 md:p-6">
         <slot />
       </main>
     </div>
@@ -134,13 +161,23 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+
+// Phone/tablet: the sidebar slides in over the page instead of
+// taking permanent width. Any navigation closes it.
+const navOpen = ref(false)
+watch(
+  () => route.path,
+  () => {
+    navOpen.value = false
+  },
+)
 
 const currentPageTitle = computed(() => {
   const titles = {

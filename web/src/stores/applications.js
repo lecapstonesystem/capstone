@@ -2,7 +2,6 @@ import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '../lib/supabase'
 import { errorMessage } from '../utils/errorText'
-import { randomPassword } from '../utils/password'
 import { toggleSort, sortRows } from '../utils/tableSort'
 import { useMembersStore } from './members'
 import { uploadDocumentPhoto, removeDocumentPhoto } from '../lib/documents'
@@ -391,12 +390,14 @@ export const useApplicationsStore = defineStore('applications', () => {
     const { data: row, error } = await supabase
       .from('member')
       .update({
+        // Move the applicant into the Active roster. No temp_password:
+        // the real login lives in Supabase Auth — the member already
+        // has one from app registration, or an admin creates it later
+        // with Members → Issue Credentials.
         status: 'Active',
         member_no: memberNo,
         date_joined: now.slice(0, 10),
         login_enabled: true,
-        must_change_password: true,
-        temp_password: randomPassword(),
         app_checklist: application.checklist,
         app_remarks: note || application.remarks || null,
         app_events: [event, ...application.dbEvents],
@@ -416,7 +417,6 @@ export const useApplicationsStore = defineStore('applications', () => {
     return {
       ok: true,
       member: { memberNo, firstName: application.firstName, lastName: application.lastName },
-      tempPassword: row.temp_password,
     }
   }
 

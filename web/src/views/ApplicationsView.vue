@@ -727,25 +727,10 @@
           {{ credentials.memberNo }} · {{ credentials.name }} was created in the Members module.
         </p>
 
-        <div
-          class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mt-4 flex items-center justify-between gap-3"
-        >
-          <div class="min-w-0 text-left">
-            <p class="text-xs text-gray-400">Temporary password</p>
-            <p class="font-mono text-sm font-semibold text-gray-800 truncate">
-              {{ credentials.tempPassword }}
-            </p>
-          </div>
-          <button
-            @click="copyTempPassword"
-            class="text-xs font-medium text-green-700 hover:text-green-800 shrink-0"
-          >
-            {{ copied ? 'Copied!' : 'Copy' }}
-          </button>
-        </div>
-
-        <p class="text-xs text-gray-500 mt-3">
-          Hand this over face-to-face — the member must change it on first login.
+        <p class="text-xs text-gray-500 mt-4 text-left">
+          This member signs into the app with the password they chose when applying. For a walk-in
+          member who has no app login, open their record in the Members module and use Issue
+          Credentials to create one.
         </p>
 
         <div class="flex justify-center gap-3 mt-5">
@@ -894,15 +879,14 @@ async function runConfirm() {
   if (result && result.ok === false) reviewError.value = result.message
 }
 
-// Approval → auto-creates the member, then shows the credentials to hand over
-const credentials = ref(null) // { memberNo, name, tempPassword }
-const copied = ref(false)
+// Approval → auto-creates the member, then confirms the handover
+const credentials = ref(null) // { memberNo, name }
 
 function requestApprove() {
   const application = detailApp.value
   confirmAction.value = {
     title: 'Approve Application?',
-    message: `${application.appNo} will be approved and a member record will be created automatically (status Active, temporary password issued to hand over in person).`,
+    message: `${application.appNo} will be approved and a member record will be created automatically (status Active, ready to sign in to the app).`,
     confirmLabel: 'Approve & Create Member',
     danger: false,
     run: async () => {
@@ -911,9 +895,7 @@ function requestApprove() {
       credentials.value = {
         memberNo: result.member.memberNo,
         name: `${result.member.firstName} ${result.member.lastName}`,
-        tempPassword: result.tempPassword,
       }
-      copied.value = false
       detailApp.value = null
       return { ok: true }
     },
@@ -947,16 +929,6 @@ function requestReject() {
       if (result.ok) detailApp.value = null
       return result
     },
-  }
-}
-
-async function copyTempPassword() {
-  try {
-    await navigator.clipboard.writeText(credentials.value.tempPassword)
-    copied.value = true
-    setTimeout(() => (copied.value = false), 1500)
-  } catch {
-    // Clipboard blocked — user can highlight and copy manually
   }
 }
 

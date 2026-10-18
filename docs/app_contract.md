@@ -58,8 +58,10 @@ just these endpoints:
   dashboard toggle: *Authentication → Sign In / Providers → Email →
   Confirm email = OFF* (Hans does this once).
 - **Paying members:** sign in with email + password — same account they
-  got at registration approval (or one linked later with the helper SQL
-  in `13_app_documents.sql` for pre-existing members).
+  got at registration approval (or one an admin creates later in the
+  portal: Members → Issue Credentials signs the login up and links
+  `auth_uid`; when the login already exists, Reset Password emails the
+  member a sign-in link instead).
 - Session persists on device; sign out to log out.
 
 ```kotlin

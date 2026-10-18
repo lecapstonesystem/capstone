@@ -35,9 +35,11 @@ import { useAuditStore } from './audit'
  * capitalShare lives in share_capital (sum of amount), read in a
  * second query and summed client-side.
  *
- * Credentials (login_enabled / must_change_password / temp_password)
- * are 04's TRANSITIONAL columns: persisted now, dropped when member
- * logins move to Supabase Auth through the backend.
+ * Credentials: login_enabled gates the member app login; the real
+ * credential lives in Supabase Auth, created by issueTempPassword()
+ * (signUp + auth_uid link) or by the app's own registration —
+ * temp_password / must_change_password are 04's legacy display
+ * columns.
  *
  * history has no table yet — logAction appends client-side, so the
  * activity list lives until the page reloads.
@@ -95,6 +97,9 @@ function rowToMember(row, capitals, entries) {
       loginEnabled: row.login_enabled !== false,
       mustChangePassword: row.must_change_password === true,
       tempPassword: row.temp_password || null,
+      // A linked Auth account means the member can already sign in to
+      // the app (created at app registration or by Issue Credentials).
+      hasLogin: Boolean(row.auth_uid),
     },
     // Registration-queue timeline kept on the member row (15) —
     // merged with the audit_log trail in fetchMembers().
@@ -362,33 +367,137 @@ export const useMembersStore = defineStore('members', () => {
     if (updated) logAction(updated, `Status changed to ${status}`)
   }
 
-  // Generates a temp password (first issue) or replaces it (reset)
+  /**
+   * Create the member's APP login. The temp_password column is
+   * display-only (04) — the real credential lives in Supabase Auth:
+   *
+   * - No auth account yet (walk-in member): signUp() the login with a
+   *   one-time password, link auth_uid to the member row, then put the
+   *   admin's session back — the same dance as addAdmin in admins.js.
+   *   The password is returned in memory only and shown once.
+   * - Login already exists (app-registered member): a browser cannot
+   *   set another user's password (that needs the service key), so
+   *   fall back to emailing a password-reset link — the member opens
+   *   it and chooses their own password.
+   */
   async function issueTempPassword(id) {
     const current = members.value.find((item) => item.id === id)
-    if (!current) return
-    const alreadyIssued = Boolean(current.account.tempPassword)
-    const { data: row, error } = await supabase
+    if (!current) return { ok: false, message: 'Member not found.' }
+    lastError.value = ''
+
+    const email = String(current.email || '')
+      .trim()
+      .toLowerCase()
+    if (!email || !email.includes('@') || !email.includes('.')) {
+      return {
+        ok: false,
+        message: "Add the member's email address first — the app login uses it as the username.",
+      }
+    }
+
+    // Login already exists → only Supabase can reset its password:
+    // email the member a sign-in link instead.
+    if (current.account.hasLogin) {
+      return sendMemberResetLink(email)
+    }
+
+    const tempPassword = randomPassword()
+
+    // 1. Remember the acting admin's session so we can put it back.
+    const { data: sessionData } = await supabase.auth.getSession()
+    const previous = sessionData?.session
+
+    // 2. Create the Supabase Auth login with the one-time password.
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password: tempPassword,
+    })
+
+    if (signUpError) {
+      const message = String(signUpError.message || '').toLowerCase()
+      if (message.includes('already registered') || message.includes('already been registered')) {
+        // Email exists in Auth but isn't linked to this member row.
+        return sendMemberResetLink(email)
+      }
+      if (message.includes('rate limit')) {
+        return { ok: false, message: 'Too many attempts. Wait a minute, then try again.' }
+      }
+      console.error('[UCMS] member login signup failed:', signUpError)
+      lastError.value = errorMessage(signUpError)
+      return {
+        ok: false,
+        message:
+          'Could not create the login. Make sure "Confirm email" is switched off in the Supabase dashboard (Authentication → Providers → Email), then try again.',
+      }
+    }
+
+    const newUser = signUpData?.user
+    // Enumeration guard: an already-used email answers with a user that
+    // has no identities instead of an error.
+    if (!newUser || (Array.isArray(newUser.identities) && newUser.identities.length === 0)) {
+      return sendMemberResetLink(email)
+    }
+
+    // 3. Put the admin's session back (auto-confirm swapped it for the
+    //    new user's).
+    if (previous && signUpData?.session) {
+      try {
+        await supabase.auth.setSession({
+          access_token: previous.access_token,
+          refresh_token: previous.refresh_token,
+        })
+      } catch (error) {
+        console.error('[UCMS] could not restore admin session after member signup:', error)
+        return {
+          ok: false,
+          message:
+            'The login was created, but your session was interrupted. Sign out and back in, then use Reset Password on this member to email a sign-in link.',
+        }
+      }
+    }
+
+    // 4. Link the login to the member row (runs as the admin, so RLS
+    //    passes).
+    const { data: row, error: updateError } = await supabase
       .from('member')
       .update({
-        temp_password: randomPassword(),
-        must_change_password: true,
+        auth_uid: newUser.id,
         login_enabled: true,
       })
       .eq('member_id', id)
       .select()
       .single()
+
+    if (updateError) {
+      console.error('[UCMS] linking member login failed:', updateError)
+      lastError.value = errorMessage(updateError)
+      return {
+        ok: false,
+        message: `${errorMessage(updateError)} The login itself exists — use Reset Password on this member to email a sign-in link.`,
+      }
+    }
+
+    const updated = replaceLocal(rowToMember(row, keepCapital(current)))
+    if (updated) logAction(updated, 'App login created — temporary password issued')
+    return { ok: true, tempPassword }
+  }
+
+  // Email a password-reset link to the member (used when the email
+  // already belongs to an Auth account, so the password can't be set
+  // from here). Same path as the admin reset emails.
+  async function sendMemberResetLink(email) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
     if (error) {
       lastError.value = errorMessage(error)
-      return
+      return { ok: false, message: errorMessage(error) }
     }
-    const updated = replaceLocal(rowToMember(row, keepCapital(current)))
-    if (updated) {
-      logAction(
-        updated,
-        alreadyIssued
-          ? 'Password reset — new temporary password issued'
-          : 'Credentials issued — temporary password set',
-      )
+    const current = members.value.find((item) => String(item.email || '').toLowerCase() === email)
+    if (current) logAction(current, 'Password reset — sign-in link emailed to the member')
+    return {
+      ok: true,
+      notice: `A sign-in link was emailed to ${email}. Have the member open it and choose a new password.`,
     }
   }
 

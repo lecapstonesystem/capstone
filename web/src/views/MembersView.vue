@@ -490,15 +490,15 @@
               </span>
             </div>
 
-            <!-- Temporary password (shown only when one is issued) -->
+            <!-- Temporary password (memory only — shown right after issue) -->
             <div
-              v-if="detailMember.account.tempPassword"
+              v-if="issuedPassword"
               class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between gap-3"
             >
               <div class="min-w-0">
                 <p class="text-xs text-gray-400">Temporary password</p>
                 <p class="font-mono text-sm font-semibold text-gray-800 truncate">
-                  {{ detailMember.account.tempPassword }}
+                  {{ issuedPassword }}
                 </p>
                 <p class="text-xs text-amber-600 mt-1">
                   Shown once and never stored — copy it now. If it's lost, use Reset Password to
@@ -513,6 +513,11 @@
               </button>
             </div>
 
+            <p v-else-if="detailMember.account.hasLogin" class="text-xs text-gray-400">
+              This member signs into the app with their own password. Use Reset Password to email
+              them a new sign-in link.
+            </p>
+
             <p v-else class="text-xs text-gray-400">
               No credentials issued yet — generate a temporary password to hand to the member.
             </p>
@@ -522,7 +527,7 @@
                 @click="issueCredentials"
                 class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700 transition duration-200"
               >
-                {{ detailMember.account.tempPassword ? 'Reset Password' : 'Issue Credentials' }}
+                {{ detailMember.account.hasLogin ? 'Reset Password' : 'Issue Credentials' }}
               </button>
               <button
                 v-if="detailMember.account.loginEnabled"
@@ -540,6 +545,15 @@
                 Enable Login
               </button>
             </div>
+
+            <!-- Issue-credentials feedback (errors, or the emailed-link note) -->
+            <p
+              v-if="accountNotice"
+              :class="accountNoticeError ? 'text-red-600' : 'text-green-700'"
+              class="text-xs"
+            >
+              {{ accountNotice }}
+            </p>
 
             <!-- Membership status actions -->
             <div class="flex flex-wrap gap-2 pt-1">
@@ -1030,10 +1044,27 @@ function requestRemovePhoto() {
   }
 }
 
-// Account actions
-function issueCredentials() {
-  membersStore.issueTempPassword(detailMember.value.id)
+// Account actions — issueTempPassword creates the Supabase Auth login
+// when it's missing (password returned in memory only, shown once) or
+// emails a password-reset link when the login already exists.
+const accountNotice = ref('')
+const accountNoticeError = ref(false)
+const issuedPassword = ref('') // memory only — never persisted
+
+async function issueCredentials() {
+  accountNotice.value = ''
+  accountNoticeError.value = false
+  issuedPassword.value = ''
   copied.value = false
+  const result = await membersStore.issueTempPassword(detailMember.value.id)
+  if (!result.ok) {
+    accountNoticeError.value = true
+    accountNotice.value = result.message
+  } else if (result.tempPassword) {
+    issuedPassword.value = result.tempPassword
+  } else {
+    accountNotice.value = result.notice || ''
+  }
 }
 
 function toggleLogin(enabled) {
@@ -1042,7 +1073,7 @@ function toggleLogin(enabled) {
 
 async function copyTempPassword() {
   try {
-    await navigator.clipboard.writeText(detailMember.value.account.tempPassword)
+    await navigator.clipboard.writeText(issuedPassword.value)
     copied.value = true
     setTimeout(() => (copied.value = false), 1500)
   } catch {
@@ -1106,6 +1137,11 @@ function openDetails(member) {
   photoError.value = ''
   capitalDraft.value = ''
   capitalError.value = ''
+  // Clear the previous drawer's memory-only credential state.
+  issuedPassword.value = ''
+  accountNotice.value = ''
+  accountNoticeError.value = false
+  copied.value = false
 }
 
 function editFromDetails() {

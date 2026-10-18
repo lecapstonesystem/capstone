@@ -51,26 +51,32 @@
             <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
               New members per month
             </p>
-            <div
-              v-if="growthSeries.length > 0"
-              class="flex items-end gap-1 h-44 border-b border-gray-100 pb-1"
-            >
+            <!-- Each bar keeps a legible width; narrow screens (and
+                 long all-time ranges) scroll sideways instead of
+                 crushing the bars into unreadable slivers. Print
+                 falls back to the old squeezed-but-complete layout. -->
+            <div v-if="growthSeries.length > 0" class="overflow-x-auto">
               <div
-                v-for="point in growthSeries"
-                :key="point.label"
-                class="flex-1 flex flex-col items-center gap-1 min-w-0"
-                :title="point.label"
+                class="flex items-end gap-1 h-44 border-b border-gray-100 pb-1 print:min-w-0"
+                :style="{ minWidth: growthSeries.length * 22 + 'px' }"
               >
-                <span class="text-xs font-medium text-gray-600">{{ point.count }}</span>
                 <div
-                  class="w-full bg-green-500 rounded-t"
-                  :style="{ height: growthBarPx(point.count) + 'px' }"
-                ></div>
-                <!-- Month over 2-digit year — one line per month can't
-                     fit side by side at this many bars -->
-                <div class="w-full text-center leading-tight overflow-hidden">
-                  <span class="block text-[10px] text-gray-500">{{ point.mon }}</span>
-                  <span class="block text-[10px] text-gray-400">{{ point.yr }}</span>
+                  v-for="point in growthSeries"
+                  :key="point.label"
+                  class="flex-1 flex flex-col items-center gap-1 min-w-0"
+                  :title="point.label"
+                >
+                  <span class="text-xs font-medium text-gray-600">{{ point.count }}</span>
+                  <div
+                    class="w-full bg-green-500 rounded-t"
+                    :style="{ height: growthBarPx(point.count) + 'px' }"
+                  ></div>
+                  <!-- Month over 2-digit year — one line per month can't
+                       fit side by side at this many bars -->
+                  <div class="w-full text-center leading-tight overflow-hidden">
+                    <span class="block text-[10px] text-gray-500">{{ point.mon }}</span>
+                    <span class="block text-[10px] text-gray-400">{{ point.yr }}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -348,32 +354,35 @@
             <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
               Income vs expenses per month
             </p>
-            <div
-              v-if="flowSeries.length > 0"
-              class="flex items-end gap-1 h-44 border-b border-gray-100 pb-1"
-            >
+            <!-- Same sideways-scroll treatment as the growth chart -->
+            <div v-if="flowSeries.length > 0" class="overflow-x-auto">
               <div
-                v-for="point in flowSeries"
-                :key="point.label"
-                class="flex-1 flex flex-col items-center gap-1 min-w-0"
-                :title="point.label"
+                class="flex items-end gap-1 h-44 border-b border-gray-100 pb-1 print:min-w-0"
+                :style="{ minWidth: flowSeries.length * 22 + 'px' }"
               >
-                <div class="w-full flex items-end justify-center gap-1 h-32">
-                  <div
-                    class="w-1/3 bg-green-500 rounded-t"
-                    :style="{ height: flowBarPx(point.income) + 'px' }"
-                    :title="`Income ${formatPeso(point.income)}`"
-                  ></div>
-                  <div
-                    class="w-1/3 bg-red-400 rounded-t"
-                    :style="{ height: flowBarPx(point.expense) + 'px' }"
-                    :title="`Expenses ${formatPeso(point.expense)}`"
-                  ></div>
-                </div>
-                <!-- Month over 2-digit year, same as the growth chart -->
-                <div class="w-full text-center leading-tight overflow-hidden">
-                  <span class="block text-[10px] text-gray-500">{{ point.mon }}</span>
-                  <span class="block text-[10px] text-gray-400">{{ point.yr }}</span>
+                <div
+                  v-for="point in flowSeries"
+                  :key="point.label"
+                  class="flex-1 flex flex-col items-center gap-1 min-w-0"
+                  :title="point.label"
+                >
+                  <div class="w-full flex items-end justify-center gap-1 h-32">
+                    <div
+                      class="w-1/3 bg-green-500 rounded-t"
+                      :style="{ height: flowBarPx(point.income) + 'px' }"
+                      :title="`Income ${formatPeso(point.income)}`"
+                    ></div>
+                    <div
+                      class="w-1/3 bg-red-400 rounded-t"
+                      :style="{ height: flowBarPx(point.expense) + 'px' }"
+                      :title="`Expenses ${formatPeso(point.expense)}`"
+                    ></div>
+                  </div>
+                  <!-- Month over 2-digit year, same as the growth chart -->
+                  <div class="w-full text-center leading-tight overflow-hidden">
+                    <span class="block text-[10px] text-gray-500">{{ point.mon }}</span>
+                    <span class="block text-[10px] text-gray-400">{{ point.yr }}</span>
+                  </div>
                 </div>
               </div>
             </div>

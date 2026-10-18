@@ -55,8 +55,8 @@ reset end-to-end (Admins → Reset → check the email → open the link).
 
 - Database schema, RLS policies, audit log: migrations 01–18 (all run).
 - Storage bucket `member-documents`: already private, policies in 13.
-- The Flutter app talks to Supabase directly — the web deploy does
-  not affect it (contract: `docs/flutter_app_contract.md`).
+- The Android app talks to Supabase directly — the web deploy does
+  not affect it (contract: `docs/app_contract.md`).
 
 ## 4. Production regression (before tagging)
 
@@ -82,6 +82,6 @@ Tag only after step 4 passes.
 
 - Repo stays **private** (real PII).
 - `service_role` key: Supabase backend scripts only — never in
-  `web/`, never in the Flutter app, never in chat.
+  `web/`, never in the Android app, never in chat.
 - The anon key in the client build is safe: RLS + `is_admin()`
   decide everything server-side.

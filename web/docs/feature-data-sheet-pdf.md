@@ -20,7 +20,7 @@ This replaces the current mock "View PDF" placeholder in the Applications table.
 - Load the scanned template once, stamp text at fixed coordinates
 - Output stays 100% faithful: logo, fonts, ruled lines, the "Bspb/8-8-18" footer
 - Coordinates live in **one** `data-sheet-template.json` — reusable by the
-  teammate's Flutter app so both sides share a single template definition
+  teammate's Android app so both sides share a single template definition
 
 ## Template source
 

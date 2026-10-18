@@ -1,5 +1,5 @@
 fastapi
-uvicorn[standard]
+uvicorn  # plain, not [standard]: the [standard] extras (websockets/httptools/uvloop) have no wheels for cp315 yet
 supabase  # Supabase read layer (store.py) + seed script; backend still boots without it (CSV mode)
 pandas
 scikit-learn

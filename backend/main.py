@@ -44,6 +44,7 @@ import ucms_analytics as ua  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from store import load_all  # noqa: E402  (Supabase-first, CSV fallback)
+from loan_simulator import loan_totals, round2  # noqa: E402  (single impl, shared with web)
 
 API_KEY = os.environ.get("UCMS_API_KEY", "")  # empty = dev-open, warns at startup
 # Comma-separated frontend origin(s) allowed to call this API in browsers.
@@ -120,11 +121,8 @@ def jsonable(v):
     return v
 
 
-def round2(value) -> float:
-    try:
-        return round(float(value) * 100) / 100
-    except (TypeError, ValueError):
-        return 0.0
+# round2 now lives in loan_simulator (half-up, single definition) and is
+# imported above - do not re-define it here or the two drift apart.
 
 
 def load():
@@ -327,13 +325,16 @@ def portal_rate(loan_type: str) -> float:
 def portal_total_due(principal: float, rate: float, term) -> float:
     """Diminishing closed form, same as web/src/utils/amortization.js:
     total = principal + rate% x principal x (months+1)/2."""
+    # loan_totals() zeroes out on a non-positive/garbage term; the portal has
+    # always fallen back to the bare principal there so a malformed row still
+    # shows something owed. Keep that fallback or totalDue drops to 0.
     try:
-        n = int(float(term))
-        if n <= 0:
-            raise ValueError
-        return round2(principal * (1 + rate * (n + 1) / 200))
+        invalid = int(float(term)) <= 0
     except (TypeError, ValueError):
+        invalid = True
+    if invalid:
         return round2(principal)
+    return loan_totals(principal, rate, term)["total_due"]
 
 
 def split_name(raw: str) -> tuple:

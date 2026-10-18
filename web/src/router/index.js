@@ -7,6 +7,7 @@ import LedgerView from '../views/LedgerView.vue'
 import LoansView from '../views/LoansView.vue'
 import ApplicationsView from '../views/ApplicationsView.vue'
 import ReportsView from '../views/ReportsView.vue'
+import ActivityView from '../views/ActivityView.vue'
 import AdminsView from '../views/AdminsView.vue'
 import ChangePasswordView from '../views/ChangePasswordView.vue'
 
@@ -61,6 +62,12 @@ const router = createRouter({
       path: '/reports',
       name: 'reports',
       component: ReportsView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/activity',
+      name: 'activity',
+      component: ActivityView,
       meta: { requiresAuth: true },
     },
     {

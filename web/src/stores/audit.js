@@ -87,8 +87,47 @@ export const useAuditStore = defineStore('audit', () => {
     recent.value = data || []
   }
 
+  /**
+   * Paged, filterable query for the Activity Log module: newest
+   * matching rows (raw audit_log shape) plus the total count.
+   * kind 'all' = every entity type; days 0 = all time.
+   */
+  async function queryActivity({
+    kind = 'all',
+    search = '',
+    days = 0,
+    offset = 0,
+    limit = 50,
+  } = {}) {
+    let query = supabase
+      .from('audit_log')
+      .select('entity_type, entity_id, created_at, action, actor', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
+    if (kind !== 'all') query = query.eq('entity_type', kind)
+    if (days > 0) {
+      query = query.gte('created_at', new Date(Date.now() - days * 86400000).toISOString())
+    }
+    // The or= filter parser treats commas and parentheses as syntax —
+    // strip them from the needle so a search can never break it.
+    const needle = String(search || '')
+      .replace(/[,()%]/g, ' ')
+      .trim()
+    if (needle) {
+      query = query.or(
+        `action.ilike.%${needle}%,actor.ilike.%${needle}%,entity_id.ilike.%${needle}%`,
+      )
+    }
+    const { data, error, count } = await query
+    if (error) {
+      console.error('[UCMS] activity query failed:', error)
+      return { ok: false, rows: [], total: 0 }
+    }
+    return { ok: true, rows: data || [], total: count || 0 }
+  }
+
   // Load the feed when the store is first used (Dashboard mounts).
   fetchRecent()
 
-  return { recent, record, loadHistories, fetchRecent }
+  return { recent, record, loadHistories, fetchRecent, queryActivity }
 })

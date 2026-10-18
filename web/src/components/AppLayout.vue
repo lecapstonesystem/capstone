@@ -86,6 +86,18 @@
         </RouterLink>
 
         <RouterLink
+          to="/activity"
+          class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition duration-200"
+          :class="
+            $route.path === '/activity'
+              ? 'bg-green-600 text-white'
+              : 'text-green-200 hover:bg-green-700 hover:text-white'
+          "
+        >
+          Activity Log
+        </RouterLink>
+
+        <RouterLink
           to="/admins"
           class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition duration-200"
           :class="

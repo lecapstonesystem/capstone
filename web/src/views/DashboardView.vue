@@ -78,7 +78,12 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 lg:col-span-2">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-md font-semibold text-gray-700">Recent Activity</h3>
-            <span class="text-xs text-gray-400">across all modules</span>
+            <RouterLink
+              to="/activity"
+              class="text-xs font-medium text-green-700 hover:text-green-800"
+            >
+              View all activity
+            </RouterLink>
           </div>
 
           <ul v-if="recentActivity.length > 0" class="divide-y divide-gray-100">
@@ -117,14 +122,13 @@ import { useMembersStore } from '../stores/members'
 import { useApplicationsStore } from '../stores/applications'
 import { useLoansStore } from '../stores/loans'
 import { useLedgerStore } from '../stores/ledger'
-import { useAdminsStore } from '../stores/admins'
 import { useAuditStore } from '../stores/audit'
+import { KIND_META, kindMeta, auditLabel, formatDateTime } from '../utils/activity'
 
 const membersStore = useMembersStore()
 const appsStore = useApplicationsStore()
 const loansStore = useLoansStore()
 const ledgerStore = useLedgerStore()
-const adminsStore = useAdminsStore()
 const auditStore = useAuditStore()
 
 const todayLong = new Date().toLocaleDateString('en-PH', {
@@ -215,39 +219,8 @@ const recentActivity = computed(() => {
   return entries.sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 8)
 })
 
-/** Human label for an audit row, looked up in the live stores. */
-function auditLabel(row) {
-  const id = String(row.entity_id)
-  if (row.entity_type === 'member') {
-    const member = membersStore.members.find((item) => String(item.id) === id)
-    return member ? `${member.memberNo} · ${member.firstName} ${member.lastName}` : `Member #${id}`
-  }
-  if (row.entity_type === 'loan') {
-    const loan = loansStore.loans.find((item) => String(item.id) === id)
-    return loan ? `${loan.loanNo} · ${loan.memberName}` : `Loan #${id}`
-  }
-  if (row.entity_type === 'admin') {
-    const admin = adminsStore.admins.find((item) => String(item.id) === id)
-    return admin ? `${admin.firstName} ${admin.lastName}` : 'Admin account'
-  }
-  if (row.entity_type === 'ledger') {
-    const txn = ledgerStore.transactions.find((item) => String(item.id) === id)
-    return txn ? `${txn.refNo} · ${txn.description}` : `Ledger entry #${id}`
-  }
-  return row.entity_type
-}
-
-const KIND_META = {
-  member: { bg: 'bg-green-500' },
-  loan: { bg: 'bg-blue-500' },
-  application: { bg: 'bg-amber-500' },
-  admin: { bg: 'bg-purple-500' },
-  ledger: { bg: 'bg-gray-400' },
-}
-
-function kindMeta(kind) {
-  return KIND_META[kind] || KIND_META.ledger
-}
+// Row labels, dot colors and the timestamp format are shared with the
+// Activity Log module — see utils/activity.js.
 
 function formatPeso(amount) {
   const value = Number(amount) || 0
@@ -255,16 +228,5 @@ function formatPeso(amount) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`
-}
-
-function formatDateTime(isoString) {
-  if (!isoString) return ''
-  const date = new Date(isoString)
-  return date.toLocaleString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 </script>

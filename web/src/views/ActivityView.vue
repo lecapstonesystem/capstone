@@ -59,19 +59,44 @@
           No activity matches these filters.
         </p>
 
+        <!-- Pagination — same control as the Members and Applications tables -->
         <div
-          v-if="entries.length > 0"
-          class="flex items-center justify-between pt-4 border-t border-gray-100 mt-2"
+          v-if="!error && total > 0"
+          class="pt-4 mt-2 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3"
         >
-          <p class="text-xs text-gray-400">Showing {{ entries.length }} of {{ total }} entries</p>
-          <button
-            v-if="hasMore"
-            :disabled="loading"
-            @click="loadMore"
-            class="text-xs font-medium text-green-700 hover:text-green-800 disabled:opacity-50"
-          >
-            {{ loading ? 'Loading…' : 'Load more' }}
-          </button>
+          <div class="flex items-center gap-2 text-sm text-gray-500">
+            <span>Show</span>
+            <select
+              :value="pageSize"
+              @change="setPageSize(Number($event.target.value))"
+              class="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            >
+              <option :value="10">10</option>
+              <option :value="20">20</option>
+              <option :value="50">50</option>
+            </select>
+            <span>per page · {{ paginationLabel }}</span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button
+              :disabled="page <= 1 || loading"
+              @click="setPage(page - 1)"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ← Prev
+            </button>
+            <span class="text-sm text-gray-600 px-2 whitespace-nowrap">
+              Page {{ page }} of {{ totalPages }}
+            </span>
+            <button
+              :disabled="page >= totalPages || loading"
+              @click="setPage(page + 1)"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next →
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -86,8 +111,9 @@ import { KIND_META, kindMeta, auditLabel, formatDateTime } from '../utils/activi
 
 /**
  * Activity Log — the full durable audit trail (audit_log), newest
- * first, with module/period filters, text search and paging. The
- * dashboard card is the 8-line summary; this is the whole record.
+ * first, with module/period filters, text search and the portal's
+ * standard Show-N-per-page pagination. The dashboard card is the
+ * 8-line summary; this is the whole record.
  */
 const auditStore = useAuditStore()
 
@@ -104,11 +130,12 @@ const PERIOD_OPTIONS = [
   { value: '30', label: 'Last 30 days' },
   { value: '90', label: 'Last 90 days' },
 ]
-const PAGE = 50
 
 const search = ref('')
 const kind = ref('all')
 const period = ref('0')
+const page = ref(1)
+const pageSize = ref(10)
 const rows = ref([])
 const total = ref(0)
 const loading = ref(false)
@@ -124,38 +151,64 @@ const entries = computed(() =>
   })),
 )
 
-const hasMore = computed(() => rows.value.length < total.value)
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
-async function fetchPage(reset) {
+// "Showing 1–10 of 25 entries"
+const paginationLabel = computed(() => {
+  if (!total.value) return 'no entries'
+  const start = (page.value - 1) * pageSize.value + 1
+  const end = Math.min(page.value * pageSize.value, total.value)
+  return `Showing ${start}–${end} of ${total.value} entries`
+})
+
+async function fetchPage() {
   loading.value = true
   error.value = ''
   const result = await auditStore.queryActivity({
     kind: kind.value,
     search: search.value,
     days: Number(period.value),
-    offset: reset ? 0 : rows.value.length,
-    limit: PAGE,
+    offset: (page.value - 1) * pageSize.value,
+    limit: pageSize.value,
   })
   loading.value = false
   if (!result.ok) {
+    rows.value = []
+    total.value = 0
     error.value = 'Could not load the activity log. Please try again.'
     return
   }
-  rows.value = reset ? result.rows : [...rows.value, ...result.rows]
+  rows.value = result.rows
   total.value = result.total
 }
 
-function loadMore() {
-  if (!loading.value) fetchPage(false)
+function setPage(next) {
+  if (loading.value) return
+  const clamped = Math.min(Math.max(1, next), totalPages.value)
+  if (clamped === page.value) return
+  page.value = clamped
+  fetchPage()
 }
 
-// Changing a dropdown restarts the list; typing waits for a pause.
-watch([kind, period], () => fetchPage(true))
+function setPageSize(size) {
+  pageSize.value = size
+  page.value = 1
+  fetchPage()
+}
+
+function resetAndFetch() {
+  page.value = 1
+  fetchPage()
+}
+
+// Changing a dropdown or page size restarts at page 1; typing waits
+// for a pause before restarting.
+watch([kind, period], resetAndFetch)
 let searchTimer = null
 watch(search, () => {
   clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => fetchPage(true), 300)
+  searchTimer = setTimeout(resetAndFetch, 300)
 })
 
-onMounted(() => fetchPage(true))
+onMounted(fetchPage)
 </script>

@@ -472,6 +472,9 @@
             </ul>
           </div>
 
+          <!-- Files — scans of receipts, checks and loan paperwork -->
+          <AttachmentPanel kind="loan" :id="detailLoan.id" class="border-t border-gray-100 pt-4" />
+
           <!-- Payment history -->
           <div v-if="detailLoan.payments.length > 0" class="border-t border-gray-100 pt-4">
             <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
@@ -1076,6 +1079,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import PhotoPreview from '../components/PhotoPreview.vue'
+import AttachmentPanel from '../components/AttachmentPanel.vue'
 import { PHOTO_ACCEPT } from '../lib/documents'
 import {
   useLoansStore,

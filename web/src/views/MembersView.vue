@@ -581,6 +581,13 @@
             </div>
           </div>
 
+          <!-- Files — scans of the member's paper records -->
+          <AttachmentPanel
+            kind="member"
+            :id="detailMember.id"
+            class="border-t border-gray-100 pt-4"
+          />
+
           <!-- Activity History -->
           <div class="border-t border-gray-100 pt-4 space-y-3">
             <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Activity</p>
@@ -924,6 +931,7 @@ import { ref, reactive, computed } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import PhotoPreview from '../components/PhotoPreview.vue'
+import AttachmentPanel from '../components/AttachmentPanel.vue'
 import { PHOTO_ACCEPT } from '../lib/documents'
 import { useMembersStore } from '../stores/members'
 import { useLoansStore, LOAN_TYPES } from '../stores/loans'

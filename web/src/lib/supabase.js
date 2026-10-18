@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { authStorage } from './authStorage'
 
 /**
  * Single Supabase client for the whole app.
@@ -22,4 +23,10 @@ if (!url || !anonKey || anonKey === 'PASTE_ANON_KEY_HERE') {
   )
 }
 
-export const supabase = createClient(url, anonKey)
+// Sessions go through authStorage: tab-only by default (closing the
+// browser signs out), permanent when "keep me signed in" was checked.
+export const supabase = createClient(url, anonKey, {
+  auth: {
+    storage: authStorage,
+  },
+})

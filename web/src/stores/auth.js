@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '../lib/supabase'
+import { setPersistMode } from '../lib/authStorage'
 
 /**
  * Auth store — real Supabase Auth for the admin portal.
@@ -13,7 +14,10 @@ import { supabase } from '../lib/supabase'
  *     rows — login is refused with a clear message instead of opening
  *     empty screens.
  *   - The session survives refreshes (getSession) and stays in sync
- *     across tabs/components via onAuthStateChange.
+ *     across tabs/components via onAuthStateChange. It lives in
+ *     tab-only storage by default — closing the browser signs out —
+ *     and moves to permanent storage when the login page's "keep me
+ *     signed in" box is checked (lib/authStorage.js).
  *   - profile: the admin row (name, role) shown in the layout header.
  *
  * mustChangePassword comes from the admin row itself (migration 16):
@@ -104,7 +108,10 @@ export const useAuthStore = defineStore('auth', () => {
     else loadProfile().then(write)
   }
 
-  async function signIn(email, password) {
+  async function signIn(email, password, staySignedIn = false) {
+    // Record where the session should be kept BEFORE Supabase writes
+    // it: tab-only storage by default, permanent when requested.
+    setPersistMode(staySignedIn)
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,

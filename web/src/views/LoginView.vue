@@ -48,6 +48,19 @@
           </div>
         </div>
 
+        <!-- Keep me signed in -->
+        <label class="flex items-center gap-2 text-sm text-gray-600 select-none cursor-pointer">
+          <input
+            v-model="remember"
+            type="checkbox"
+            class="rounded border-gray-300 text-green-600 focus:ring-green-500"
+          />
+          Keep me signed in on this device
+        </label>
+        <p class="text-xs text-gray-400 -mt-2">
+          Leave this unchecked on shared computers — you will be signed out when the browser closes.
+        </p>
+
         <!-- Login Button -->
         <button
           @click="handleLogin"
@@ -68,12 +81,16 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { getPersistMode } from '../lib/authStorage'
 
 const email = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
 const showPassword = ref(false)
+// Pre-check from the last choice: staff who always stay signed in
+// don't have to tick it every time.
+const remember = ref(getPersistMode())
 const router = useRouter()
 const auth = useAuthStore()
 
@@ -89,7 +106,7 @@ const handleLogin = async () => {
 
   // Real Supabase Auth — bad credentials and unprovisioned accounts
   // come back as messages from the auth store.
-  const result = await auth.signIn(email.value.trim().toLowerCase(), password.value)
+  const result = await auth.signIn(email.value.trim().toLowerCase(), password.value, remember.value)
   if (result.ok) {
     router.push('/dashboard')
   } else {

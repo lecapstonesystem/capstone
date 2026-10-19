@@ -36,6 +36,14 @@
       v-if="open"
       class="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto py-1 z-30"
     >
+      <li
+        v-if="modelValue && !query"
+        class="px-3 py-2 text-sm cursor-pointer text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+        @mousedown.prevent
+        @click="clear"
+      >
+        None
+      </li>
       <li v-if="!filtered.length" class="px-3 py-2 text-sm text-gray-400">
         No member matches "{{ query }}".
       </li>

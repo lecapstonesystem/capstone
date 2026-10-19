@@ -772,7 +772,9 @@
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Email (optional — for the app login)</label
+            >
             <input
               v-model="form.email"
               type="email"
@@ -1382,11 +1384,10 @@ async function saveMember() {
     formError.value = 'First name and last name are required.'
     return
   }
-  if (!form.email.trim()) {
-    formError.value = 'Email is required.'
-    return
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+  // Email is optional — needed only for the member's app login, so
+  // walk-in members whose sheets carry no address can still be encoded.
+  // When one is given, it must look like an email.
+  if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
     formError.value = 'Please enter a valid email address.'
     return
   }

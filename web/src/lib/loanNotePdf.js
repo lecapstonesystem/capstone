@@ -99,13 +99,13 @@ export function amountInWords(amount) {
   }
 }
 
-/** "P 20,000.00" — the ₱ sign is not in jsPDF's base fonts. */
+/** "PHP 20,000.00" — ISO code; the ₱ sign is not in jsPDF's base fonts. */
 function pesoFigures(amount) {
   const value = (Number(amount) || 0).toLocaleString('en-PH', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
-  return `P ${value}`
+  return `PHP ${value}`
 }
 
 /** The database stores "Last, First" — the form reads "First Last". */

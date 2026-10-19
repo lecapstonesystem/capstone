@@ -425,7 +425,9 @@
               <p class="text-gray-700">
                 {{
                   detailLoan.releasedAt
-                    ? `${formatDate(detailLoan.releasedAt)} · ${detailLoan.releaseChannel}`
+                    ? [formatDate(detailLoan.releasedAt), detailLoan.releaseChannel]
+                        .filter(Boolean)
+                        .join(' · ')
                     : 'Not yet released'
                 }}
               </p>

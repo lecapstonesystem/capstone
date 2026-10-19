@@ -84,7 +84,9 @@ export function amountInWords(amount) {
       pesos %= value
     }
   }
-  words += wordsUnder1000(pesos)
+  // Append the remainder — but only when something remains; a round
+  // ₱170,000 must read "ONE HUNDRED SEVENTY THOUSAND", not "... ZERO".
+  if (pesos > 0 || words === '') words += wordsUnder1000(pesos)
   return {
     pesos: words.replace(/\s+/g, ' ').trim(),
     centavos: `${String(centavos).padStart(2, '0')}/100`,

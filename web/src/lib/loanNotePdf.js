@@ -12,7 +12,8 @@
  * cooperative's name and address there instead). Amount in figures on
  * the ₱ line, NO. carries the loan's sequence number, and the signature
  * blocks stay name-free like the paper original — wet-ink signatures and
- * hand-filled co-maker addresses at the coop office.
+ * hand-filled co-maker addresses at the coop office. Every filled value
+ * sits on a ruled line, the way handwriting sits on the paper blanks.
  *
  * jsPDF is imported dynamically so the library only loads when an admin
  * actually prints a note — the login bundle stays lean.
@@ -100,11 +101,11 @@ export function amountInWords(amount) {
 }
 
 // The form's blanks read "... and ____ PESOS". For whole amounts the
-// coop leaves the centavos blank empty (same as their hand-filled
-// paper form); only real centavos print, in check style (33/100 =
-// thirty-three centavos — the .33 of ₱30,883.33).
+// coop leaves the centavos blank empty (an empty ruled blank, same as
+// their hand-filled paper form); only real centavos print, in check
+// style (33/100 = thirty-three centavos — the .33 of ₱30,883.33).
 function centavosFill(amount) {
-  return amount.centavos === '00/100' ? '____________' : amount.centavos
+  return amount.centavos === '00/100' ? '' : amount.centavos
 }
 
 /** "PHP 20,000.00" — ISO code; the ₱ sign is not in jsPDF's base fonts. */
@@ -146,6 +147,89 @@ function makeHelpers(doc) {
     const lines = doc.splitTextToSize(text, WIDTH - indent)
     doc.text(lines, PAGE_LEFT + indent, y, { maxWidth: WIDTH - indent })
     return y + lines.length * (size * 0.42) + gap
+  }
+
+  /**
+   * Paragraph where filled-in values sit on ruled lines — the way
+   * handwriting sits on the paper form's blanks. `segments` mixes
+   * plain strings (printed form text) with:
+   *   { fill: 'value' }  value on an underline (kept on one line)
+   *   { blank: 15 }      an empty ruled blank, width in mm
+   * An empty fill falls back to a blank — whole amounts leave the
+   * centavos slot empty, like the hand-filled original.
+   */
+  function ruledParagraph(segments, y, { size = 9.5, indent = 0, gap = 4 } = {}) {
+    doc.setFont('times', 'normal')
+    doc.setFontSize(size)
+    const maxW = WIDTH - indent
+    const spaceW = doc.getTextWidth(' ')
+
+    // Break into word tokens, measuring fills so they wrap as a unit.
+    const tokens = []
+    for (const seg of segments) {
+      if (typeof seg === 'string') {
+        for (const word of seg.split(/\s+/).filter(Boolean)) tokens.push({ w: word })
+      } else {
+        const words = String(seg.fill ?? '')
+          .split(/\s+/)
+          .filter(Boolean)
+        if (!words.length) {
+          tokens.push({ blank: seg.blank || 15 })
+        } else {
+          const fillW =
+            words.reduce((sum, w) => sum + doc.getTextWidth(w), 0) + spaceW * (words.length - 1)
+          words.forEach((w, i) =>
+            tokens.push({ w, fill: true, fillW, first: i === 0, last: i === words.length - 1 }),
+          )
+        }
+      }
+    }
+
+    // Greedy word wrap; a fill moves to the next line whole when it fits.
+    const lines = [[]]
+    let lineWidth = 0
+    for (const token of tokens) {
+      let line = lines[lines.length - 1]
+      const width = token.blank !== undefined ? token.blank : doc.getTextWidth(token.w)
+      if (line.length) {
+        const fitsCurrent = lineWidth + spaceW + width <= maxW
+        const fillFits = !token.first || lineWidth + spaceW + token.fillW <= maxW
+        if (!fitsCurrent || !fillFits) {
+          lines.push([])
+          lineWidth = 0
+          line = lines[lines.length - 1]
+        }
+        lineWidth += spaceW
+      }
+      lineWidth += width
+      line.push(token)
+    }
+
+    // Draw word by word; each fill gets one continuous underline that
+    // covers its internal spaces, like a single ruled blank.
+    let ry = y
+    for (const line of lines) {
+      let x = PAGE_LEFT + indent
+      let fillStart = null
+      for (const token of line) {
+        if (token.blank !== undefined) {
+          doc.line(x, ry + 1.1, x + token.blank, ry + 1.1)
+          x += token.blank + spaceW
+          continue
+        }
+        const w = doc.getTextWidth(token.w)
+        if (token.fill && fillStart === null) fillStart = x
+        doc.text(token.w, x, ry)
+        x += w
+        if (token.fill && token.last) {
+          doc.line(fillStart, ry + 1.1, x, ry + 1.1)
+          fillStart = null
+        }
+        x += spaceW
+      }
+      ry += size * 0.42
+    }
+    return ry + gap
   }
 
   function centered(text, y, { size = 10, bold = false, underline = false } = {}) {
@@ -190,7 +274,7 @@ function makeHelpers(doc) {
     }
   }
 
-  return { paragraph, centered, rule, signatureRow }
+  return { paragraph, ruledParagraph, centered, rule, signatureRow }
 }
 
 /**
@@ -203,7 +287,7 @@ function makeHelpers(doc) {
 export async function generateLoanNote(loan, member = null) {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'mm', format: 'letter' })
-  const { paragraph, centered, rule, signatureRow } = makeHelpers(doc)
+  const { paragraph, ruledParagraph, centered, rule, signatureRow } = makeHelpers(doc)
 
   // --- Values from the records ---------------------------------------------
   const principal = Number(loan.principal) || 0
@@ -261,8 +345,24 @@ export async function generateLoanNote(loan, member = null) {
   rule(PAGE_LEFT + 95, PAGE_RIGHT, y + 1, noteDate, { size: 11 })
   y += 9
 
-  y = paragraph(
-    `For value received, I/We, jointly and severally, promise to pay to the ${COOP_SHORT} Credit cooperative, or order, the sum of ${amount.pesos} and ${centavosFill(amount)} PESOS, with interest on unpaid balances at the rate of one percent per month, payable in ${term} installments of ${installment.pesos} and ${centavosFill(installment)} PESOS, the first payment to be made on ${firstDue} and a like amount, every MONTH thereafter until the full amount has been paid.`,
+  y = ruledParagraph(
+    [
+      'For value received, I/We, jointly and severally, promise to pay to the ',
+      { fill: COOP_SHORT },
+      ' Credit cooperative, or order, the sum of ',
+      { fill: amount.pesos },
+      ' and ',
+      { fill: centavosFill(amount) },
+      ' PESOS, with interest on unpaid balances at the rate of one percent per month, payable in ',
+      { fill: String(term) },
+      ' installments of ',
+      { fill: installment.pesos },
+      ' and ',
+      { fill: centavosFill(installment) },
+      ' PESOS, the first payment to be made on ',
+      { fill: firstDue },
+      ' and a like amount, every MONTH thereafter until the full amount has been paid.',
+    ],
     y,
     { size: 10.5, gap: 7 },
   )
@@ -317,8 +417,18 @@ export async function generateLoanNote(loan, member = null) {
   y += 10
 
   // Amount in FIGURES here — the way the current form is filled.
-  y = paragraph(
-    `I/We, the undersigned, hereby pledge all deposits and payments on deposits which I/We now have or hereafter may have in this Credit Cooperative as security for the loan as evidenced by a note dated ${noteDate}, in the amount of ${pesoFigures(principal)} and ____________ PESOS, executed by me/us, payable to the ${COOP_SHORT} Credit Cooperative. This pledge is given to secure the payment of the above-described loan and interest, fines, costs, or expenses that may accrue thereon, and I/We hereby authorize this Credit Cooperative to apply any or all such deposits and payments on deposits to the payment of said loan and interest, fines, costs, or expenses.`,
+  y = ruledParagraph(
+    [
+      'I/We, the undersigned, hereby pledge all deposits and payments on deposits which I/We now have or hereafter may have in this Credit Cooperative as security for the loan as evidenced by a note dated ',
+      { fill: noteDate },
+      ', in the amount of ',
+      { fill: pesoFigures(principal) },
+      ' and ',
+      { blank: 15 },
+      ' PESOS, executed by me/us, payable to the ',
+      { fill: COOP_SHORT },
+      ' Credit Cooperative. This pledge is given to secure the payment of the above-described loan and interest, fines, costs, or expenses that may accrue thereon, and I/We hereby authorize this Credit Cooperative to apply any or all such deposits and payments on deposits to the payment of said loan and interest, fines, costs, or expenses.',
+    ],
     y,
     { size: 10, gap: 6 },
   )
@@ -349,8 +459,16 @@ export async function generateLoanNote(loan, member = null) {
   centered('A U T H O R I T Y', y, { size: 11, bold: true, underline: true })
   y += 10
 
-  y = paragraph(
-    `I hereby authorize the Treasurer/Cashier/Disbursing Officer/ Paymaster of ${COOP_NAME} to collect from my salary every (payday/month) the sum of ${installment.pesos} and ${installment.centavos} PESOS until this loan plus interest/fines/costs are fully paid in addition to my regular savings.`,
+  y = ruledParagraph(
+    [
+      'I hereby authorize the Treasurer/Cashier/Disbursing Officer/ Paymaster of ',
+      { fill: COOP_NAME },
+      ' to collect from my salary every (payday/month) the sum of ',
+      { fill: installment.pesos },
+      ' and ',
+      { fill: centavosFill(installment) },
+      ' PESOS until this loan plus interest/fines/costs are fully paid in addition to my regular savings.',
+    ],
     y,
     { size: 10, gap: 20 },
   )

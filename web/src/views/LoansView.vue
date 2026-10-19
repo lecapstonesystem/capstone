@@ -7,12 +7,20 @@
           <h1 class="text-2xl font-bold text-gray-800">Loans</h1>
           <p class="text-sm text-gray-500 mt-1">{{ loansStore.loans.length }} loans</p>
         </div>
-        <button
-          @click="openNewLoan"
-          class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
-        >
-          + New Loan Application
-        </button>
+        <div class="flex flex-wrap gap-2">
+          <button
+            @click="showSimulator = true"
+            class="border border-green-600 text-green-700 bg-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-50 transition duration-200"
+          >
+            Loan Simulator
+          </button>
+          <button
+            @click="openNewLoan"
+            class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
+          >
+            + New Loan Application
+          </button>
+        </div>
       </div>
 
       <!-- Info banner — the client's rules -->
@@ -1305,6 +1313,187 @@
         </div>
       </div>
     </div>
+    <!-- Loan Simulator — quote a loan before any record exists -->
+    <div
+      v-if="showSimulator"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      @click.self="showSimulator = false"
+    >
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-800">Loan Simulator</h2>
+            <p class="text-xs text-gray-400 mt-0.5">Preview only — nothing is saved.</p>
+          </div>
+          <button
+            @click="showSimulator = false"
+            class="text-gray-400 hover:text-gray-600 text-xl leading-none"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
+          <!-- Inputs -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Loan type</label>
+              <select
+                v-model="simForm.type"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option v-for="type in LOAN_TYPES" :key="type.value" :value="type.value">
+                  {{ type.label }}
+                </option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Amount (₱)</label>
+              <input
+                v-model.number="simForm.amount"
+                type="number"
+                min="1"
+                step="any"
+                placeholder="0.00"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Term (months)</label>
+              <input
+                v-model.number="simForm.termMonths"
+                type="number"
+                min="1"
+                max="36"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Release date</label>
+              <input
+                v-model="simForm.start"
+                type="date"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          <p class="text-xs text-gray-400">
+            {{ simRate }}% per month · diminishing balance — the payment shrinks every month as the
+            interest is charged only on the remaining balance.
+          </p>
+
+          <!-- Results -->
+          <div v-if="simValid" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="bg-green-50 border border-green-100 rounded-lg p-3">
+              <p class="text-xs font-medium text-green-700 uppercase tracking-wider">
+                First payment
+              </p>
+              <p class="text-lg font-bold text-gray-800 mt-1">
+                {{ formatPeso(simTotals.firstPayment) }}
+              </p>
+              <p class="text-xs text-gray-400">month 1</p>
+            </div>
+            <div class="bg-green-50 border border-green-100 rounded-lg p-3">
+              <p class="text-xs font-medium text-green-700 uppercase tracking-wider">
+                Last payment
+              </p>
+              <p class="text-lg font-bold text-gray-800 mt-1">
+                {{ formatPeso(simTotals.lastPayment) }}
+              </p>
+              <p class="text-xs text-gray-400">month {{ simForm.termMonths }}</p>
+            </div>
+            <div class="bg-green-50 border border-green-100 rounded-lg p-3">
+              <p class="text-xs font-medium text-green-700 uppercase tracking-wider">
+                Total interest
+              </p>
+              <p class="text-lg font-bold text-gray-800 mt-1">
+                {{ formatPeso(simTotals.interestTotal) }}
+              </p>
+              <p class="text-xs text-gray-400">over the whole term</p>
+            </div>
+            <div class="bg-green-50 border border-green-100 rounded-lg p-3">
+              <p class="text-xs font-medium text-green-700 uppercase tracking-wider">
+                Total to pay
+              </p>
+              <p class="text-lg font-bold text-gray-800 mt-1">
+                {{ formatPeso(simTotals.totalDue) }}
+              </p>
+              <p class="text-xs text-gray-400">principal + interest</p>
+            </div>
+          </div>
+
+          <div
+            v-else
+            class="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm"
+          >
+            Enter an amount above zero and a term between 1 and 36 months.
+          </div>
+
+          <!-- Coop rule reminders — the caps the real application enforces -->
+          <div v-if="simNotes.length" class="space-y-2">
+            <p
+              v-for="note in simNotes"
+              :key="note"
+              class="bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 rounded-lg text-sm"
+            >
+              {{ note }}
+            </p>
+          </div>
+
+          <p class="text-xs text-gray-400">
+            Actual ceiling: 2× the member's capital share (max ₱200,000). Emergency loans max at
+            ₱20,000. Amounts of ₱100,000 and above need 2 co-makers.
+          </p>
+
+          <!-- Schedule -->
+          <div v-if="simValid" class="border-t border-gray-100 pt-4">
+            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
+              Amortization Schedule
+            </p>
+            <div class="table-scroll overflow-x-auto max-h-64 overflow-y-auto">
+              <table class="w-full min-w-[520px] text-xs">
+                <thead>
+                  <tr
+                    class="text-left text-xs font-medium text-gray-400 uppercase sticky top-0 bg-white"
+                  >
+                    <th class="py-2 pr-3">#</th>
+                    <th class="py-2 pr-3">Due Date</th>
+                    <th class="py-2 pr-3">Principal</th>
+                    <th class="py-2 pr-3">Interest</th>
+                    <th class="py-2 pr-3">Payment</th>
+                    <th class="py-2">Balance</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr v-for="row in simSchedule" :key="row.month">
+                    <td class="py-2 pr-3 text-gray-400">{{ row.month }}</td>
+                    <td class="py-2 pr-3 text-gray-500 whitespace-nowrap">
+                      {{ formatDate(row.dueDate) }}
+                    </td>
+                    <td class="py-2 pr-3 text-gray-600">{{ formatPeso(row.principal) }}</td>
+                    <td class="py-2 pr-3 text-gray-600">{{ formatPeso(row.interest) }}</td>
+                    <td class="py-2 pr-3 font-medium text-gray-800">
+                      {{ formatPeso(row.payment) }}
+                    </td>
+                    <td class="py-2 text-gray-500">{{ formatPeso(row.balance) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-6 py-4 border-t border-gray-100 flex justify-end shrink-0">
+          <button
+            @click="showSimulator = false"
+            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   </AppLayout>
 </template>
 
@@ -1385,6 +1574,13 @@ function formatDate(isoString) {
   if (!isoString) return '—'
   const date = new Date(isoString)
   return date.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+// Local date as yyyy-mm-dd for date inputs (toISOString shifts the day
+// west of UTC).
+function todayInput() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function formatDateTime(isoString) {
@@ -1826,4 +2022,54 @@ async function submitLoan() {
   // Jump straight into the application the admin just created
   openDetails(result.loan)
 }
+
+// ---------- loan simulator ----------
+// Quote a loan before any record exists — same engine as real loans,
+// so the counter quote can never disagree with the actual schedule.
+const showSimulator = ref(false)
+const simForm = reactive({
+  type: 'Regular',
+  amount: 20000,
+  termMonths: 12,
+  start: todayInput(),
+})
+
+const simRate = computed(() => typeMeta(simForm.type).rate)
+const simValid = computed(
+  () =>
+    Number(simForm.amount) > 0 &&
+    Number(simForm.termMonths) >= 1 &&
+    Number(simForm.termMonths) <= 36,
+)
+const simTotals = computed(() =>
+  loanTotals(Number(simForm.amount), simRate.value, Number(simForm.termMonths)),
+)
+const simSchedule = computed(() =>
+  buildSchedule({
+    principal: Number(simForm.amount),
+    ratePercent: simRate.value,
+    termMonths: Number(simForm.termMonths),
+    startDate: simForm.start,
+  }),
+)
+
+// The caps addLoan enforces — shown before staff promise a figure.
+const simNotes = computed(() => {
+  const amount = Number(simForm.amount) || 0
+  const notes = []
+  if (simForm.type === 'Emergency' && amount > EMERGENCY_MAX) {
+    notes.push(
+      `Emergency loans are capped at ${formatPeso(EMERGENCY_MAX)} — pick another loan type for larger amounts.`,
+    )
+  }
+  if (amount > CEILING_CAP) {
+    notes.push(
+      `Above the coop maximum of ${formatPeso(CEILING_CAP)} — the ceiling is also 2× the member's capital share.`,
+    )
+  }
+  if (amount >= COMAKER_THRESHOLD && amount <= CEILING_CAP) {
+    notes.push(`${formatPeso(COMAKER_THRESHOLD)} and above need 2 co-makers.`)
+  }
+  return notes
+})
 </script>

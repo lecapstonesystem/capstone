@@ -99,6 +99,14 @@ export function amountInWords(amount) {
   }
 }
 
+// The form's blanks read "... and ____ PESOS". For whole amounts the
+// coop leaves the centavos blank empty (same as their hand-filled
+// paper form); only real centavos print, in check style (33/100 =
+// thirty-three centavos — the .33 of ₱30,883.33).
+function centavosFill(amount) {
+  return amount.centavos === '00/100' ? '____________' : amount.centavos
+}
+
 /** "PHP 20,000.00" — ISO code; the ₱ sign is not in jsPDF's base fonts. */
 function pesoFigures(amount) {
   const value = (Number(amount) || 0).toLocaleString('en-PH', {
@@ -254,7 +262,7 @@ export async function generateLoanNote(loan, member = null) {
   y += 9
 
   y = paragraph(
-    `For value received, I/We, jointly and severally, promise to pay to the ${COOP_SHORT} Credit cooperative, or order, the sum of ${amount.pesos} and ${amount.centavos} PESOS, with interest on unpaid balances at the rate of one percent per month, payable in ${term} installments of ${installment.pesos} and ${installment.centavos} PESOS, the first payment to be made on ${firstDue} and a like amount, every MONTH thereafter until the full amount has been paid.`,
+    `For value received, I/We, jointly and severally, promise to pay to the ${COOP_SHORT} Credit cooperative, or order, the sum of ${amount.pesos} and ${centavosFill(amount)} PESOS, with interest on unpaid balances at the rate of one percent per month, payable in ${term} installments of ${installment.pesos} and ${centavosFill(installment)} PESOS, the first payment to be made on ${firstDue} and a like amount, every MONTH thereafter until the full amount has been paid.`,
     y,
     { size: 10.5, gap: 7 },
   )

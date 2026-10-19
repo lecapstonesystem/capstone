@@ -894,11 +894,13 @@
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Interest Rate</label>
-              <input
-                :value="`${typeInfo.rate}% per month — diminishing (auto)`"
-                readonly
+              <!-- Plain display, not an input — the rate comes from the loan
+                   type, so there is nothing to focus or edit here. -->
+              <div
                 class="w-full border border-gray-200 bg-gray-50 text-gray-500 rounded-lg px-4 py-2 text-sm"
-              />
+              >
+                {{ typeInfo.rate }}% per month — diminishing (auto)
+              </div>
             </div>
           </div>
 

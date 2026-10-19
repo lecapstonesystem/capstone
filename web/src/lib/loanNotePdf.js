@@ -1,5 +1,5 @@
 /**
- * Loan Note PDF — Form No. KB Cr.13.
+ * Loan Note PDF — Form No. KB Cr.13 (current coop format).
  *
  * Recreates the cooperative's paper form (Loan Note, Pledge of Deposits,
  * Authority) as a printable PDF, filling every blank from the loan and
@@ -7,9 +7,12 @@
  * printed form — including the "one percent per month" interest line,
  * which the client asked to keep exactly as printed.
  *
- * Signatures, the collateral line, and the fields the database does not
- * collect stay blank on purpose: they are filled and signed by hand at
- * the coop office, same as the paper form.
+ * Header layout follows the CURRENT form: borrower name and address on
+ * ruled lines under the letterhead (the older form printed the
+ * cooperative's name and address there instead). Amount in figures on
+ * the ₱ line, NO. carries the loan's sequence number, and the signature
+ * blocks stay name-free like the paper original — wet-ink signatures and
+ * hand-filled co-maker addresses at the coop office.
  *
  * jsPDF is imported dynamically so the library only loads when an admin
  * actually prints a note — the login bundle stays lean.
@@ -17,10 +20,13 @@
 import { loanTotals, buildSchedule } from '../utils/amortization'
 
 export const COOP_NAME = 'KHS Mentors Multipurpose Cooperative'
-export const COOP_ADDRESS = 'Caloocan High School, 10th Ave. West Grace Park, Caloocan City'
+// The form itself continues "... Credit cooperative" after the blanks,
+// so fills use the name without the trailing word — the way the coop
+// fills it by hand ("KHS Mentors Multipurpose Credit cooperative").
+const COOP_SHORT = 'KHS Mentors Multipurpose'
 
 // ---------------------------------------------------------------------------
-// Amount in words — "FIFTY THOUSAND and 00/100", the way the form wants it.
+// Amount helpers
 // ---------------------------------------------------------------------------
 
 const ONES = [
@@ -85,12 +91,28 @@ export function amountInWords(amount) {
     }
   }
   // Append the remainder — but only when something remains; a round
-  // ₱170,000 must read "ONE HUNDRED SEVENTY THOUSAND", not "... ZERO".
+  // ₱170,000 must read "ONE HUNDRED SEVENTY THOUSAND", not " ZERO".
   if (pesos > 0 || words === '') words += wordsUnder1000(pesos)
   return {
     pesos: words.replace(/\s+/g, ' ').trim(),
     centavos: `${String(centavos).padStart(2, '0')}/100`,
   }
+}
+
+/** "P 20,000.00" — the ₱ sign is not in jsPDF's base fonts. */
+function pesoFigures(amount) {
+  const value = (Number(amount) || 0).toLocaleString('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+  return `P ${value}`
+}
+
+/** The database stores "Last, First" — the form reads "First Last". */
+function displayName(name) {
+  const raw = String(name || '').trim()
+  const [last, first] = raw.split(',')
+  return first ? `${first.trim()} ${last.trim()}` : raw
 }
 
 function longDate(iso) {
@@ -144,7 +166,9 @@ function makeHelpers(doc) {
     doc.line(x1, y, x2, y)
   }
 
-  function signatureRow(y, { captionLeft, nameLeft, captionRight, valueRight }) {
+  // Like the paper form: signature and address lines with captions —
+  // no printed names; signatures are wet ink at the coop office.
+  function signatureRow(y, { captionLeft, captionRight, valueRight }) {
     const half = WIDTH / 2 - 5
     rule(PAGE_LEFT, PAGE_LEFT + half, y)
     rule(PAGE_LEFT + WIDTH - half, PAGE_RIGHT, y)
@@ -152,17 +176,13 @@ function makeHelpers(doc) {
     doc.setFontSize(8)
     doc.text(captionLeft, PAGE_LEFT + half / 2, y + 4, { align: 'center' })
     doc.text(captionRight, PAGE_LEFT + WIDTH - half / 2, y + 4, { align: 'center' })
-    if (nameLeft) {
-      doc.setFontSize(7.5)
-      doc.text(nameLeft, PAGE_LEFT + half / 2, y + 8, { align: 'center' })
-    }
     if (valueRight) {
       doc.setFontSize(8)
       doc.text(valueRight, PAGE_LEFT + WIDTH - half + 1, y - 1.5)
     }
   }
 
-  return { paragraph, centered, rule, signatureRow, centerX }
+  return { paragraph, centered, rule, signatureRow }
 }
 
 /**
@@ -192,9 +212,9 @@ export async function generateLoanNote(loan, member = null) {
   const installment = amountInWords(totals.firstPayment)
   const noteDate = longDate(startDate)
   const firstDue = longDate(schedule[0]?.dueDate || startDate)
-  const maker = loan.memberName || ''
+  const borrower = displayName(loan.memberName)
   const address = (member && member.address) || ''
-  const coMakers = (loan.coMakers || []).filter(Boolean)
+  const loanNoSeq = String(loan.loanNo || '').replace(/^LOAN-/, '')
 
   // =========================================================================
   // Page 1 — LOAN NOTE
@@ -208,29 +228,33 @@ export async function generateLoanNote(loan, member = null) {
 
   centered(COOP_NAME, y, { size: 15, bold: true })
   y += 4
-  rule(PAGE_LEFT, PAGE_RIGHT, y)
-  centered('(Name of Credit Cooperative)', y + 4, { size: 8 })
+
+  // Borrower block — the current form's header: name and address on
+  // ruled lines (the older form had the cooperative's address here).
+  rule(PAGE_LEFT, PAGE_RIGHT, y, borrower, { size: 11 })
+  centered('(Name of Borrower)', y + 4, { size: 8 })
   y += 9
-  rule(PAGE_LEFT, PAGE_RIGHT, y, COOP_ADDRESS, { size: 9, align: 'center' })
+  rule(PAGE_LEFT, PAGE_RIGHT, y, address, { size: 11 })
   centered('(Address)', y + 4, { size: 8 })
-  y += 13
+  y += 12
 
-  centered('L O A N   N O T E', y, { size: 12, bold: true })
+  centered('LOAN NOTE', y, { size: 12 })
   y += 9
 
-  // No. ____ at the right, filled with the loan number
+  // NO. ____ — the loan's sequence, above the amount/date line
   doc.setFont('times', 'normal')
   doc.setFontSize(10)
   doc.text('NO.', PAGE_RIGHT - 58, y)
-  rule(PAGE_RIGHT - 48, PAGE_RIGHT, y + 1, loan.loanNo || '', { size: 10 })
+  rule(PAGE_RIGHT - 48, PAGE_RIGHT, y + 1, loanNoSeq, { size: 10 })
   y += 7
 
-  // Date line, filled with the note date
-  rule(PAGE_LEFT, PAGE_LEFT + 95, y + 1, noteDate, { size: 10 })
+  // ₱ amount in figures (left) and the note date (right)
+  rule(PAGE_LEFT, PAGE_LEFT + 62, y + 1, pesoFigures(principal), { size: 11 })
+  rule(PAGE_LEFT + 95, PAGE_RIGHT, y + 1, noteDate, { size: 11 })
   y += 9
 
   y = paragraph(
-    `For value received, I/We, jointly and severally, promise to pay to the ${COOP_NAME} Credit cooperative, or order, the sum of ${amount.pesos} and ${amount.centavos} PESOS, with interest on unpaid balances at the rate of one percent per month, payable in ${term} installments of ${installment.pesos} and ${installment.centavos} PESOS, the first payment to be made on ${firstDue} and a like amount, every MONTH thereafter until the full amount has been paid.`,
+    `For value received, I/We, jointly and severally, promise to pay to the ${COOP_SHORT} Credit cooperative, or order, the sum of ${amount.pesos} and ${amount.centavos} PESOS, with interest on unpaid balances at the rate of one percent per month, payable in ${term} installments of ${installment.pesos} and ${installment.centavos} PESOS, the first payment to be made on ${firstDue} and a like amount, every MONTH thereafter until the full amount has been paid.`,
     y,
     { size: 10.5, gap: 7 },
   )
@@ -264,24 +288,13 @@ export async function generateLoanNote(loan, member = null) {
 
   signatureRow(y, {
     captionLeft: 'Signature of Maker',
-    nameLeft: maker,
     captionRight: 'Address',
     valueRight: address,
   })
   y += 16
-  signatureRow(y, {
-    captionLeft: 'Signature of Co-Maker',
-    nameLeft: coMakers[0] || '',
-    captionRight: 'Address',
-    valueRight: '',
-  })
+  signatureRow(y, { captionLeft: 'Signature of Co-Maker', captionRight: 'Address' })
   y += 16
-  signatureRow(y, {
-    captionLeft: 'Signature of Co-Maker',
-    nameLeft: coMakers[1] || '',
-    captionRight: 'Address',
-    valueRight: '',
-  })
+  signatureRow(y, { captionLeft: 'Signature of Co-Maker', captionRight: 'Address' })
   y += 12
 
   centered('TEACH YOUR PESO TO EARN MORE CENTAVOS', y, { size: 9, bold: true })
@@ -295,8 +308,9 @@ export async function generateLoanNote(loan, member = null) {
   centered('PLEDGE OF DEPOSITS', y, { size: 11, bold: true, underline: true })
   y += 10
 
+  // Amount in FIGURES here — the way the current form is filled.
   y = paragraph(
-    `I/We, the undersigned, hereby pledge all deposits and payments on deposits which I/We now have or hereafter may have in this Credit Cooperative as security for the loan as evidenced by a note dated ${noteDate}, in the amount of ${amount.pesos} and ${amount.centavos} PESOS, executed by me/us, payable to the ${COOP_NAME} Credit Cooperative. This pledge is given to secure the payment of the above-described loan and interest, fines, costs, or expenses that may accrue thereon, and I/We hereby authorize this Credit Cooperative to apply any or all such deposits and payments on deposits to the payment of said loan and interest, fines, costs, or expenses.`,
+    `I/We, the undersigned, hereby pledge all deposits and payments on deposits which I/We now have or hereafter may have in this Credit Cooperative as security for the loan as evidenced by a note dated ${noteDate}, in the amount of ${pesoFigures(principal)} and ____________ PESOS, executed by me/us, payable to the ${COOP_SHORT} Credit Cooperative. This pledge is given to secure the payment of the above-described loan and interest, fines, costs, or expenses that may accrue thereon, and I/We hereby authorize this Credit Cooperative to apply any or all such deposits and payments on deposits to the payment of said loan and interest, fines, costs, or expenses.`,
     y,
     { size: 10, gap: 6 },
   )
@@ -307,16 +321,12 @@ export async function generateLoanNote(loan, member = null) {
     { size: 10, gap: 14 },
   )
 
-  // Maker (centered) then the two co-makers side by side
+  // Maker (centered) then the two co-makers side by side — signed by
+  // hand, no printed names, same as the paper form.
   const makerHalf = 60
   const makerX = PAGE_LEFT + WIDTH / 2
   rule(makerX - makerHalf / 2, makerX + makerHalf / 2, y)
   centered('Maker', y + 4, { size: 8 })
-  if (maker) {
-    doc.setFont('times', 'normal')
-    doc.setFontSize(7.5)
-    doc.text(maker, makerX, y - 1.5, { align: 'center' })
-  }
   y += 16
 
   const coHalf = 65
@@ -326,14 +336,6 @@ export async function generateLoanNote(loan, member = null) {
   doc.setFontSize(8)
   doc.text('Co-Maker', PAGE_LEFT + coHalf / 2, y + 4, { align: 'center' })
   doc.text('Co-Maker', PAGE_RIGHT - coHalf / 2, y + 4, { align: 'center' })
-  if (coMakers[0]) {
-    doc.setFontSize(7.5)
-    doc.text(coMakers[0], PAGE_LEFT + coHalf / 2, y - 1.5, { align: 'center' })
-  }
-  if (coMakers[1]) {
-    doc.setFontSize(7.5)
-    doc.text(coMakers[1], PAGE_RIGHT - coHalf / 2, y - 1.5, { align: 'center' })
-  }
   y += 20
 
   centered('A U T H O R I T Y', y, { size: 11, bold: true, underline: true })
@@ -349,10 +351,6 @@ export async function generateLoanNote(loan, member = null) {
   doc.setFont('times', 'normal')
   doc.setFontSize(8)
   doc.text('Signature', PAGE_RIGHT - 42.5, y + 4, { align: 'center' })
-  if (maker) {
-    doc.setFontSize(7.5)
-    doc.text(maker, PAGE_RIGHT - 84, y - 1.5)
-  }
 
   doc.save(`LoanNote-${loan.loanNo || 'loan'}.pdf`)
 }

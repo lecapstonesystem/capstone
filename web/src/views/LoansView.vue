@@ -628,6 +628,15 @@
 
         <!-- Footer actions -->
         <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 flex-wrap shrink-0">
+          <button
+            v-if="noteEligible"
+            @click="printLoanNote"
+            class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition duration-200"
+            title="Print the coop's Loan Note form, pre-filled from this loan"
+          >
+            Print Loan Note
+          </button>
+
           <template v-if="detailLoan.status === 'For Approval'">
             <button
               @click="detailLoan = null"
@@ -1091,6 +1100,7 @@ import {
   CEILING_CAP,
 } from '../stores/loans'
 import { useMembersStore } from '../stores/members'
+import { generateLoanNote } from '../lib/loanNotePdf'
 import { loanTotals, buildSchedule, nextDue } from '../utils/amortization'
 
 const loansStore = useLoansStore()
@@ -1256,6 +1266,19 @@ function requestReminder() {
     danger: false,
     run: () => loansStore.sendReminder(loan.id),
   }
+}
+
+// ---------- Loan Note PDF (Form No. KB Cr.13) ----------
+// Printed once the loan is approved — the member signs it at release.
+const noteEligible = computed(() =>
+  ['Approved', 'Released', 'Paid'].includes(detailLoan.value?.status),
+)
+
+async function printLoanNote() {
+  const loan = detailLoan.value
+  if (!loan) return
+  const member = membersStore.members.find((m) => m.id === loan.memberId) || null
+  await generateLoanNote(loan, member)
 }
 
 // "Showing 1–10 of 25 loans"

@@ -800,18 +800,10 @@
             {{ newFormError }}
           </div>
 
-          <!-- Member -->
+          <!-- Member — searchable picker; 150+ members overflow a native select -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Member</label>
-            <select
-              v-model="newForm.memberId"
-              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            >
-              <option :value="null" disabled>Select a member...</option>
-              <option v-for="member in memberOptions" :key="member.id" :value="member.id">
-                {{ member.memberNo }} — {{ member.firstName }} {{ member.lastName }}
-              </option>
-            </select>
+            <MemberPicker v-model="newForm.memberId" :options="memberOptions" />
           </div>
 
           <!-- Eligibility panel -->
@@ -1500,6 +1492,7 @@
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
+import MemberPicker from '../components/MemberPicker.vue'
 import SortableTh from '../components/SortableTh.vue'
 import PhotoPreview from '../components/PhotoPreview.vue'
 import AttachmentPanel from '../components/AttachmentPanel.vue'

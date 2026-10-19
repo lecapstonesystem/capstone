@@ -792,6 +792,7 @@
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
+import { persistentColumns } from '../lib/uiPrefs'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import PhotoPreview from '../components/PhotoPreview.vue'
@@ -801,7 +802,11 @@ import { useApplicationsStore } from '../stores/applications'
 const appsStore = useApplicationsStore()
 
 // Column visibility — App No, Applicant, Form and Actions always show
-const columns = reactive({ source: true, submitted: true, status: true })
+const columns = persistentColumns('registrations', {
+  source: true,
+  submitted: true,
+  status: true,
+})
 const showColumnPicker = ref(false)
 const visibleColumnCount = computed(() => 4 + Object.values(columns).filter(Boolean).length)
 // Only force horizontal scroll when the wide columns are visible

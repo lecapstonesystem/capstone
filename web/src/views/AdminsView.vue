@@ -613,6 +613,7 @@
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
+import { persistentColumns } from '../lib/uiPrefs'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import { useAdminsStore } from '../stores/admins'
@@ -620,7 +621,7 @@ import { useAdminsStore } from '../stores/admins'
 const adminsStore = useAdminsStore()
 
 // Column visibility — Name, Login status and Actions always show
-const columns = reactive({ email: true, role: true, lastLogin: true })
+const columns = persistentColumns('admins', { email: true, role: true, lastLogin: true })
 const showColumnPicker = ref(false)
 
 // "How roles work" guide — kept next to the account list so the

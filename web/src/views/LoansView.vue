@@ -1583,6 +1583,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
+import { persistentColumns } from '../lib/uiPrefs'
 import AppLayout from '../components/AppLayout.vue'
 import MemberPicker from '../components/MemberPicker.vue'
 import SortableTh from '../components/SortableTh.vue'
@@ -1608,7 +1609,7 @@ const auth = useAuthStore()
 const membersStore = useMembersStore()
 
 // Column visibility — Loan No, Member and Actions always show
-const columns = reactive({
+const columns = persistentColumns('loans', {
   type: true,
   principal: true,
   balance: true,

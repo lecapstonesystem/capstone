@@ -402,6 +402,7 @@
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
+import { persistentColumns } from '../lib/uiPrefs'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import { useLedgerStore } from '../stores/ledger'
@@ -409,7 +410,11 @@ import { useLedgerStore } from '../stores/ledger'
 const ledgerStore = useLedgerStore()
 
 // Column visibility — Ref No., Date, Amount and Actions always show
-const columns = reactive({ type: true, category: true, description: true })
+const columns = persistentColumns('ledger', {
+  type: true,
+  category: true,
+  description: true,
+})
 const showColumnPicker = ref(false)
 const visibleColumnCount = computed(() => 4 + Object.values(columns).filter(Boolean).length)
 // Only force horizontal scroll when the wide columns are visible

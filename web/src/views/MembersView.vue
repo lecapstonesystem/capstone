@@ -979,6 +979,7 @@
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
+import { persistentColumns } from '../lib/uiPrefs'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import PhotoPreview from '../components/PhotoPreview.vue'
@@ -1245,7 +1246,7 @@ function editFromDetails() {
 }
 
 // Column visibility — Contact & Address live in details by default
-const columns = reactive({
+const columns = persistentColumns('members', {
   contact: false,
   address: false,
   status: true,

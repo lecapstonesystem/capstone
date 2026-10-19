@@ -58,10 +58,14 @@ function splitName(row) {
   if (row.first_name || row.last_name) {
     return { first: row.first_name || '', last: row.last_name || '' }
   }
-  const parts = String(row.name || '')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
+  const value = String(row.name || '').trim()
+  // Same convention as the members store: "Macayan, Nenita" is
+  // surname-first — the part before the comma is the LAST name.
+  if (value.includes(',')) {
+    const [last, ...rest] = value.split(',')
+    return { first: rest.join(',').trim(), last: last.trim() }
+  }
+  const parts = value.split(/\s+/).filter(Boolean)
   if (parts.length <= 1) return { first: parts[0] || '', last: '' }
   return { first: parts[0], last: parts.slice(1).join(' ') }
 }

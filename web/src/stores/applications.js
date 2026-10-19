@@ -12,14 +12,14 @@ import { uploadDocumentPhoto, removeDocumentPhoto } from '../lib/documents'
  * The queue is the member REGISTRATION queue and lives on `member`
  * itself (15_registration_queue.sql): an applicant is a member row
  * in a review status. It is NOT the `loan_application` table — that
- * one holds LOAN requests filed by existing members (Flutter app
+ * one holds LOAN requests filed by existing members (mobile app
  * flow 2) and belongs with the Loans module.
  *
  * Client rule: there is NO online registration. Two ways in:
  *   1. 🚶 Walk-in — an admin types the applicant's details here
- *   2. 📱 Flutter app — the app inserts the member row directly
+ *   2. 📱 Mobile app — the app inserts the member row directly
  *      with status 'Pending' + app_source 'App' + the profile photo
- *      (13_app_documents.sql / docs/flutter_app_contract.md)
+ *      (13_app_documents.sql / docs/app_contract.md)
  *
  * Status lifecycle (member.status):
  *   Pending → Under Review → Active | Returned | Rejected
@@ -43,7 +43,7 @@ import { uploadDocumentPhoto, removeDocumentPhoto } from '../lib/documents'
  * app_events is the persisted review timeline [{at, action, by}],
  * newest first — the review modal and Dashboard Recent Activity
  * read it. The "received" entry is synthesized from created_at for
- * Flutter-filed rows (the app only writes the row itself).
+ * App-filed rows (the app only writes the row itself).
  *
  * Actions return { ok, message? } and ApplicationsView awaits them;
  * the dialogs stay open and show message on failure.
@@ -128,7 +128,7 @@ function receivedAtOf(row) {
 }
 
 // Newest first; the "received" entry is synthesized from created_at
-// so Flutter-filed rows have a timeline before the admin acts.
+// so app-filed rows have a timeline before the admin acts.
 function historyOf(row) {
   const events = [...(Array.isArray(row.app_events) ? row.app_events : [])].sort(
     (a, b) => new Date(b.at) - new Date(a.at),

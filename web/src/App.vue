@@ -16,7 +16,7 @@ import { useAuditStore } from './stores/audit'
 /**
  * Fresh-data layer. Every store fetches once on first use and then
  * caches for the rest of the session, so writes made outside this tab
- * (SQL editor, the teammate's Flutter app) stayed invisible until F5.
+ * (SQL editor, the teammate's mobile app) stayed invisible until F5.
  *
  * Refresh all data stores whenever the tab regains focus (switching
  * back from the Supabase dashboard — including side-by-side windows,

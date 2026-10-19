@@ -904,6 +904,23 @@ export const useLoansStore = defineStore('loans', () => {
     }
   }
 
+  // In-app notice for the member (app contract §12) — best-effort by
+  // design: the decision is already committed, so a failed notice is
+  // reported to the admin instead of reverting anything. Members
+  // without an app login have no inbox — skip them silently.
+  async function notifyRequestMember(request, adminId, { type, title, body, loanId = null }) {
+    if (!request.memberAuthUid) return { ok: true }
+    const { error } = await supabase.from('notification').insert({
+      member_id: request.memberId,
+      loan_id: loanId,
+      type,
+      title,
+      body,
+      created_by: adminId,
+    })
+    return error ? { ok: false } : { ok: true }
+  }
+
   // ✅ Approve an app request → creates the loan ready for release.
   // The request is stamped FIRST; if the loan insert then fails the
   // stamp is reverted, so a request can never sit Approved without
@@ -1042,13 +1059,21 @@ export const useLoansStore = defineStore('loans', () => {
       logAction(loan, 'App documents could not be linked — attach them from the Files panel')
     }
 
+    // Tell the member in the app — claim in person, same words the portal uses.
+    const notify = await notifyRequestMember(request, adminId, {
+      type: 'loan_approved',
+      title: 'Loan request approved',
+      body: `Your ${typeInfo.label} loan request of ₱${round2(amount).toLocaleString('en-PH')} for ${term} months has been approved. Claim the proceeds in person at the cooperative (cash or Landbank cheque).`,
+      loanId: row.loan_id,
+    })
+
     const local = requests.value.find((item) => item.id === id)
     if (local) {
       local.status = 'Approved'
       local.remarks = trimmedNote
       local.dateReviewed = today
     }
-    return { ok: true, loan, docs }
+    return { ok: true, loan, docs, notify }
   }
 
   // ↩️ Return / ❌ Reject — both require remarks (same rule as the
@@ -1087,7 +1112,24 @@ export const useLoansStore = defineStore('loans', () => {
     request.remarks = trimmed
     request.dateReviewed = today
     useAuditStore().record('loan_application', id, `Loan request ${label} — ${trimmed}`)
-    return { ok: true }
+
+    // The member reads the outcome (with these exact remarks) in the app.
+    const notify = await notifyRequestMember(
+      request,
+      auth.profile?.admin_id ?? null,
+      status === 'Returned'
+        ? {
+            type: 'loan_returned',
+            title: 'Loan request returned',
+            body: `Your loan request was returned for completion: ${trimmed}`,
+          }
+        : {
+            type: 'loan_rejected',
+            title: 'Loan request rejected',
+            body: `Your loan request was rejected. Remarks: ${trimmed}`,
+          },
+    )
+    return { ok: true, notify }
   }
 
   // Load once, when the store is first used (LoansView mounts).

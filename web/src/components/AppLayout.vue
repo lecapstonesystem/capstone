@@ -86,6 +86,18 @@
         </RouterLink>
 
         <RouterLink
+          to="/notifications"
+          class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition duration-200"
+          :class="
+            $route.path === '/notifications'
+              ? 'bg-green-600 text-white'
+              : 'text-green-200 hover:bg-green-700 hover:text-white'
+          "
+        >
+          Notifications
+        </RouterLink>
+
+        <RouterLink
           to="/activity"
           class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition duration-200"
           :class="
@@ -201,6 +213,7 @@ const currentPageTitle = computed(() => {
     '/loans': 'Loans',
     '/registrations': 'Registrations',
     '/reports': 'Reports',
+    '/notifications': 'Notifications',
     '/admins': 'Admin Accounts',
   }
   return titles[route.path] || 'Dashboard'

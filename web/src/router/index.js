@@ -6,6 +6,7 @@ import MembersView from '../views/MembersView.vue'
 import LedgerView from '../views/LedgerView.vue'
 import LoansView from '../views/LoansView.vue'
 import ApplicationsView from '../views/ApplicationsView.vue'
+import NotificationsView from '../views/NotificationsView.vue'
 import ReportsView from '../views/ReportsView.vue'
 import ActivityView from '../views/ActivityView.vue'
 import AdminsView from '../views/AdminsView.vue'
@@ -67,6 +68,12 @@ const router = createRouter({
       path: '/reports',
       name: 'reports',
       component: ReportsView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/notifications',
+      name: 'notifications',
+      component: NotificationsView,
       meta: { requiresAuth: true },
     },
     {

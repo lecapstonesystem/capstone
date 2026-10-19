@@ -84,6 +84,7 @@ supabase.auth.signInWith(Email) {
 |---|---|
 | Register (insert own member row, `status='Pending'`) | yes, once per account |
 | Read own member row / own loans / own payments / own applications | yes |
+| Read own notifications, mark them read | yes |
 | File loan application (`status='Pending'`) | yes, own member_id only |
 | Submit payment with receipt (`status='Pending'`, own released loan) | yes |
 | Upload files into **own folder** in `member-documents` (profile photo, payment receipt, loan documents under `loan-apps/{application_id}`) | yes |
@@ -285,6 +286,7 @@ Track `Pending → Recorded` after the admin verifies in the portal.
 | `member` | `Pending` | `Active` (assigns `member_no`) or `Rejected` |
 | `loan_application` | `Pending` | `Under Review` → `Approved` / `Returned` / `Rejected` |
 | `payment` | `Pending` | `Recorded` (+ `verified_by`, `date_verified`) |
+| `notification` | (reads own rows) marks own `read_at` | creates every row — bulk reminders + loan-decision notices |
 
 Balances count only `Recorded` payments — a `Pending` receipt does not
 move the loan balance until verified.
@@ -304,3 +306,48 @@ move the loan balance until verified.
 5. App records a loan payment with a receipt → portal **Loans** →
    payment shows, receipt viewable, status Pending → verify it →
    Recorded, balance moves.
+6. Portal → **Notifications** → *Find payments due* → send → the app's
+   notification inbox shows the reminder; and when the admin approves /
+   returns / rejects your app-filed loan request, the inbox shows
+   `Loan request approved / returned / rejected` (with the admin's
+   remarks) after the app refreshes.
+
+## 12. Notifications — the member inbox (in-app)
+
+Every message the coop sends lands in the `notification` table; the app
+is the delivery channel. No push service, no Firebase — RLS does the
+scoping, and a database trigger freezes message content: you may only
+ever set `read_at`.
+
+| Need | Call |
+|---|---|
+| List my messages (newest first) | see below |
+| Unread count for the bell badge | count rows where `read_at` is null |
+| Mark one read | update `read_at` filtered to its `notification_id` |
+| Edit title / body / target | **never** — read-only by trigger |
+
+```kotlin
+val notes = supabase.from("notification")
+    .select("notification_id, type, title, body, loan_id, created_at, read_at")
+    .order("created_at", order = SortingOrder.Descending)
+    .decodeList()
+
+// RLS already returns ONLY your member's rows — no extra filter needed.
+
+// mark one read (style varies by version — your usual update + where):
+supabase.from("notification")
+    .update(mapOf("read_at" to java.time.Instant.now().toString())) {
+        eq("notification_id", noteId)
+    }
+```
+
+- **Refresh when the app opens and when it returns to the foreground** —
+  that refresh is what keeps the member informed without visiting the
+  office. (Live updates via Realtime on `notification` are a nice
+  optional extra later.)
+- Types you will show: `payment_due` and `payment_overdue` (bulk
+  reminders the admin sends from the portal's Notifications page) and
+  `loan_approved`, `loan_returned`, `loan_rejected` — written
+  automatically the moment the admin reviews the member's loan
+  request. Returned/rejected messages carry the admin's remarks
+  verbatim, so the member knows exactly what to re-file.

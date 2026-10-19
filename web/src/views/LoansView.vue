@@ -1842,9 +1842,15 @@ async function approveRequest() {
   reviewRequest.value = null
   requestDocs.value = []
   docsError.value = ''
+  const warnings = []
   if (result.docs && !result.docs.ok) {
-    approvalNotice.value =
-      'The request was approved, but its documents could not be linked to the loan. The files remain stored — attach them from the loan’s Files panel.'
+    warnings.push('its documents could not be linked to the loan (the files remain stored)')
+  }
+  if (result.notify && !result.notify.ok) {
+    warnings.push('the member could not be notified in the app')
+  }
+  if (warnings.length) {
+    approvalNotice.value = `The request was approved — but ${warnings.join(' and ')}.`
   }
 }
 
@@ -1867,6 +1873,13 @@ async function submitRequestDecision(status) {
     return
   }
   reviewRequest.value = null
+  requestDocs.value = []
+  docsError.value = ''
+  if (result.notify && !result.notify.ok) {
+    approvalNotice.value = `The request was ${
+      status === 'Returned' ? 'returned' : 'rejected'
+    } — but the member could not be notified in the app.`
+  }
 }
 
 // "Showing 1–10 of 25 loans"

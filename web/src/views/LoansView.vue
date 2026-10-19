@@ -70,6 +70,14 @@
         </div>
       </div>
 
+      <!-- Non-blocking warning from the last approval (documents not linked) -->
+      <p
+        v-if="approvalNotice"
+        class="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded-xl mb-6"
+      >
+        {{ approvalNotice }}
+      </p>
+
       <!-- App-filed loan requests — the mobile app's review queue -->
       <div
         v-if="loansStore.pendingRequests.length > 0 || loansStore.requestsError"
@@ -1183,6 +1191,35 @@
             </div>
           </dl>
 
+          <!-- Documents the member attached when filing from the app -->
+          <div class="rounded-lg border border-gray-200 px-4 py-3">
+            <p class="text-sm font-medium text-gray-700 mb-2">Documents from the mobile app</p>
+            <p v-if="docsLoading" class="text-xs text-gray-400">Loading documents…</p>
+            <p v-else-if="docsError" class="text-xs text-red-600">{{ docsError }}</p>
+            <ul v-else-if="requestDocs.length" class="space-y-2">
+              <li
+                v-for="doc in requestDocs"
+                :key="doc.path"
+                class="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 flex items-center justify-between gap-3"
+              >
+                <div class="min-w-0">
+                  <p class="text-sm text-gray-800 truncate">{{ doc.name }}</p>
+                  <p class="text-xs text-gray-400 truncate">
+                    {{ doc.type === 'application/pdf' ? 'PDF' : 'Image'
+                    }}{{ docSizeLabel(doc.size) }}
+                  </p>
+                </div>
+                <button
+                  class="text-xs font-medium text-green-700 hover:text-green-800 shrink-0"
+                  @click="viewRequestDoc(doc)"
+                >
+                  View
+                </button>
+              </li>
+            </ul>
+            <p v-else class="text-xs text-gray-400">No documents attached to this request.</p>
+          </div>
+
           <!-- Live eligibility check against the coop's rules -->
           <div
             v-if="reviewEligibility"
@@ -1714,6 +1751,10 @@ function requestVerify(payment) {
 // ---------- app-filed loan requests ----------
 const reviewRequest = ref(null)
 const requestError = ref('')
+const approvalNotice = ref('')
+const requestDocs = ref([])
+const docsLoading = ref(false)
+const docsError = ref('')
 const coMakerDrafts = ref([])
 const approvalNote = ref('')
 const requestRemarks = ref('')
@@ -1726,14 +1767,53 @@ function typeLabel(value) {
 function openRequest(request) {
   reviewRequest.value = request
   requestError.value = ''
+  approvalNotice.value = ''
+  requestDocs.value = []
+  docsError.value = ''
   coMakerDrafts.value = Array(Number(request.amount) >= COMAKER_THRESHOLD ? 2 : 1).fill('')
   approvalNote.value = ''
   requestRemarks.value = ''
+  loadRequestDocuments(request)
 }
 
 function closeRequest() {
   reviewRequest.value = null
   requestError.value = ''
+  requestDocs.value = []
+  docsError.value = ''
+}
+
+async function loadRequestDocuments(request) {
+  docsLoading.value = true
+  docsError.value = ''
+  const result = await loansStore.fetchRequestDocuments(request)
+  if (reviewRequest.value !== request) return // modal moved on — drop the stale result
+  docsLoading.value = false
+  if (!result.ok) {
+    docsError.value = result.message
+    return
+  }
+  requestDocs.value = result.docs
+}
+
+async function viewRequestDoc(doc) {
+  // Open the tab synchronously — popup blockers allow a tab opened
+  // inside the click itself — then point it at the signed URL.
+  const tab = window.open('about:blank', '_blank')
+  const url = await loansStore.requestDocumentUrl(doc.path)
+  if (!url) {
+    if (tab) tab.close()
+    docsError.value = 'This file could not be opened. Please try again.'
+    return
+  }
+  if (tab) tab.location.href = url
+  else window.location.href = url // popup blocked — navigate in this tab
+}
+
+function docSizeLabel(size) {
+  if (!size) return ''
+  if (size < 1024 * 1024) return ` · ${Math.max(1, Math.round(size / 1024))} KB`
+  return ` · ${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
 const requiredCoMakerCount = computed(() =>
@@ -1760,6 +1840,12 @@ async function approveRequest() {
     return
   }
   reviewRequest.value = null
+  requestDocs.value = []
+  docsError.value = ''
+  if (result.docs && !result.docs.ok) {
+    approvalNotice.value =
+      'The request was approved, but its documents could not be linked to the loan. The files remain stored — attach them from the loan’s Files panel.'
+  }
 }
 
 async function submitRequestDecision(status) {

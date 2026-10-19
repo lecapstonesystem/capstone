@@ -7,7 +7,7 @@ project**. No FastAPI in between — the phase-2 service_role backend is
 out of scope (admin portal writes directly under `06_admin_access.sql`,
 the app writes directly under RLS from `02` + `13`).
 
-All 18 migrations (`database/01…13`, `14…18`) are **already applied on
+All 20 migrations (`database/01…20`) are **already applied on
 production** — you code against the live schema, you run no SQL.
 
 ---
@@ -86,15 +86,15 @@ supabase.auth.signInWith(Email) {
 | Read own member row / own loans / own payments / own applications | yes |
 | File loan application (`status='Pending'`) | yes, own member_id only |
 | Submit payment with receipt (`status='Pending'`, own released loan) | yes |
-| Upload photos into **own folder** in `member-documents` | yes |
+| Upload files into **own folder** in `member-documents` (profile photo, payment receipt, loan documents under `loan-apps/{application_id}`) | yes |
 | Read anything else / other members / ledger / admin tables | **no** |
 | Mark own payment verified, set own status/member_no, approve anything | **no** (admin portal only) |
 
 ## 5. Flow 1 — member registration (with photo)
 
 1. Sign up → `uid`
-2. Pick + compress the profile photo (bucket caps: **5 MB**, jpeg/png/webp
-   only — compress to ~200–300 KB so uploads stay fast on mobile data)
+2. Pick + compress the profile photo (bucket caps: **10 MB**, jpeg/png/webp/pdf
+   — but still compress to ~200–300 KB so uploads stay fast on mobile data)
 
 ```kotlin
 fun compressJpeg(context: Context, uri: Uri, maxDim: Int = 1280, quality: Int = 75): ByteArray {
@@ -164,7 +164,7 @@ val me = supabase.from("member")
 ```kotlin
 val me = /* as above, own member row */;
 
-supabase.from("loan_application").insert(
+val row = supabase.from("loan_application").insert(
     mapOf(
         "member_id" to me!!["member_id"],
         "amount" to amount,
@@ -174,11 +174,47 @@ supabase.from("loan_application").insert(
         "status" to "Pending",              // FORCED by RLS
         "date_submitted" to LocalDate.now().toString(),
     )
-)
+).select().decodeSingleOrNull()              // returns the inserted row —
+                                             // you need its id for the
+                                             // documents folder below
+val applicationId = row!!["application_id"].jsonPrimitive.int  // decode style varies by version
 ```
 
 `reviewed_by` / `date_reviewed` / `remarks` must be omitted — the portal sets them.
 Track status by re-reading your rows: `Pending → Approved / Rejected / Returned`.
+
+### 6b. Required documents (shown to the admin during review)
+
+After the insert, upload one file per requirement. **The folder name is the
+contract** — the portal's Review Loan Request modal only looks in
+`{your auth uid}/loan-apps/{application_id}/`:
+
+```kotlin
+val docs = mapOf(
+    "valid-id.jpg"         to validIdBytes,   // compressed JPEG (or a PDF below)
+    "proof-of-salary.jpg"  to salaryBytes,
+    "checking-account.jpg" to checkingBytes,
+)
+for ((name, bytes) in docs) {
+    supabase.storage.from("member-documents")
+        .upload("$uid/loan-apps/$applicationId/$name", bytes) {
+            contentType = ContentType.Image.JPEG   // or ContentType.Application.PDF
+            upsert = true
+        }
+}
+```
+
+- **Filenames are pinned** (`valid-id`, `proof-of-salary`, `checking-account` +
+  extension) — the portal labels them for the reviewer. Other names still list,
+  just shown raw.
+- Limits: **10 MB** per file, jpeg/png/webp/pdf (bucket-enforced).
+- Uploads run **after** the insert — the folder is named after the id. If one
+  fails, tell the member: the application itself is already filed.
+- **Never** insert into the `attachment` table — it is admin-only and rejects
+  you with 42501. Storage in your own folder is the only door.
+- On approval the portal registers these files on the new loan's **Files**
+  panel (with an audit line). On return/rejection they simply stay in your
+  folder, and a re-filed application gets a new folder — nothing is lost.
 
 ## 7. Flow 3 — loan payment (with receipt photo)
 
@@ -227,8 +263,8 @@ Track `Pending → Recorded` after the admin verifies in the portal.
 | HTTP body `code: 42501` (RestException) | RLS rejected the write | almost always a wrong `status` value, or a `member_id`/`loan_id` that is not yours |
 | `23505` on `member_auth_uid_key` | account already has a registration row | sign in instead of signing up |
 | 401 / "JWT expired" / PGRST301 | session expired | sign in again |
-| storage `413` / "exceeded" | file > 5 MB | compress harder / re-encode |
-| storage `415` | mime not allowed | upload jpeg/png/webp (`contentType = image/jpeg`) |
+| storage `413` / "exceeded" | file > 10 MB | compress harder / re-encode |
+| storage `415` | mime not allowed | upload jpeg/png/webp/pdf (`contentType = image/jpeg`) |
 | signUp `weak_password` / invalid email | local validation | enforce 8+ chars in the form |
 | 401 `Forbidden use of secret key` | the secret key leaked into the app | replace with the publishable key immediately |
 
@@ -238,7 +274,7 @@ Track `Pending → Recorded` after the admin verifies in the portal.
 - mark its own payment verified or its own registration approved —
   status transitions are **admin-portal-only**, enforced by RLS;
 - submit a payment against someone else's loan or a not-yet-released loan;
-- exceed 5 MB or non-image uploads (bucket limits, server-enforced);
+- exceed 10 MB or upload anything outside jpeg/png/webp/pdf (bucket limits, server-enforced);
 - the secret key is not in the app, so even a decompiled APK yields
   only the publishable key plus RLS.
 
@@ -258,9 +294,13 @@ move the loan balance until verified.
 1. Point the app at the production URL + publishable key (section 1).
 2. Dashboard: *Authentication → Sign In / Providers → Email → Confirm
    email = OFF* (verify once).
-3. App registers a test member with a photo → portal **Applications**
+3. App registers a test member with a photo → portal **Registrations**
    shows it, source "Mobile App", status Pending → approve it → member
    becomes Active, photo is their avatar everywhere.
-4. App records a loan payment with a receipt → portal **Loans** →
+4. App files a loan request **with the required documents** (6b) → portal
+   **Loans** → amber panel → Review shows the request and its documents
+   (View opens each) → approve → the request leaves the queue and the
+   documents appear in the new loan's **Files** panel.
+5. App records a loan payment with a receipt → portal **Loans** →
    payment shows, receipt viewable, status Pending → verify it →
    Recorded, balance moves.

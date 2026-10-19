@@ -792,6 +792,7 @@ export const useLoansStore = defineStore('loans', () => {
       memberId: row.member_id,
       memberName: row.member?.name || '',
       memberNo: row.member?.member_no || '',
+      memberAuthUid: row.member?.auth_uid || '',
       amount: Number(row.amount || 0),
       purpose: row.purpose || '',
       type: row.loan_type || '',
@@ -808,7 +809,7 @@ export const useLoansStore = defineStore('loans', () => {
     try {
       const { data, error } = await supabase
         .from('loan_application')
-        .select('*, member(name, member_no)')
+        .select('*, member(name, member_no, auth_uid)')
         .order('application_id', { ascending: false })
       if (error) throw error
       requests.value = (data || []).map(rowToRequest)
@@ -818,6 +819,88 @@ export const useLoansStore = defineStore('loans', () => {
       requests.value = []
     } finally {
       requestsLoading.value = false
+    }
+  }
+
+  // ---------- documents the member attached when filing (Flow 2b) ----------
+  // The app uploads them to {auth-uid}/loan-apps/{application_id}/ in the
+  // member-documents bucket. They stay storage-only while pending — listing
+  // them here is what lets the admin review them before approving.
+  async function fetchRequestDocuments(request) {
+    if (!request?.memberAuthUid || !request?.id) return { ok: true, docs: [] }
+    const prefix = `${request.memberAuthUid}/loan-apps/${request.id}`
+    const { data, error } = await supabase.storage.from('member-documents').list(prefix)
+    if (error) {
+      return { ok: false, message: 'The documents for this request could not be loaded.' }
+    }
+    const docs = (data || [])
+      .filter((file) => file && file.name)
+      .map((file) => {
+        const size = Number(file.metadata?.size)
+        return {
+          name: file.name,
+          path: `${prefix}/${file.name}`,
+          size: Number.isFinite(size) ? size : null,
+          type: file.metadata?.mimetype || file.metadata?.contentType || '',
+        }
+      })
+    return { ok: true, docs }
+  }
+
+  /** Short-lived signed URL — the bucket is private. */
+  async function requestDocumentUrl(path) {
+    const { data, error } = await supabase.storage
+      .from('member-documents')
+      .createSignedUrl(path, 3600)
+    return error ? null : data.signedUrl
+  }
+
+  // Friendly label for the three required documents — the contract pins
+  // these filenames so the reviewer sees requirement names, not raw files.
+  function documentLabel(fileName) {
+    const base = String(fileName)
+      .toLowerCase()
+      .replace(/\.[a-z0-9]+$/, '')
+    if (base.includes('valid-id') || base.includes('valid id')) return 'Valid ID'
+    if (base.includes('proof-of-salary') || base.includes('proof of salary'))
+      return 'Proof of salary'
+    if (base.includes('checking-account') || base.includes('checking account'))
+      return 'Checking account'
+    return ''
+  }
+
+  // On approval the documents become attachment rows on the new loan, so the
+  // paperwork follows the money (Files panel, same replace/remove rules as
+  // any other attachment). The files are NOT moved — admins can read anywhere
+  // in the bucket, and removing an attachment deletes the object wherever it
+  // lives. Failure here never undoes a completed approval; the caller reports
+  // it instead.
+  async function registerRequestDocuments(request, loanId, adminId) {
+    if (!request.memberAuthUid) return { ok: true, count: 0 }
+    const prefix = `${request.memberAuthUid}/loan-apps/${request.id}`
+    try {
+      const { data, error } = await supabase.storage.from('member-documents').list(prefix)
+      if (error) throw error
+      const files = (data || []).filter((file) => file && file.name)
+      if (!files.length) return { ok: true, count: 0 }
+      const rows = files.map((file) => {
+        const size = Number(file.metadata?.size)
+        const label = documentLabel(file.name)
+        return {
+          loan_id: loanId,
+          file_path: `${prefix}/${file.name}`,
+          file_name: file.name,
+          file_type: file.metadata?.mimetype || file.metadata?.contentType || null,
+          file_size: Number.isFinite(size) ? size : null,
+          note: label ? `${label} (app submission)` : 'App submission',
+          uploaded_by: adminId,
+        }
+      })
+      const { error: insertError } = await supabase.from('attachment').insert(rows)
+      if (insertError) throw insertError
+      return { ok: true, count: rows.length }
+    } catch {
+      return { ok: false, count: 0 }
     }
   }
 
@@ -948,13 +1031,24 @@ export const useLoansStore = defineStore('loans', () => {
       `App loan request approved — ${typeInfo.label} ₱${round2(amount).toLocaleString('en-PH')} (request #${id})`,
     )
 
+    // Carry the app-submitted documents over to the new loan.
+    const docs = await registerRequestDocuments(request, row.loan_id, adminId)
+    if (docs.ok && docs.count > 0) {
+      logAction(
+        loan,
+        `App documents linked — ${docs.count} file${docs.count > 1 ? 's' : ''} from the loan request`,
+      )
+    } else if (!docs.ok) {
+      logAction(loan, 'App documents could not be linked — attach them from the Files panel')
+    }
+
     const local = requests.value.find((item) => item.id === id)
     if (local) {
       local.status = 'Approved'
       local.remarks = trimmedNote
       local.dateReviewed = today
     }
-    return { ok: true, loan }
+    return { ok: true, loan, docs }
   }
 
   // ↩️ Return / ❌ Reject — both require remarks (same rule as the
@@ -1041,6 +1135,8 @@ export const useLoansStore = defineStore('loans', () => {
     requestsError,
     pendingRequests,
     fetchRequests,
+    fetchRequestDocuments,
+    requestDocumentUrl,
     approveRequest,
     returnRequest,
     rejectRequest,

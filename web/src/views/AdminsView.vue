@@ -28,6 +28,35 @@
         a <strong>Super Admin</strong> can manage accounts.
       </div>
 
+      <!-- Role guide — what each role can access and do -->
+      <button
+        @click="rolesHelpOpen = !rolesHelpOpen"
+        class="text-sm font-medium text-green-700 hover:text-green-800 transition duration-200 -mt-4 mb-6"
+      >
+        {{ rolesHelpOpen ? 'Hide role guide' : 'How roles work' }}
+      </button>
+
+      <div
+        v-if="rolesHelpOpen"
+        class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6 space-y-5"
+      >
+        <div v-for="entry in ROLE_GUIDE" :key="entry.name">
+          <p class="text-sm font-semibold text-gray-800">{{ entry.name }}</p>
+          <p class="text-sm text-gray-600 mt-0.5">{{ entry.summary }}</p>
+          <ul class="mt-1.5 space-y-1">
+            <li v-for="line in entry.can" :key="line" class="text-xs text-gray-500 flex gap-2">
+              <span class="text-green-600 shrink-0">-</span>
+              <span>{{ line }}</span>
+            </li>
+          </ul>
+        </div>
+        <p class="text-xs text-gray-400 border-t border-gray-100 pt-3">
+          Role boundaries are enforced in the database itself, not only in the interface: test-data
+          deletion is allowed for Developer sessions alone (row-level security), and the audit log
+          has no delete path for any role — deletions are logged, never erased.
+        </p>
+      </div>
+
       <!-- Search + Role Filter -->
       <div
         class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-col sm:flex-row gap-3"
@@ -161,7 +190,9 @@
                     :class="
                       admin.role === 'Super Admin'
                         ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-600'
+                        : admin.role === 'Developer'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-gray-100 text-gray-600'
                     "
                     class="px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap"
                   >
@@ -280,7 +311,9 @@
               :class="
                 detailAdmin.role === 'Super Admin'
                   ? 'bg-green-100 text-green-700'
-                  : 'bg-gray-100 text-gray-600'
+                  : detailAdmin.role === 'Developer'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-gray-100 text-gray-600'
               "
             >
               {{ detailAdmin.role }}
@@ -589,6 +622,42 @@ const adminsStore = useAdminsStore()
 // Column visibility — Name, Login status and Actions always show
 const columns = reactive({ email: true, role: true, lastLogin: true })
 const showColumnPicker = ref(false)
+
+// "How roles work" guide — kept next to the account list so the
+// powers behind each badge are one glance away.
+const rolesHelpOpen = ref(false)
+const ROLE_GUIDE = [
+  {
+    name: 'Super Admin',
+    summary:
+      'The cooperative’s top account — everything an Admin can do, plus control of who is signed up.',
+    can: [
+      'Add admin accounts, change roles, enable or disable logins, reset passwords',
+      'Everything listed under Admin',
+      'At least one Super Admin must always remain — the system blocks removing the last one',
+    ],
+  },
+  {
+    name: 'Admin',
+    summary: 'Day-to-day cooperative work — the normal role for coop staff.',
+    can: [
+      'Members: register, edit, suspend or drop; issue app credentials',
+      'Loans: create, review and release; verify payments; print Loan Notes',
+      'Registrations, Ledger, Reports, Notifications and the Activity Log',
+      'View this account list — management stays with Super Admins',
+    ],
+  },
+  {
+    name: 'Developer',
+    summary:
+      'Everything an Admin can do, plus cleanup of TEST data during development and testing.',
+    can: [
+      'Delete test members and test loans — requires typing the record number and is written to the audit log',
+      'Deletion is blocked for every other role inside the database itself (row-level security)',
+      'Not a coop duty: real member records are never deleted through the portal (RA 9520)',
+    ],
+  },
+]
 const visibleColumnCount = computed(() => 3 + Object.values(columns).filter(Boolean).length)
 // Only force horizontal scroll when the wide columns are visible
 const tableMinWidth = computed(() => (columns.email || columns.lastLogin ? '820px' : '660px'))

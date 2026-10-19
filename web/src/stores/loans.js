@@ -772,6 +772,55 @@ export const useLoansStore = defineStore('loans', () => {
     return { ok: true }
   }
 
+  // ---------- developer-only test-data cleanup ----------
+  // Removes a test loan the way database/reference_manual_member_delete
+  // .sql does (no FK cascades — children first). The audit trail is
+  // kept: the deletion is itself logged, never erased. RLS gates the
+  // role (22_developer_role.sql) — this guard mirrors it client-side.
+  async function deleteTestLoan(loan) {
+    const auth = useAuthStore()
+    if (!auth.isDeveloper) {
+      return { ok: false, message: 'Only the Developer role can delete test data.' }
+    }
+
+    // Storage files outlive their rows — collect the paths first.
+    const [atts, pays] = await Promise.all([
+      supabase.from('attachment').select('file_path').eq('loan_id', loan.id),
+      supabase.from('payment').select('receipt_image_url').eq('loan_id', loan.id),
+    ])
+    const paths = new Set()
+    for (const row of atts.data || []) if (row.file_path) paths.add(row.file_path)
+    for (const row of pays.data || []) if (row.receipt_image_url) paths.add(row.receipt_image_url)
+
+    const steps = [
+      ['attachment', supabase.from('attachment').delete().eq('loan_id', loan.id)],
+      ['co_maker', supabase.from('co_maker').delete().eq('loan_id', loan.id)],
+      ['payment', supabase.from('payment').delete().eq('loan_id', loan.id)],
+      ['loan', supabase.from('loan').delete().eq('loan_id', loan.id)],
+    ]
+    for (const [label, query] of steps) {
+      const { error } = await query
+      if (error) {
+        return {
+          ok: false,
+          message: `${label} could not be cleared (${errorMessage(error)}). Deletion stopped — finish with the reference SQL script (database/reference_manual_member_delete.sql).`,
+        }
+      }
+    }
+
+    // Best-effort: leftover files are inert, so a storage hiccup is a
+    // warning, not a failure.
+    let storageFailed = false
+    if (paths.size) {
+      const { error } = await supabase.storage.from('member-documents').remove([...paths])
+      storageFailed = Boolean(error)
+    }
+
+    useAuditStore().record('loan', loan.id, `Test loan deleted (developer) — ${loan.loanNo}`)
+    loans.value = loans.value.filter((item) => item.id !== loan.id)
+    return { ok: true, storageFailed }
+  }
+
   // ---------- app-filed loan requests (loan_application) ----------
   // Requests come in from the mobile app (Flow 2 of the app contract)
   // with status 'Pending'; this queue is the portal's review side.
@@ -1172,6 +1221,7 @@ export const useLoansStore = defineStore('loans', () => {
     attachReceipt,
     removeReceipt,
     sendReminder,
+    deleteTestLoan,
     requests,
     requestsLoading,
     requestsError,

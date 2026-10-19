@@ -6,6 +6,7 @@ import { uploadDocumentPhoto, removeDocumentPhoto } from '../lib/documents'
 import { randomPassword } from '../utils/password'
 import { toggleSort, sortRows } from '../utils/tableSort'
 import { useAuditStore } from './audit'
+import { useAuthStore } from './auth'
 
 /**
  * Members store — live Supabase data (swapped from mocks).
@@ -615,10 +616,98 @@ export const useMembersStore = defineStore('members', () => {
     return { ok: true }
   }
 
-  // No deleteMember: cooperatives must keep member records (RA 9520,
-  // AMLA), so the portal offers Suspend/Drop only — both keep the
-  // row. Permanent deletion is a deliberate backend action (service_role
-  // / SQL), never a click here.
+  // Cooperatives must keep member records (RA 9520, AMLA), so the
+  // portal offers Suspend/Drop only for real members. The one
+  // exception is the developer-only TEST-data cleanup below: triple-
+  // gated by the Developer role (RLS — 22_developer_role.sql), a
+  // typed member number in the portal, and a line in the audit log.
+  // It mirrors database/reference_manual_member_delete.sql (no FK
+  // cascades — children first). audit_log is never touched: the
+  // trail stays even after the test rows are gone.
+
+  // Depth-first listing of a storage prefix — a member's folder can
+  // nest (loan-apps/2/...). item.id is set on files, absent on folders.
+  async function collectStorageFolder(bucket, prefix, out) {
+    const { data } = await supabase.storage.from(bucket).list(prefix)
+    for (const item of data || []) {
+      const path = `${prefix}/${item.name}`
+      if (item.id) out.push(path)
+      else await collectStorageFolder(bucket, path, out)
+    }
+  }
+
+  async function deleteTestMember(member) {
+    const auth = useAuthStore()
+    if (!auth.isDeveloper) {
+      return { ok: false, message: 'Only the Developer role can delete test data.' }
+    }
+
+    // Storage paths must be collected while the rows still exist.
+    const { data: loanRows, error: loanError } = await supabase
+      .from('loan')
+      .select('loan_id')
+      .eq('member_id', member.id)
+    if (loanError) return { ok: false, message: errorMessage(loanError) }
+    const loanIds = (loanRows || []).map((row) => row.loan_id)
+    const loanFilter = loanIds.length ? `,loan_id.in.(${loanIds.join(',')})` : ''
+
+    const paths = new Set()
+    const [atts, pays, fresh] = await Promise.all([
+      supabase.from('attachment').select('file_path').or(`member_id.eq.${member.id}${loanFilter}`),
+      supabase
+        .from('payment')
+        .select('receipt_image_url')
+        .or(`member_id.eq.${member.id}${loanFilter}`),
+      supabase.from('member').select('auth_uid, id_photo_url').eq('member_id', member.id).single(),
+    ])
+    for (const row of atts.data || []) if (row.file_path) paths.add(row.file_path)
+    for (const row of pays.data || []) if (row.receipt_image_url) paths.add(row.receipt_image_url)
+    if (fresh.data?.id_photo_url) paths.add(fresh.data.id_photo_url)
+
+    // Rows, child-first — the reference script's order.
+    const steps = [
+      [
+        'attachment',
+        supabase.from('attachment').delete().or(`member_id.eq.${member.id}${loanFilter}`),
+      ],
+      ['co_maker', supabase.from('co_maker').delete().or(`member_id.eq.${member.id}${loanFilter}`)],
+      ['payment', supabase.from('payment').delete().or(`member_id.eq.${member.id}${loanFilter}`)],
+      ['loan_application', supabase.from('loan_application').delete().eq('member_id', member.id)],
+      ['share_capital', supabase.from('share_capital').delete().eq('member_id', member.id)],
+      ['loan', supabase.from('loan').delete().eq('member_id', member.id)],
+      ['member', supabase.from('member').delete().eq('member_id', member.id)],
+    ]
+    for (const [label, query] of steps) {
+      const { error } = await query
+      if (error) {
+        return {
+          ok: false,
+          message: `${label} could not be cleared (${errorMessage(error)}). Deletion stopped — finish with the reference SQL script (database/reference_manual_member_delete.sql).`,
+        }
+      }
+    }
+
+    // The member's whole storage folder, plus every collected path —
+    // best-effort: leftover files are inert, so hiccups are warnings.
+    let storageFailed = false
+    const folderPaths = []
+    if (fresh.data?.auth_uid) {
+      await collectStorageFolder('member-documents', fresh.data.auth_uid, folderPaths)
+      for (const path of folderPaths) paths.add(path)
+    }
+    if (paths.size) {
+      const { error } = await supabase.storage.from('member-documents').remove([...paths])
+      storageFailed = Boolean(error)
+    }
+
+    useAuditStore().record(
+      'member',
+      member.id,
+      `Test member deleted (developer) — ${member.memberNo} ${member.name}`,
+    )
+    members.value = members.value.filter((item) => item.id !== member.id)
+    return { ok: true, storageFailed }
+  }
 
   // Load once, when the store is first used (MembersView mounts).
   fetchMembers()
@@ -652,6 +741,9 @@ export const useMembersStore = defineStore('members', () => {
     removeCapital,
     uploadIdPhoto,
     removeIdPhoto,
-    // deleteMember intentionally absent — see note above
+    // Suspend/Drop stays the normal path for real members;
+    // deleteTestMember is the developer-only escape hatch for TEST
+    // data (typed confirmation in the view, role gated by 22).
+    deleteTestMember,
   }
 })

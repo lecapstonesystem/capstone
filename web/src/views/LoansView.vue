@@ -729,6 +729,14 @@
             Print Loan Note
           </button>
 
+          <button
+            v-if="auth.isDeveloper"
+            @click="openDeleteLoanTest"
+            class="border border-red-300 text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 transition duration-200"
+          >
+            Delete Test Loan
+          </button>
+
           <template v-if="detailLoan.status === 'For Approval'">
             <button
               @click="detailLoan = null"
@@ -1525,6 +1533,51 @@
         </div>
       </div>
     </div>
+    <!-- Developer-only: delete a TEST loan (typed confirmation) -->
+    <div
+      v-if="deleteLoanTestOpen && detailLoan"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      @click.self="deleteLoanTestOpen = false"
+    >
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-2">Delete test loan?</h2>
+        <p class="text-sm text-gray-500 mb-4">
+          This permanently removes <strong>{{ detailLoan.loanNo }}</strong> together with its
+          payments, co-maker rows and attached files. The audit log keeps its trail — deletions are
+          logged, never erased. Only ever do this for test loans; a real member's loan history is
+          the record the coop is required to keep.
+        </p>
+        <p class="text-sm text-gray-700 mb-2">
+          Type the loan number <strong>{{ detailLoan.loanNo }}</strong> to confirm.
+        </p>
+        <input
+          v-model="deleteLoanTestConfirm"
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+          :placeholder="detailLoan.loanNo"
+        />
+        <p v-if="deleteLoanTestError" class="text-sm text-red-600 mb-2">
+          {{ deleteLoanTestError }}
+        </p>
+        <div class="flex justify-end gap-3 mt-4">
+          <button
+            @click="deleteLoanTestOpen = false"
+            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+          >
+            Cancel
+          </button>
+          <button
+            @click="runDeleteLoanTest"
+            :disabled="
+              deleteLoanTestBusy ||
+              deleteLoanTestConfirm.trim().toUpperCase() !== String(detailLoan.loanNo).toUpperCase()
+            "
+            class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition duration-200 disabled:opacity-50"
+          >
+            {{ deleteLoanTestBusy ? 'Deleting…' : 'Delete permanently' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </AppLayout>
 </template>
 
@@ -1546,10 +1599,12 @@ import {
   CEILING_CAP,
 } from '../stores/loans'
 import { useMembersStore } from '../stores/members'
+import { useAuthStore } from '../stores/auth'
 import { generateLoanNote } from '../lib/loanNotePdf'
 import { loanTotals, buildSchedule, nextDue } from '../utils/amortization'
 
 const loansStore = useLoansStore()
+const auth = useAuthStore()
 const membersStore = useMembersStore()
 
 // Column visibility — Loan No, Member and Actions always show
@@ -1634,6 +1689,38 @@ const detailLoan = ref(null)
 const actionError = ref('')
 const remarksDraft = ref('')
 const releaseChannel = ref('Cash')
+
+// Developer-only test-data cleanup (22_developer_role.sql) — typed
+// loan number, RLS-gated role, audit-logged removal.
+const deleteLoanTestOpen = ref(false)
+const deleteLoanTestConfirm = ref('')
+const deleteLoanTestBusy = ref(false)
+const deleteLoanTestError = ref('')
+
+function openDeleteLoanTest() {
+  deleteLoanTestConfirm.value = ''
+  deleteLoanTestError.value = ''
+  deleteLoanTestOpen.value = true
+}
+
+async function runDeleteLoanTest() {
+  const loan = detailLoan.value
+  if (
+    !loan ||
+    deleteLoanTestConfirm.value.trim().toUpperCase() !== String(loan.loanNo).toUpperCase()
+  ) {
+    return
+  }
+  deleteLoanTestBusy.value = true
+  const result = await loansStore.deleteTestLoan(loan)
+  deleteLoanTestBusy.value = false
+  if (!result.ok) {
+    deleteLoanTestError.value = result.message
+    return
+  }
+  deleteLoanTestOpen.value = false
+  detailLoan.value = null
+}
 
 const schedule = computed(() =>
   detailLoan.value

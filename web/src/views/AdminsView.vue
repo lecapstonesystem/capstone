@@ -45,6 +45,7 @@
           <option value="All">All Roles</option>
           <option value="Super Admin">Super Admin</option>
           <option value="Admin">Admin</option>
+          <option value="Developer">Developer</option>
         </select>
 
         <!-- Column visibility -->
@@ -391,6 +392,7 @@
               >
                 <option value="Super Admin">Super Admin</option>
                 <option value="Admin">Admin</option>
+                <option value="Developer">Developer</option>
               </select>
               <p class="text-xs text-gray-400 mt-1">
                 {{
@@ -511,6 +513,7 @@
             >
               <option value="Admin">Admin</option>
               <option value="Super Admin">Super Admin</option>
+              <option value="Developer">Developer</option>
             </select>
           </div>
 

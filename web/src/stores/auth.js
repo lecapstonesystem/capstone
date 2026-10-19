@@ -32,6 +32,7 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!session.value)
   const displayName = computed(() => profile.value?.name || session.value?.user?.email || 'Admin')
   const role = computed(() => profile.value?.role || '')
+  const isDeveloper = computed(() => role.value === 'Developer')
   const mustChangePassword = computed(() => !!profile.value?.must_change_password)
 
   let initPromise = null
@@ -206,6 +207,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     displayName,
     role,
+    isDeveloper,
     mustChangePassword,
     ensureInit,
     signIn,

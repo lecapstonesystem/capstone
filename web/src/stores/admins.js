@@ -83,7 +83,7 @@ export const useAdminsStore = defineStore('admins', () => {
     )
   }
 
-  const ROLE_RANK = { 'Super Admin': 0, Admin: 1 }
+  const ROLE_RANK = { 'Super Admin': 0, Admin: 1, Developer: 2 }
 
   const filteredAdmins = computed(() => {
     const query = search.value.toLowerCase().trim()

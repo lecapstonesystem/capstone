@@ -427,6 +427,23 @@
             </div>
           </div>
 
+          <!-- Members' Data Sheet — the coop's own form, pre-filled -->
+          <div class="border-t border-gray-100 pt-4">
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Members' Data Sheet
+              </p>
+              <button
+                @click="printDataSheet"
+                :disabled="printingSheet"
+                class="border border-green-300 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-50 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {{ printingSheet ? 'Preparing…' : 'Print Data Sheet' }}
+              </button>
+            </div>
+            <p v-if="sheetError" class="text-xs text-red-600 mt-2">{{ sheetError }}</p>
+          </div>
+
           <!-- Loans -->
           <div class="border-t border-gray-100 pt-4 space-y-3">
             <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">
@@ -686,6 +703,32 @@
                 v-model="form.lastName"
                 type="text"
                 placeholder="e.g. Dela Cruz"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          <!-- Gender + birthday (printed on the Members' Data Sheet) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+              <select
+                v-model="form.gender"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="">Not set</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option v-if="form.gender && form.gender !== 'Male' && form.gender !== 'Female'">
+                  {{ form.gender }}
+                </option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Birthday</label>
+              <input
+                v-model="form.dateOfBirth"
+                type="date"
                 class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
             </div>
@@ -980,6 +1023,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { persistentColumns } from '../lib/uiPrefs'
+import { generateDataSheet } from '../lib/memberDataSheetPdf'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import PhotoPreview from '../components/PhotoPreview.vue'
@@ -1265,6 +1309,8 @@ const emptyForm = {
   firstName: '',
   middleName: '',
   lastName: '',
+  gender: '',
+  dateOfBirth: '',
   memberType: 'Regular',
   civilStatus: 'Single',
   spouseName: '',
@@ -1299,6 +1345,8 @@ function openEditModal(member) {
     firstName: member.firstName,
     middleName: member.middleName || '',
     lastName: member.lastName,
+    gender: member.gender || '',
+    dateOfBirth: member.dateOfBirth || '',
     memberType: member.memberType || 'Regular',
     civilStatus: member.civilStatus || 'Single',
     spouseName: member.spouseName || '',
@@ -1355,6 +1403,8 @@ async function saveMember() {
     firstName: form.firstName.trim(),
     middleName: form.middleName.trim(),
     lastName: form.lastName.trim(),
+    gender: form.gender || null,
+    dateOfBirth: form.dateOfBirth || null,
     memberType: form.memberType,
     civilStatus: form.civilStatus,
     spouseName: form.civilStatus === 'Married' ? form.spouseName.trim() : '',
@@ -1383,6 +1433,23 @@ async function saveMember() {
   }
 
   closeModal()
+}
+
+const printingSheet = ref(false)
+const sheetError = ref('')
+
+// Print the coop's Members' Data Sheet with this member's details
+// typed in — the member signs it and the office files the copy.
+async function printDataSheet() {
+  printingSheet.value = true
+  sheetError.value = ''
+  try {
+    await generateDataSheet(detailMember.value)
+  } catch {
+    sheetError.value = 'Could not prepare the data sheet. Please try again.'
+  } finally {
+    printingSheet.value = false
+  }
 }
 
 function statusBadgeClass(status) {

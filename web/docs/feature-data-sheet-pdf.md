@@ -1,7 +1,9 @@
 # Feature spec — Auto-filled Members' Data Sheet (PDF)
 
-Status: **PARKED — start after the Supabase connection phase is done.**
-Decision recorded: use the scanned form we already have; full data-sheet field scope.
+Status: **SHIPPED — essentials scope** (portal v1.0: Members drawer and
+approved Registrations both print the pre-filled sheet).
+Decisions recorded: overlay the scanned form (not a recreation); the full
+field scope stays the v1.1 extension — see "Built" below.
 
 ## Goal
 
@@ -53,3 +55,25 @@ Left blank by design: 1x1 picture and signature (wet ink, physical steps).
 
 - Supabase Storage — PDF is generated on demand in the browser
 - Reprinting history — the signed paper original stays the record
+
+## Built (v1.0, essentials scope)
+
+- `web/src/lib/memberDataSheetPdf.js` stamps with pdf-lib: fetches
+  `web/public/forms/members-data-sheet.jpg` plus
+  `data-sheet-template.json` — coordinates are fractions of the page, so
+  a re-scan at any resolution keeps the template, and the mobile app can
+  reuse the same JSON.
+- Stamped from the live record: name parts, DOB + computed age, civil
+  status mark, spouse name, present address, landline/mobile/email,
+  TIN/GSIS/SSS/PAG-IBIG/PHILHEALTH, membership date + computed years in
+  the cooperative, capital share, membership-type mark. Permanent
+  address stays blank — the system holds one address (the member's
+  current one), which prints on Present Address.
+- Gender + Birthday added to the member edit form (columns existed since
+  the base schema; the portal now collects, shows and saves them).
+- Left blank for wet ink: 1x1 photo, signature, date signed, dependents,
+  spouse occupation, department/position/years/employee no., education
+  block, financial institution.
+- Recalibrate any time with `node scripts/sample-data-sheet.mjs` (from
+  `web/`) — writes `public/forms/_sample.pdf`; compare against the
+  printed lines and adjust the JSON.

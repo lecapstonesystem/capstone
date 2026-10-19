@@ -1,0 +1,41 @@
+{
+  "$comment": "Members' Data Sheet overlay template. Coordinates are fractions of the page: x from the left edge, y from the top edge, y = text BASELINE. Fractions make one template fit any scan resolution — multiply by the output page size at stamp time. Shared by the portal (web/src/lib/memberDataSheetPdf.js) and reusable by the mobile app. Keys with no system data (dependents, employment, education) stay in the template and print blank for wet ink.",
+  "page": { "width": 215.9, "height": 279.4, "unit": "mm" },
+  "image": "members-data-sheet.jpg",
+  "scanned": { "width": 1601, "height": 2048 },
+  "fields": [
+    { "key": "lastName", "x": 0.2041, "y": 0.247, "size": 11, "align": "center", "w": 0.225 },
+    { "key": "firstName", "x": 0.4994, "y": 0.247, "size": 11, "align": "center", "w": 0.225 },
+    { "key": "middleName", "x": 0.7462, "y": 0.247, "size": 11, "align": "center", "w": 0.225 },
+    { "key": "dateOfBirth", "x": 0.1603, "y": 0.2745, "size": 9.5, "align": "left", "w": 0.183 },
+    { "key": "age", "x": 0.1112, "y": 0.288, "size": 9.5, "align": "left", "w": 0.172 },
+    { "key": "spouseName", "x": 0.1775, "y": 0.321, "size": 9.5, "align": "left", "w": 0.291 },
+    { "key": "dependents", "x": 0.6315, "y": 0.321, "size": 9.5, "align": "left", "w": 0.217 },
+    { "key": "spouseOccupation", "x": 0.1794, "y": 0.3375, "size": 9.5, "align": "left", "w": 0.293 },
+    { "key": "permanentAddress", "x": 0.2049, "y": 0.3745, "size": 9.5, "align": "left", "w": 0.642 },
+    { "key": "presentAddress", "x": 0.2017, "y": 0.393, "size": 9.5, "align": "left", "w": 0.645 },
+    { "key": "landline", "x": 0.1411, "y": 0.434, "size": 9, "align": "left", "w": 0.142 },
+    { "key": "mobile", "x": 0.398, "y": 0.434, "size": 9, "align": "left", "w": 0.137 },
+    { "key": "email", "x": 0.6736, "y": 0.434, "size": 9, "align": "left", "w": 0.189 },
+    { "key": "department", "x": 0.1603, "y": 0.464, "size": 9, "align": "left", "w": 0.197 },
+    { "key": "position", "x": 0.4504, "y": 0.464, "size": 9, "align": "left", "w": 0.146 },
+    { "key": "yearsInService", "x": 0.747, "y": 0.464, "size": 9, "align": "left", "w": 0.117 },
+    { "key": "employeeNumber", "x": 0.1603, "y": 0.48, "size": 9, "align": "left", "w": 0.114 },
+    { "key": "tinNumber", "x": 0.3579, "y": 0.48, "size": 9, "align": "left", "w": 0.13 },
+    { "key": "gsisNumber", "x": 0.577, "y": 0.48, "size": 9, "align": "left", "w": 0.121 },
+    { "key": "sssNumber", "x": 0.775, "y": 0.48, "size": 9, "align": "left", "w": 0.089 },
+    { "key": "pagibigNumber", "x": 0.1666, "y": 0.496, "size": 9, "align": "left", "w": 0.123 },
+    { "key": "philhealthNumber", "x": 0.446, "y": 0.496, "size": 9, "align": "left", "w": 0.14 },
+    { "key": "membershipDate", "x": 0.3516, "y": 0.6545, "size": 9.5, "align": "left", "w": 0.155 },
+    { "key": "yearsInCooperative", "x": 0.7735, "y": 0.6545, "size": 9.5, "align": "left", "w": 0.087 },
+    { "key": "capitalShare", "x": 0.1745, "y": 0.6825, "size": 9.5, "align": "left", "w": 0.191 }
+  ],
+  "checks": [
+    { "group": "civilStatus", "value": "Single", "x": 0.2729, "y": 0.3057 },
+    { "group": "civilStatus", "value": "Married", "x": 0.4289, "y": 0.3057 },
+    { "group": "civilStatus", "value": "Widow", "x": 0.5838, "y": 0.3057 },
+    { "group": "civilStatus", "value": "Separated", "x": 0.7713, "y": 0.3057 },
+    { "group": "memberType", "value": "Regular", "x": 0.3836, "y": 0.7091 },
+    { "group": "memberType", "value": "Associate", "x": 0.5868, "y": 0.7091 }
+  ]
+}

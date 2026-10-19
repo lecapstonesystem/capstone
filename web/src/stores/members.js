@@ -75,11 +75,14 @@ function rowToMember(row, capitals, entries) {
     lastName: names.last,
     middleName: row.middle_name || '',
     memberType: titleCase(row.member_type) || 'Regular',
+    gender: titleCase(row.gender),
+    dateOfBirth: row.date_of_birth ? String(row.date_of_birth).slice(0, 10) : '',
     civilStatus: row.civil_status || '',
     spouseName: row.spouse_name || '',
     landline: row.landline || '',
     govIdType: row.gov_id_type || '',
     govIdNumber: row.government_id || '',
+    tinNumber: row.tin_number || '',
     gsisNumber: row.gsis_number || '',
     sssNumber: row.sss_number || '',
     pagibigNumber: row.pagibig_number || '',
@@ -119,6 +122,8 @@ function toRow(data) {
     middle_name: data.middleName || null,
     last_name: data.lastName || null,
     member_type: data.memberType || 'Regular',
+    gender: data.gender || null,
+    date_of_birth: data.dateOfBirth || null,
     civil_status: data.civilStatus || null,
     spouse_name: data.spouseName || null,
     landline: data.landline || null,
@@ -311,6 +316,19 @@ export const useMembersStore = defineStore('members', () => {
 
   // Both save actions return an error message (or null) so the form
   // can stay open and show it — the view has no toast layer.
+  // One-off load for printing a member's data sheet from the
+  // Registrations module — the row plus its capital share, mapped
+  // exactly like fetchMembers does.
+  async function loadMemberForPrint(memberId) {
+    const [{ data: row, error }, { data: shares }] = await Promise.all([
+      supabase.from('member').select('*').eq('member_id', memberId).single(),
+      supabase.from('share_capital').select('amount').eq('member_id', memberId),
+    ])
+    if (error) return { ok: false, message: errorMessage(error) }
+    const total = (shares || []).reduce((sum, share) => sum + (Number(share.amount) || 0), 0)
+    return { ok: true, member: rowToMember(row, new Map([[memberId, total]]), new Map()) }
+  }
+
   async function addMember(data) {
     const { data: row, error } = await supabase
       .from('member')
@@ -734,6 +752,7 @@ export const useMembersStore = defineStore('members', () => {
     setPageSize,
     addMember,
     updateMember,
+    loadMemberForPrint,
     setStatus,
     issueTempPassword,
     setLoginEnabled,

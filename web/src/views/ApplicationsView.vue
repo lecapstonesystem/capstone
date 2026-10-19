@@ -474,6 +474,14 @@
         <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
           <template v-if="detailApp.status === 'Approved' || detailApp.status === 'Rejected'">
             <button
+              v-if="detailApp.status === 'Approved'"
+              @click="printDataSheet"
+              :disabled="printingSheet"
+              class="border border-green-300 text-green-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-50 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {{ printingSheet ? 'Preparing…' : 'Print Data Sheet' }}
+            </button>
+            <button
               @click="detailApp = null"
               class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
             >
@@ -793,6 +801,8 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { persistentColumns } from '../lib/uiPrefs'
+import { useMembersStore } from '../stores/members'
+import { generateDataSheet } from '../lib/memberDataSheetPdf'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import PhotoPreview from '../components/PhotoPreview.vue'
@@ -800,6 +810,7 @@ import { PHOTO_ACCEPT } from '../lib/documents'
 import { useApplicationsStore } from '../stores/applications'
 
 const appsStore = useApplicationsStore()
+const membersStore = useMembersStore()
 
 // Column visibility — App No, Applicant, Form and Actions always show
 const columns = persistentColumns('registrations', {
@@ -839,6 +850,27 @@ async function openReview(application) {
 
 // Form preview (mock paper form; real PDF comes from Supabase Storage later)
 const previewApp = ref(null)
+
+const printingSheet = ref(false)
+
+// Print the approved applicant's Members' Data Sheet — approving the
+// application creates the member record this reads from.
+async function printDataSheet() {
+  printingSheet.value = true
+  reviewError.value = ''
+  try {
+    const result = await membersStore.loadMemberForPrint(detailApp.value.memberId)
+    if (!result.ok) {
+      reviewError.value = result.message
+      return
+    }
+    await generateDataSheet(result.member)
+  } catch {
+    reviewError.value = 'Could not prepare the data sheet. Please try again.'
+  } finally {
+    printingSheet.value = false
+  }
+}
 
 function viewForm(application) {
   previewApp.value = application

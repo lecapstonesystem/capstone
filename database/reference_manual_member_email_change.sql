@@ -13,8 +13,9 @@
 -- in TWO places that must move together:
 --   1. auth.users / auth.identities  the actual login credential
 --   2. member.email                  the portal's record
--- Changing only member.email in the edit form leaves the login
--- on the old address and sends future reset links nowhere.
+-- The portal's Edit form BLOCKS changing the email on members
+-- with a login (it would leave the portal and the login out of
+-- sync) — this script is the sanctioned way to change it.
 --
 -- HOW TO USE:
 --   1. Replace every 'REPLACE-...' below with the real values

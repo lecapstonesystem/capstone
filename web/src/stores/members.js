@@ -381,6 +381,20 @@ export const useMembersStore = defineStore('members', () => {
     if (emailClash(data.email, id)) {
       return 'Another member already uses this email address. Each member needs their own — the app login uses it as the username.'
     }
+    // The login credential lives in Supabase Auth, where a browser
+    // cannot touch it. Moving only member.email would leave the portal
+    // and the login out of sync: the app would still accept the old
+    // address, and reset links would target an address with no account
+    // behind it. Refuse the edit and point at the reference script.
+    const nextEmail = String(data.email ?? '')
+      .trim()
+      .toLowerCase()
+    const wasEmail = String(current.email ?? '')
+      .trim()
+      .toLowerCase()
+    if (current.account.hasLogin && nextEmail !== wasEmail) {
+      return 'This member already has an app login — the app signs in with the email on that login, so changing it here would leave the portal and the login out of sync. Use the reference script database/reference_manual_member_email_change.sql to change it.'
+    }
     const { data: row, error } = await supabase
       .from('member')
       .update(toRow(data))

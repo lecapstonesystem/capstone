@@ -388,6 +388,39 @@ export const useLoansStore = defineStore('loans', () => {
     loan.history.unshift(useAuditStore().record('loan', loan.id, action))
   }
 
+  // Co-makers must be members (public.co_maker references member_id):
+  // typed names are matched against live members; no match stays
+  // on the row only, until the page reloads. Shared by portal-filed
+  // loans and approvals of app-filed requests.
+  async function linkCoMakers(loanId, names, today) {
+    const membersStore = useMembersStore()
+    const coMakerRows = []
+    const displayNames = []
+    for (const raw of names) {
+      const norm = raw.trim().toLowerCase().replace(/\s+/g, ' ')
+      const member = membersStore.members.find((cand) => {
+        const full = `${cand.firstName} ${cand.middleName} ${cand.lastName}`
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase()
+        const short = `${cand.firstName} ${cand.lastName}`.toLowerCase().replace(/\s+/g, ' ')
+        const memberNo = String(cand.memberNo || '').toLowerCase()
+        return full === norm || short === norm || (memberNo && memberNo === norm)
+      })
+      if (member) {
+        coMakerRows.push({ loan_id: loanId, member_id: member.id, signed_at: today })
+        displayNames.push(`${member.firstName} ${member.lastName}`)
+      } else {
+        displayNames.push(raw.trim())
+      }
+    }
+    if (coMakerRows.length) {
+      const { error: coMakerError } = await supabase.from('co_maker').insert(coMakerRows)
+      if (coMakerError) lastError.value = errorMessage(coMakerError) // loan itself is safe
+    }
+    return displayNames
+  }
+
   // ---------- actions ----------
   // Validation failures and database errors come back as
   // { ok: false, message } so the dialogs can show them.
@@ -450,34 +483,7 @@ export const useLoansStore = defineStore('loans', () => {
       .single()
     if (error) return { ok: false, message: errorMessage(error) }
 
-    // Co-makers must be members (public.co_maker references member_id):
-    // typed names are matched against live members; no match stays
-    // on the row only, until the page reloads.
-    const membersStore = useMembersStore()
-    const coMakerRows = []
-    const displayNames = []
-    for (const raw of filledCoMakers) {
-      const norm = raw.trim().toLowerCase().replace(/\s+/g, ' ')
-      const member = membersStore.members.find((cand) => {
-        const full = `${cand.firstName} ${cand.middleName} ${cand.lastName}`
-          .replace(/\s+/g, ' ')
-          .trim()
-          .toLowerCase()
-        const short = `${cand.firstName} ${cand.lastName}`.toLowerCase().replace(/\s+/g, ' ')
-        const memberNo = String(cand.memberNo || '').toLowerCase()
-        return full === norm || short === norm || (memberNo && memberNo === norm)
-      })
-      if (member) {
-        coMakerRows.push({ loan_id: row.loan_id, member_id: member.id, signed_at: today })
-        displayNames.push(`${member.firstName} ${member.lastName}`)
-      } else {
-        displayNames.push(raw.trim())
-      }
-    }
-    if (coMakerRows.length) {
-      const { error: coMakerError } = await supabase.from('co_maker').insert(coMakerRows)
-      if (coMakerError) lastError.value = errorMessage(coMakerError) // loan itself is safe
-    }
+    const displayNames = await linkCoMakers(row.loan_id, filledCoMakers, today)
 
     const loan = {
       id: row.loan_id,
@@ -651,6 +657,66 @@ export const useLoansStore = defineStore('loans', () => {
     return { ok: true, loan }
   }
 
+  // ✅ Verify an app-submitted payment (Flow 3): the receipt appears in
+  // the history right away, but paidOf() above counts only 'Recorded'
+  // money — this is the step that moves the balance. Stamps who and when.
+  async function verifyPayment(id, paymentId) {
+    const loan = loans.value.find((item) => item.id === id)
+    if (!loan) return { ok: false, message: 'Loan not found.' }
+    const payment = loan.payments.find((item) => item.id === paymentId)
+    if (!payment) return { ok: false, message: 'Payment not found.' }
+    if (payment.status === 'Recorded') {
+      return { ok: false, message: 'This payment is already verified.' }
+    }
+    const value = Number(payment.amount) || 0
+    if (!(value > 0)) return { ok: false, message: 'This payment has no valid amount.' }
+    // The member typed the amount in the app — a typo must not be able
+    // to overpay the ledger into the green.
+    const balance = balanceOf(loan)
+    if (value > balance + 0.01) {
+      return {
+        ok: false,
+        message: `The receipt is ₱${round2(value).toLocaleString('en-PH')} but the remaining balance is only ₱${balance.toLocaleString('en-PH', { minimumFractionDigits: 2 })} — it cannot be verified as submitted.`,
+      }
+    }
+
+    const auth = useAuthStore()
+    const { error } = await supabase
+      .from('payment')
+      .update({
+        status: 'Recorded',
+        verified_by: auth.profile?.admin_id ?? null,
+        date_verified: todayLocal(),
+      })
+      .eq('payment_id', paymentId)
+    if (error) return { ok: false, message: errorMessage(error) }
+    payment.status = 'Recorded'
+
+    const receiptNote = payment.receiptPath ? ' — receipt on file' : ''
+    const viaChannel = payment.channel ? ` via ${payment.channel}` : ''
+    if (balanceOf(loan) <= 0.01 && loan.status !== 'Paid') {
+      const { error: statusError } = await supabase
+        .from('loan')
+        .update({ status: 'Paid' })
+        .eq('loan_id', id)
+      if (statusError) {
+        lastError.value = errorMessage(statusError)
+        return { ok: false, message: errorMessage(statusError) }
+      }
+      loan.status = 'Paid'
+      logAction(
+        loan,
+        `Payment verified — ₱${round2(value).toLocaleString('en-PH')}${viaChannel} — loan fully paid${receiptNote}`,
+      )
+    } else {
+      logAction(
+        loan,
+        `Payment verified — ₱${round2(value).toLocaleString('en-PH')}${viaChannel}${receiptNote}`,
+      )
+    }
+    return { ok: true }
+  }
+
   // ---------- receipt photo on an existing payment ----------
   // Receipts are attachments like everything else in the portal:
   // attach or replace from the payment history, remove with a
@@ -706,8 +772,233 @@ export const useLoansStore = defineStore('loans', () => {
     return { ok: true }
   }
 
+  // ---------- app-filed loan requests (loan_application) ----------
+  // Requests come in from the mobile app (Flow 2 of the app contract)
+  // with status 'Pending'; this queue is the portal's review side.
+  // Decide → stamps status/reviewed_by/date_remed/remarks on the row;
+  // the app re-reads its own rows to track
+  // Pending → Approved / Rejected / Returned.
+  const requests = ref([])
+  const requestsLoading = ref(false)
+  const requestsError = ref('')
+
+  const pendingRequests = computed(() =>
+    requests.value.filter((request) => request.status === 'Pending'),
+  )
+
+  function rowToRequest(row) {
+    return {
+      id: row.application_id,
+      memberId: row.member_id,
+      memberName: row.member?.name || '',
+      memberNo: row.member?.member_no || '',
+      amount: Number(row.amount || 0),
+      purpose: row.purpose || '',
+      type: row.loan_type || '',
+      termMonths: Number(row.term_months || 0),
+      status: row.status || 'Pending',
+      dateSubmitted: row.date_submitted || '',
+      remarks: row.remarks || '',
+      dateReviewed: row.date_reviewed || null,
+    }
+  }
+
+  async function fetchRequests() {
+    requestsLoading.value = true
+    try {
+      const { data, error } = await supabase
+        .from('loan_application')
+        .select('*, member(name, member_no)')
+        .order('application_id', { ascending: false })
+      if (error) throw error
+      requests.value = (data || []).map(rowToRequest)
+      requestsError.value = ''
+    } catch (error) {
+      requestsError.value = errorMessage(error)
+      requests.value = []
+    } finally {
+      requestsLoading.value = false
+    }
+  }
+
+  // ✅ Approve an app request → creates the loan ready for release.
+  // The request is stamped FIRST; if the loan insert then fails the
+  // stamp is reverted, so a request can never sit Approved without
+  // its loan row (the reverse order could produce duplicate loans).
+  async function approveRequest(id, { coMakers = [], note = '' } = {}) {
+    const request = requests.value.find((item) => item.id === id)
+    if (!request) return { ok: false, message: 'Request not found.' }
+    if (request.status !== 'Pending') {
+      return { ok: false, message: 'This request has already been reviewed.' }
+    }
+
+    const typeInfo = LOAN_TYPES.find((item) => item.value === request.type)
+    if (!typeInfo) {
+      return {
+        ok: false,
+        message:
+          'This request has no recognized loan type — return or reject it so the member can file again.',
+      }
+    }
+
+    const amount = Number(request.amount) || 0
+    if (!(amount > 0)) return { ok: false, message: 'This request has no valid amount.' }
+
+    const term = Number(request.termMonths) || 0
+    if (term < 1 || term > 36) {
+      return { ok: false, message: 'The requested term is missing or outside 1–36 months.' }
+    }
+
+    // Same gate a portal-filed loan gets — capital share, 2-month wait,
+    // concurrent-loan limits and ceiling all re-checked at approval.
+    const elig = eligibility(request.memberId, request.type)
+    if (!elig.ok) return { ok: false, message: elig.reasons.join(' ') }
+
+    if (request.type === 'Emergency') {
+      if (amount > EMERGENCY_MAX) {
+        return { ok: false, message: 'Emergency loans are capped at ₱20,000.' }
+      }
+    } else if (amount > elig.limit) {
+      return {
+        ok: false,
+        message: elig.firstLoan
+          ? `First loan is capped at 80% of the ceiling — maximum ₱${elig.limit.toLocaleString('en-PH')}.`
+          : `Amount exceeds the ceiling of ₱${elig.limit.toLocaleString('en-PH')} (2× capital share).`,
+      }
+    }
+
+    const requiredCoMakers = amount >= COMAKER_THRESHOLD ? 2 : 1
+    const filledCoMakers = coMakers.filter((name) => name && name.trim())
+    if (filledCoMakers.length < requiredCoMakers) {
+      return {
+        ok: false,
+        message: `${requiredCoMakers} co-maker${requiredCoMakers > 1 ? 's' : ''} required for this amount (₱100,000 and above need 2).`,
+      }
+    }
+
+    const now = new Date().toISOString()
+    const today = todayLocal()
+    const auth = useAuthStore()
+    const adminId = auth.profile?.admin_id ?? null
+    const trimmedNote = String(note || '').trim()
+
+    const { error: stampError } = await supabase
+      .from('loan_application')
+      .update({
+        status: 'Approved',
+        reviewed_by: adminId,
+        date_reviewed: today,
+        remarks: trimmedNote || null,
+      })
+      .eq('application_id', id)
+    if (stampError) return { ok: false, message: errorMessage(stampError) }
+
+    const totals = loanTotals(amount, typeInfo.rate, term)
+    const { data: row, error } = await supabase
+      .from('loan')
+      .insert({
+        member_id: request.memberId,
+        amount: round2(amount),
+        interest_rate: typeInfo.rate / 100, // fraction — seed/CSV convention
+        date_issued: today, // moves to the release date on release
+        due_date: plusMonths(today, term),
+        status: 'Approved',
+        approved_by: adminId,
+        created_at: now,
+        term_months: term,
+        loan_type: request.type,
+      })
+      .select()
+      .single()
+    if (error) {
+      // Best-effort revert — back to Pending so the queue stays honest.
+      await supabase
+        .from('loan_application')
+        .update({ status: 'Pending', reviewed_by: null, date_reviewed: null, remarks: null })
+        .eq('application_id', id)
+      return { ok: false, message: errorMessage(error) }
+    }
+
+    const displayNames = await linkCoMakers(row.loan_id, filledCoMakers, today)
+
+    const loan = {
+      id: row.loan_id,
+      loanNo: loanNoOf(row.loan_id),
+      memberId: request.memberId,
+      memberNo: elig.member.memberNo,
+      memberName: request.memberName,
+      type: request.type,
+      principal: round2(amount),
+      ratePercent: typeInfo.rate,
+      termMonths: term,
+      totalDue: totals.totalDue, // frozen here — diminishing total
+      coMakers: displayNames,
+      requirements: [], // checklist is session-only; the review happened here
+      status: 'Approved',
+      createdAt: now,
+      releasedAt: null,
+      releaseChannel: null,
+      payments: [],
+      remarks: trimmedNote,
+      history: [],
+    }
+    loans.value.push(loan)
+    logAction(
+      loan,
+      `App loan request approved — ${typeInfo.label} ₱${round2(amount).toLocaleString('en-PH')} (request #${id})`,
+    )
+
+    const local = requests.value.find((item) => item.id === id)
+    if (local) {
+      local.status = 'Approved'
+      local.remarks = trimmedNote
+      local.dateReviewed = today
+    }
+    return { ok: true, loan }
+  }
+
+  // ↩️ Return / ❌ Reject — both require remarks (same rule as the
+  // registration queue), and both stamp the row for the app to read.
+  async function returnRequest(id, remarks) {
+    return decideRequest(id, 'Returned', remarks, 'returned')
+  }
+
+  async function rejectRequest(id, remarks) {
+    return decideRequest(id, 'Rejected', remarks, 'rejected')
+  }
+
+  async function decideRequest(id, status, remarks, label) {
+    const request = requests.value.find((item) => item.id === id)
+    if (!request) return { ok: false, message: 'Request not found.' }
+    if (request.status !== 'Pending') {
+      return { ok: false, message: 'This request has already been reviewed.' }
+    }
+    const trimmed = String(remarks || '').trim()
+    if (!trimmed) {
+      return { ok: false, message: `Remarks are required when ${label} a loan request.` }
+    }
+    const auth = useAuthStore()
+    const today = todayLocal()
+    const { error } = await supabase
+      .from('loan_application')
+      .update({
+        status,
+        reviewed_by: auth.profile?.admin_id ?? null,
+        date_reviewed: today,
+        remarks: trimmed,
+      })
+      .eq('application_id', id)
+    if (error) return { ok: false, message: errorMessage(error) }
+    request.status = status
+    request.remarks = trimmed
+    request.dateReviewed = today
+    useAuditStore().record('loan_application', id, `Loan request ${label} — ${trimmed}`)
+    return { ok: true }
+  }
+
   // Load once, when the store is first used (LoansView mounts).
   fetchLoans()
+  fetchRequests()
 
   return {
     loans,
@@ -741,8 +1032,17 @@ export const useLoansStore = defineStore('loans', () => {
     rejectLoan,
     releaseLoan,
     recordPayment,
+    verifyPayment,
     attachReceipt,
     removeReceipt,
     sendReminder,
+    requests,
+    requestsLoading,
+    requestsError,
+    pendingRequests,
+    fetchRequests,
+    approveRequest,
+    returnRequest,
+    rejectRequest,
   }
 })

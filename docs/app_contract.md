@@ -177,7 +177,7 @@ supabase.from("loan_application").insert(
 )
 ```
 
-`reviewed_by` / `date_reviewed` must be omitted — the portal sets them.
+`reviewed_by` / `date_reviewed` / `remarks` must be omitted — the portal sets them.
 Track status by re-reading your rows: `Pending → Approved / Rejected / Returned`.
 
 ## 7. Flow 3 — loan payment (with receipt photo)

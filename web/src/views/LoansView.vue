@@ -62,6 +62,58 @@
         </div>
       </div>
 
+      <!-- App-filed loan requests — the mobile app's review queue -->
+      <div
+        v-if="loansStore.pendingRequests.length > 0 || loansStore.requestsError"
+        class="bg-amber-50 border border-amber-200 rounded-xl mb-6"
+      >
+        <div class="px-4 py-3 border-b border-amber-200 flex items-center justify-between gap-3">
+          <div>
+            <p class="text-sm font-semibold text-amber-800">Loan requests from the mobile app</p>
+            <p class="text-xs text-amber-700 mt-0.5">
+              {{ loansStore.pendingRequests.length }} awaiting review
+            </p>
+          </div>
+          <button
+            @click="loansStore.fetchRequests()"
+            :disabled="loansStore.requestsLoading"
+            class="border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-amber-100 transition duration-200 disabled:opacity-50"
+          >
+            {{ loansStore.requestsLoading ? 'Refreshing…' : 'Refresh' }}
+          </button>
+        </div>
+        <p v-if="loansStore.requestsError" class="px-4 py-2 text-sm text-red-600">
+          {{ loansStore.requestsError }}
+        </p>
+        <ul v-if="loansStore.pendingRequests.length" class="divide-y divide-amber-200">
+          <li
+            v-for="request in loansStore.pendingRequests"
+            :key="request.id"
+            class="px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+          >
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-gray-800">
+                {{ request.memberName }}
+                <span v-if="request.memberNo" class="text-gray-400 font-normal"
+                  >· {{ request.memberNo }}</span
+                >
+              </p>
+              <p class="text-xs text-gray-500 mt-0.5">
+                {{ typeLabel(request.type) }} · {{ formatPeso(request.amount) }} ·
+                {{ request.termMonths }} month(s) · filed
+                {{ formatDate(request.dateSubmitted) }}
+              </p>
+            </div>
+            <button
+              @click="openRequest(request)"
+              class="bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-amber-700 transition duration-200"
+            >
+              Review
+            </button>
+          </li>
+        </ul>
+      </div>
+
       <!-- Search + Filters -->
       <div
         class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-col sm:flex-row gap-3"
@@ -483,13 +535,14 @@
               Payment History
             </p>
             <div class="table-scroll overflow-x-auto max-h-40 overflow-y-auto">
-              <table class="w-full min-w-[500px] text-sm">
+              <table class="w-full min-w-[580px] text-sm">
                 <thead>
                   <tr class="text-left text-xs font-medium text-gray-400 uppercase">
                     <th class="py-2 pr-4">Date</th>
                     <th class="py-2 pr-4">Amount</th>
                     <th class="py-2 pr-4">Channel</th>
                     <th class="py-2 pr-4">Note</th>
+                    <th class="py-2 pr-4">Status</th>
                     <th class="py-2">Receipt</th>
                   </tr>
                 </thead>
@@ -503,6 +556,27 @@
                     </td>
                     <td class="py-2 pr-4 text-gray-600">{{ payment.channel }}</td>
                     <td class="py-2 pr-4 text-gray-400 text-xs">{{ payment.note || '—' }}</td>
+                    <td class="py-2 pr-4">
+                      <div class="flex items-center gap-2">
+                        <span
+                          class="px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap"
+                          :class="
+                            payment.status === 'Recorded'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-amber-100 text-amber-700'
+                          "
+                        >
+                          {{ payment.status === 'Recorded' ? 'Verified' : 'Pending' }}
+                        </span>
+                        <button
+                          v-if="payment.status !== 'Recorded'"
+                          @click="requestVerify(payment)"
+                          class="text-green-700 hover:text-green-800 font-medium text-xs"
+                        >
+                          Verify
+                        </button>
+                      </div>
+                    </td>
                     <td class="py-2">
                       <div class="flex items-start gap-2">
                         <PhotoPreview v-if="payment.receiptPath" :path="payment.receiptPath" />
@@ -1050,6 +1124,155 @@
       @change="onReceiptPicked"
     />
 
+    <!-- Review an app-filed loan request -->
+    <div
+      v-if="reviewRequest"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      @click.self="closeRequest"
+    >
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-xl max-h-[90vh] flex flex-col">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+          <h2 class="text-lg font-semibold text-gray-800">Review Loan Request</h2>
+          <button
+            @click="closeRequest"
+            class="text-gray-400 hover:text-gray-600 text-xl leading-none"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
+          <div
+            v-if="requestError"
+            class="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm"
+          >
+            {{ requestError }}
+          </div>
+
+          <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            <div class="col-span-2">
+              <dt class="text-gray-400 text-xs uppercase tracking-wider">Member</dt>
+              <dd class="text-gray-800">
+                {{ reviewRequest.memberName }}
+                <span v-if="reviewRequest.memberNo" class="text-gray-500"
+                  >({{ reviewRequest.memberNo }})</span
+                >
+              </dd>
+            </div>
+            <div>
+              <dt class="text-gray-400 text-xs uppercase tracking-wider">Type</dt>
+              <dd class="text-gray-800">{{ typeLabel(reviewRequest.type) }}</dd>
+            </div>
+            <div>
+              <dt class="text-gray-400 text-xs uppercase tracking-wider">Amount</dt>
+              <dd class="text-gray-800">{{ formatPeso(reviewRequest.amount) }}</dd>
+            </div>
+            <div>
+              <dt class="text-gray-400 text-xs uppercase tracking-wider">Term</dt>
+              <dd class="text-gray-800">{{ reviewRequest.termMonths }} month(s)</dd>
+            </div>
+            <div>
+              <dt class="text-gray-400 text-xs uppercase tracking-wider">Filed</dt>
+              <dd class="text-gray-800">{{ formatDate(reviewRequest.dateSubmitted) }}</dd>
+            </div>
+            <div class="col-span-2">
+              <dt class="text-gray-400 text-xs uppercase tracking-wider">Purpose</dt>
+              <dd class="text-gray-800">{{ reviewRequest.purpose || '—' }}</dd>
+            </div>
+          </dl>
+
+          <!-- Live eligibility check against the coop's rules -->
+          <div
+            v-if="reviewEligibility"
+            class="rounded-lg px-4 py-3 text-sm border"
+            :class="
+              reviewEligibility.ok
+                ? 'bg-green-50 border-green-200 text-green-800'
+                : 'bg-red-50 border-red-200 text-red-700'
+            "
+          >
+            <p v-if="reviewEligibility.ok" class="font-medium">
+              Eligible — ceiling {{ formatPeso(reviewEligibility.limit)
+              }}<span v-if="reviewEligibility.firstLoan"> (first loan: 80%)</span>
+            </p>
+            <ul v-else class="space-y-1">
+              <li v-for="(reason, index) in reviewEligibility.reasons" :key="index">
+                • {{ reason }}
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <p class="text-sm font-medium text-gray-700 mb-2">
+              Co-maker<span v-if="requiredCoMakerCount > 1">s</span> —
+              {{ requiredCoMakerCount }} required for this amount
+            </p>
+            <div class="space-y-2">
+              <input
+                v-for="(_, index) in coMakerDrafts"
+                :key="index"
+                v-model="coMakerDrafts[index]"
+                type="text"
+                :placeholder="`Co-maker ${index + 1} — member name or KHS number`"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Approval note (optional)</label
+            >
+            <textarea
+              v-model="approvalNote"
+              rows="2"
+              placeholder="e.g. Co-maker verified, certificate of seminar on file"
+              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            ></textarea>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Remarks — required to return or reject</label
+            >
+            <textarea
+              v-model="requestRemarks"
+              rows="2"
+              placeholder="e.g. Missing co-maker — ask the member to re-file with one."
+              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 flex-wrap shrink-0">
+          <button
+            @click="closeRequest"
+            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+          >
+            Close
+          </button>
+          <button
+            @click="submitRequestDecision('Returned')"
+            class="border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-50 transition duration-200"
+          >
+            Return
+          </button>
+          <button
+            @click="submitRequestDecision('Rejected')"
+            class="border border-red-300 text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 transition duration-200"
+          >
+            Reject
+          </button>
+          <button
+            @click="approveRequest"
+            class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
+          >
+            Approve
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Confirmation Modal -->
     <div
       v-if="confirmAction"
@@ -1281,6 +1504,92 @@ async function printLoanNote() {
   if (!loan) return
   const member = membersStore.members.find((m) => m.id === loan.memberId) || null
   await generateLoanNote(loan, member)
+}
+
+// ---------- payment verification (app-submitted receipts) ----------
+function requestVerify(payment) {
+  const loan = detailLoan.value
+  confirmAction.value = {
+    title: 'Verify Payment?',
+    message: `${formatPeso(payment.amount)} from ${loan.memberName}${
+      payment.channel ? ` via ${payment.channel}` : ''
+    } — verifying counts it toward the balance and updates the loan's remaining dues.`,
+    confirmLabel: 'Verify',
+    danger: false,
+    run: () => loansStore.verifyPayment(loan.id, payment.id),
+  }
+}
+
+// ---------- app-filed loan requests ----------
+const reviewRequest = ref(null)
+const requestError = ref('')
+const coMakerDrafts = ref([])
+const approvalNote = ref('')
+const requestRemarks = ref('')
+
+function typeLabel(value) {
+  const found = LOAN_TYPES.find((item) => item.value === value)
+  return found ? found.label : value || '—'
+}
+
+function openRequest(request) {
+  reviewRequest.value = request
+  requestError.value = ''
+  coMakerDrafts.value = Array(Number(request.amount) >= COMAKER_THRESHOLD ? 2 : 1).fill('')
+  approvalNote.value = ''
+  requestRemarks.value = ''
+}
+
+function closeRequest() {
+  reviewRequest.value = null
+  requestError.value = ''
+}
+
+const requiredCoMakerCount = computed(() =>
+  reviewRequest.value && reviewRequest.value.amount >= COMAKER_THRESHOLD ? 2 : 1,
+)
+
+// Live rules check — capital share, 2-month wait, ceilings, limits.
+const reviewEligibility = computed(() =>
+  reviewRequest.value
+    ? loansStore.eligibility(reviewRequest.value.memberId, reviewRequest.value.type)
+    : null,
+)
+
+async function approveRequest() {
+  const request = reviewRequest.value
+  if (!request) return
+  requestError.value = ''
+  const result = await loansStore.approveRequest(request.id, {
+    coMakers: coMakerDrafts.value,
+    note: approvalNote.value,
+  })
+  if (!result.ok) {
+    requestError.value = result.message
+    return
+  }
+  reviewRequest.value = null
+}
+
+async function submitRequestDecision(status) {
+  const request = reviewRequest.value
+  if (!request) return
+  requestError.value = ''
+  if (!requestRemarks.value.trim()) {
+    requestError.value = `Remarks are required when ${
+      status === 'Returned' ? 'returning' : 'rejecting'
+    } a loan request.`
+    return
+  }
+  const result =
+    status === 'Returned'
+      ? await loansStore.returnRequest(request.id, requestRemarks.value)
+      : await loansStore.rejectRequest(request.id, requestRemarks.value)
+  if (!result.ok) {
+    requestError.value = result.message
+    return
+  }
+  reviewRequest.value = null
 }
 
 // "Showing 1–10 of 25 loans"

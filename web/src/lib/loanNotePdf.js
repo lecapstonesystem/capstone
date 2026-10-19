@@ -227,16 +227,16 @@ export async function generateLoanNote(loan, member = null) {
   y += 10
 
   centered(COOP_NAME, y, { size: 15, bold: true })
-  y += 4
+  y += 8
 
-  // Borrower block — the current form's header: name and address on
-  // ruled lines (the older form had the cooperative's address here).
-  rule(PAGE_LEFT, PAGE_RIGHT, y, borrower, { size: 11 })
+  // Borrower block — the current form's header: name and address
+  // centered on their ruled lines, like the hand-filled original.
+  rule(PAGE_LEFT, PAGE_RIGHT, y, borrower, { size: 11, align: 'center' })
   centered('(Name of Borrower)', y + 4, { size: 8 })
-  y += 9
-  rule(PAGE_LEFT, PAGE_RIGHT, y, address, { size: 11 })
+  y += 10
+  rule(PAGE_LEFT, PAGE_RIGHT, y, address, { size: 11, align: 'center' })
   centered('(Address)', y + 4, { size: 8 })
-  y += 12
+  y += 14
 
   centered('LOAN NOTE', y, { size: 12 })
   y += 9

@@ -335,7 +335,27 @@ export const useMembersStore = defineStore('members', () => {
     return { ok: true, member: rowToMember(row, new Map([[memberId, total]]), new Map()) }
   }
 
+  // One email = one member: the app login is keyed by email, so a
+  // duplicate would hand the wrong account to the wrong person.
+  // Checked against the loaded list, case-insensitive.
+  function emailClash(email, exceptId) {
+    const target = String(email || '')
+      .trim()
+      .toLowerCase()
+    if (!target) return false
+    return members.value.some(
+      (item) =>
+        item.id !== exceptId &&
+        String(item.email || '')
+          .trim()
+          .toLowerCase() === target,
+    )
+  }
+
   async function addMember(data) {
+    if (emailClash(data.email)) {
+      return 'Another member already uses this email address. Each member needs their own — the app login uses it as the username.'
+    }
     const { data: row, error } = await supabase
       .from('member')
       .insert({
@@ -358,6 +378,9 @@ export const useMembersStore = defineStore('members', () => {
   async function updateMember(id, data) {
     const current = members.value.find((item) => item.id === id)
     if (!current) return 'Member not found.'
+    if (emailClash(data.email, id)) {
+      return 'Another member already uses this email address. Each member needs their own — the app login uses it as the username.'
+    }
     const { data: row, error } = await supabase
       .from('member')
       .update(toRow(data))

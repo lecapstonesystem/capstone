@@ -127,7 +127,7 @@
       <!-- 2. Applications Summary -->
       <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="font-semibold text-gray-800">Applications Summary</h2>
+          <h2 class="font-semibold text-gray-800">Registrations Summary</h2>
           <button
             @click="exportApplications"
             class="text-xs font-medium text-green-700 hover:text-green-800 no-print"
@@ -182,7 +182,7 @@
             </span>
           </div>
         </div>
-        <p v-else class="text-sm text-gray-400 mb-4">No applications in this period.</p>
+        <p v-else class="text-sm text-gray-400 mb-4">No registrations in this period.</p>
 
         <!-- Recent applications -->
         <div v-if="recentApps.length > 0" class="table-scroll overflow-x-auto">
@@ -817,8 +817,8 @@ const summaryRows = computed(() => [
     formatPeso(delinquentAmount.value),
     delinquentAmount.value > 0 ? 'text-red-600' : 'text-gray-800',
   ],
-  ['Applications received', String(appStats.value.received)],
-  ['Applications approved', String(appStats.value.approved)],
+  ['Registrations received', String(appStats.value.received)],
+  ['Registrations approved', String(appStats.value.approved)],
 ])
 
 // ---------- CSV export ----------
@@ -844,7 +844,7 @@ function exportGrowth() {
 
 function exportApplications() {
   download(
-    'ucms-applications.csv',
+    'ucms-registrations.csv',
     ['App No', 'Applicant', 'Status', 'Source', 'Submitted'],
     rangeApps.value.map((app) => [
       app.appNo,

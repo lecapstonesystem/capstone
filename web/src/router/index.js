@@ -48,15 +48,20 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: '/applications',
-      name: 'applications',
+      path: '/registrations',
+      name: 'registrations',
       component: ApplicationsView,
       meta: { requiresAuth: true },
     },
     {
-      // old URL still works — renamed from Verification Queue
+      // old URLs still work — renamed from Verification Queue, then
+      // Applications (the module is the member REGISTRATION queue)
       path: '/verification',
-      redirect: '/applications',
+      redirect: '/registrations',
+    },
+    {
+      path: '/applications',
+      redirect: '/registrations',
     },
     {
       path: '/reports',

@@ -169,8 +169,8 @@ const attentionItems = computed(() => {
   const appCount = appsStore.pendingCount + appsStore.underReviewCount
   if (appCount > 0) {
     items.push({
-      to: '/applications',
-      text: `${appCount} application${appCount > 1 ? 's' : ''} waiting for review`,
+      to: '/registrations',
+      text: `${appCount} registration${appCount > 1 ? 's' : ''} waiting for review`,
       tone: 'text-gray-700',
     })
   }

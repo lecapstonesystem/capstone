@@ -4,14 +4,14 @@
       <!-- Header -->
       <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 class="text-2xl font-bold text-gray-800">Applications</h1>
+          <h1 class="text-2xl font-bold text-gray-800">Registrations</h1>
           <p class="text-sm text-gray-500 mt-1">{{ appsStore.applications.length }} total</p>
         </div>
         <button
           @click="openAddModal"
           class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
         >
-          + New Application
+          + New Registration
         </button>
       </div>
 
@@ -20,8 +20,8 @@
         class="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg mb-6 text-sm"
       >
         Registration is <strong>face-to-face only</strong> — there is no online registration.
-        Applications arrive two ways: a pre-filled PDF from the mobile app, or a walk-in entry typed
-        by an admin.
+        Registrations arrive two ways: a pre-filled PDF from the mobile app, or a walk-in entry
+        typed by an admin.
       </div>
 
       <!-- Summary cards -->
@@ -225,7 +225,7 @@
               <!-- Empty state -->
               <tr v-if="appsStore.filteredApplications.length === 0">
                 <td :colspan="visibleColumnCount" class="px-6 py-10 text-center text-gray-400">
-                  No applications found.
+                  No registrations found.
                 </td>
               </tr>
             </tbody>
@@ -526,7 +526,7 @@
     >
       <div class="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] flex flex-col">
         <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h2 class="text-lg font-semibold text-gray-800">New Walk-in Application</h2>
+          <h2 class="text-lg font-semibold text-gray-800">New Walk-in Registration</h2>
           <button
             @click="closeModal"
             class="text-gray-400 hover:text-gray-600 text-xl leading-none"
@@ -618,7 +618,7 @@
             @click="saveApplication"
             class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
           >
-            Add Application
+            Add Registration
           </button>
         </div>
       </div>
@@ -940,10 +940,10 @@ function requestReject() {
 // "Showing 1–10 of 25 applications"
 const paginationLabel = computed(() => {
   const total = appsStore.filteredApplications.length
-  if (total === 0) return 'No applications found'
+  if (total === 0) return 'No registrations found'
   const start = (appsStore.page - 1) * appsStore.pageSize + 1
   const end = Math.min(appsStore.page * appsStore.pageSize, total)
-  return `Showing ${start}–${end} of ${total} applications`
+  return `Showing ${start}–${end} of ${total} registrations`
 })
 
 const showModal = ref(false)
@@ -1001,7 +1001,7 @@ async function saveApplication() {
   })
   if (!result.ok) {
     // Keep the modal open and show why (RLS/network failure)
-    formError.value = result.message || 'Could not save the application.'
+    formError.value = result.message || 'Could not save the registration.'
     return
   }
 

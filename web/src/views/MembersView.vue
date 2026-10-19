@@ -150,7 +150,7 @@
                   </div>
                 </td>
                 <td v-if="columns.contact" class="px-6 py-4 text-gray-500">
-                  <div>{{ member.email }}</div>
+                  <div class="truncate" :title="member.email">{{ member.email }}</div>
                   <div class="text-xs text-gray-400">{{ member.phone }}</div>
                 </td>
                 <td v-if="columns.address" class="px-6 py-4 text-gray-500 max-w-48 truncate">

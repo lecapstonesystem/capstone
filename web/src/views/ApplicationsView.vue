@@ -364,8 +364,12 @@
                 <p class="font-semibold text-gray-800">
                   {{ detailApp.firstName }} {{ detailApp.lastName }}
                 </p>
-                <p class="text-sm text-gray-500">{{ detailApp.phone }} · {{ detailApp.address }}</p>
-                <p v-if="detailApp.email" class="text-sm text-gray-500">{{ detailApp.email }}</p>
+                <p class="text-sm text-gray-500 truncate">
+                  {{ detailApp.phone }} · {{ detailApp.address }}
+                </p>
+                <p v-if="detailApp.email" class="text-sm text-gray-500 truncate">
+                  {{ detailApp.email }}
+                </p>
               </div>
               <span
                 class="ml-auto px-2.5 py-1 rounded-full text-xs font-medium shrink-0"

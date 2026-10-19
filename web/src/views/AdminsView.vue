@@ -148,7 +148,13 @@
                     </div>
                   </div>
                 </td>
-                <td v-if="columns.email" class="px-6 py-4 text-gray-500">{{ admin.email }}</td>
+                <td
+                  v-if="columns.email"
+                  class="px-6 py-4 text-gray-500 truncate"
+                  :title="admin.email"
+                >
+                  {{ admin.email }}
+                </td>
                 <td v-if="columns.role" class="px-6 py-4">
                   <span
                     :class="
@@ -156,7 +162,7 @@
                         ? 'bg-green-100 text-green-700'
                         : 'bg-gray-100 text-gray-600'
                     "
-                    class="px-2.5 py-1 rounded-full text-xs font-medium"
+                    class="px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap"
                   >
                     {{ admin.role }}
                   </span>
@@ -488,7 +494,7 @@
             <input
               v-model="form.email"
               type="email"
-              placeholder="admin@ucms.com"
+              placeholder="e.g. juan.delacruz@gmail.com"
               :disabled="modalMode === 'edit'"
               class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-50 disabled:cursor-not-allowed"
             />

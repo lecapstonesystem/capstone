@@ -18,8 +18,9 @@ count — trust in the data is the deliverable.
 - Names: First / Middle / Last separately. **Comma on the paper = surname first** ("Macayan, Nenita" = Last: Macayan, First: Nenita).
 - Phone: exactly 11 digits (09XXXXXXXXX).
 - Email: two boxes on the form.
-  - **Personal email** — the app login. Only if the member actually gave
-    one; **leave blank otherwise; never invent placeholders**.
+  - **Personal email** — the app login. Ask for it: every member who will use
+    the app needs one. **Never invent placeholders** — if they don't have it
+    yet, leave it blank and get it before Issue Credentials.
   - **Work email** — the address written on the paper sheet (usually
     `@deped.gov.ph`). Record only; it is never used to sign in or send
     reset links. Leave blank if the sheet has none.

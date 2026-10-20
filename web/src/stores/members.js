@@ -463,7 +463,8 @@ export const useMembersStore = defineStore('members', () => {
     if (!email || !email.includes('@') || !email.includes('.')) {
       return {
         ok: false,
-        message: "Add the member's email address first — the app login uses it as the username.",
+        message:
+          "Add the member's personal email first — the app login uses it as the username (not the DepEd address).",
       }
     }
 

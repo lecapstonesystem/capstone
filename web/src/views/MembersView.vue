@@ -782,7 +782,7 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1"
-                >Personal email (optional — app login)</label
+                >Personal email (app login)</label
               >
               <input
                 v-model="form.email"
@@ -791,7 +791,11 @@
                 class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
               <p class="text-xs text-gray-400 mt-1">
-                Used to sign in to the app. Leave blank if the member has no personal address.
+                The member's own address — not the DepEd one. Needed before they can sign in to the
+                app.
+              </p>
+              <p v-if="loginEmailIsDeped" class="text-xs text-amber-600 mt-1">
+                That is the DepEd address — use the member's personal email for the app login.
               </p>
             </div>
             <div>
@@ -1359,6 +1363,11 @@ const emptyForm = {
   dateJoined: new Date().toISOString().split('T')[0],
 }
 const form = reactive({ ...emptyForm })
+
+// Policy: the app login uses a personal address. DepEd accounts are
+// deactivated when staff leave, so warn (not block) when one is typed
+// into the login box.
+const loginEmailIsDeped = computed(() => /@deped\.gov\.ph$/i.test(form.email.trim()))
 
 function openAddModal() {
   modalMode.value = 'add'

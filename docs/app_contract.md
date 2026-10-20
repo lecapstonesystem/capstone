@@ -174,6 +174,7 @@ val row = supabase.from("loan_application").insert(
         "loan_type" to loanType,            // the app's dropdown values
         "status" to "Pending",              // FORCED by RLS
         "date_submitted" to LocalDate.now().toString(),
+        "requested_co_makers" to requestedCoMakers, // 1–2 names the member typed (optional)
     )
 ).select().decodeSingleOrNull()              // returns the inserted row —
                                              // you need its id for the
@@ -183,6 +184,12 @@ val applicationId = row!!["application_id"].jsonPrimitive.int  // decode style v
 
 `reviewed_by` / `date_reviewed` / `remarks` must be omitted — the portal sets them.
 Track status by re-reading your rows: `Pending → Approved / Rejected / Returned`.
+
+`requested_co_makers` (migration 24) is the member's **suggestion**: the portal
+shows it on the review screen and pre-fills the co-maker boxes. Approval still
+requires the admin to confirm each co-maker is an existing member — the app
+cannot check that (members only read their own row under RLS). Omitting the
+field is fine; the review boxes simply start empty.
 
 ### 6b. Required documents (shown to the admin during review)
 

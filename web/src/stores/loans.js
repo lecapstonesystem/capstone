@@ -854,6 +854,11 @@ export const useLoansStore = defineStore('loans', () => {
       dateSubmitted: row.date_submitted || '',
       remarks: row.remarks || '',
       dateReviewed: row.date_reviewed || null,
+      // Names the member typed in the app (24). Suggestions only — the
+      // admin confirms each one is a member before approving.
+      requestedCoMakers: Array.isArray(row.requested_co_makers)
+        ? row.requested_co_makers.map((name) => String(name || '').trim()).filter(Boolean)
+        : [],
     }
   }
 

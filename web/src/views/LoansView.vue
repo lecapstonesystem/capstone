@@ -1254,6 +1254,10 @@
               Co-maker<span v-if="requiredCoMakerCount > 1">s</span> —
               {{ requiredCoMakerCount }} required for this amount
             </p>
+            <p v-if="reviewRequest?.requestedCoMakers?.length" class="text-xs text-gray-500 mb-2">
+              Entered in the app: {{ reviewRequest.requestedCoMakers.join(', ') }} — confirm each
+              person is a member before approving.
+            </p>
             <div class="space-y-2">
               <input
                 v-for="(_, index) in coMakerDrafts"
@@ -1858,7 +1862,11 @@ function openRequest(request) {
   approvalNotice.value = ''
   requestDocs.value = []
   docsError.value = ''
-  coMakerDrafts.value = Array(Number(request.amount) >= COMAKER_THRESHOLD ? 2 : 1).fill('')
+  // Start from the names the member typed in the app (if the app sent
+  // them) — the admin still verifies each is a member.
+  const required = Number(request.amount) >= COMAKER_THRESHOLD ? 2 : 1
+  const suggested = (request.requestedCoMakers || []).slice(0, required)
+  coMakerDrafts.value = Array.from({ length: required }, (_, index) => suggested[index] || '')
   approvalNote.value = ''
   requestRemarks.value = ''
   loadRequestDocuments(request)

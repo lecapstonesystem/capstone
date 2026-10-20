@@ -800,7 +800,7 @@
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1"
-                >Work email (optional — record only)</label
+                >Work email (record only)</label
               >
               <input
                 v-model="form.workEmail"

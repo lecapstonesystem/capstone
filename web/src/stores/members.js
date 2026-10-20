@@ -72,7 +72,7 @@ function splitName(row) {
   return { first: parts[0], last: parts.slice(1).join(' ') }
 }
 
-function rowToMember(row, capitals, entries) {
+function rowToMember(row, capitals = new Map(), entries = new Map()) {
   const names = splitName(row)
   return {
     id: row.member_id,
@@ -258,6 +258,11 @@ export const useMembersStore = defineStore('members', () => {
     const current = members.value.find((item) => item.id === updated.id)
     if (!current) return null
     updated.history = current.history || []
+    // Capital entries are loaded with the list, not with the row that an
+    // update returns — keep what the drawer already shows.
+    if (!updated.capitalEntries?.length) {
+      updated.capitalEntries = current.capitalEntries || []
+    }
     Object.assign(current, updated)
     return current
   }

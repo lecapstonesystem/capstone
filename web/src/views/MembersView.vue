@@ -1423,10 +1423,20 @@ async function saveMember() {
     dateJoined: form.dateJoined,
   }
 
-  const saveError =
-    modalMode.value === 'add'
-      ? await membersStore.addMember(data)
-      : await membersStore.updateMember(editingId.value, data)
+  let saveError = null
+  try {
+    saveError =
+      modalMode.value === 'add'
+        ? await membersStore.addMember(data)
+        : await membersStore.updateMember(editingId.value, data)
+  } catch (err) {
+    // A bug or a dropped connection mid-save: keep the form open and be
+    // honest — the write may or may not have landed.
+    console.error('[UCMS] member save failed:', err)
+    formError.value =
+      'The save did not finish. Refresh the page (F5) to check whether the change was kept, then try again.'
+    return
+  }
   if (saveError) {
     // Keep the modal open and show what the database said
     formError.value = saveError

@@ -324,8 +324,7 @@
           <div>
             <h2 class="font-semibold text-gray-800">Forecasting</h2>
             <p class="text-xs text-gray-400">
-              Expected collections come from the active loans' own amortization schedules ·
-              membership extends the average of the last 12 months
+              Expected collections come from the active loans' own amortization schedules
             </p>
           </div>
           <button
@@ -360,7 +359,7 @@
           </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 gap-6">
           <!-- Expected collections per month -->
           <div>
             <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
@@ -397,50 +396,13 @@
               {{ formatPeso(forecastTwelve) }} expected within 12 months
             </p>
           </div>
-
-          <!-- Membership trend -->
-          <div>
-            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
-              Membership — last 12 months (green) and projected (blue)
-            </p>
-            <div class="overflow-x-auto">
-              <div
-                class="flex items-end gap-1 h-44 border-b border-gray-100 pb-1"
-                :style="{ minWidth: memberBars.length * 18 + 'px' }"
-              >
-                <div
-                  v-for="bar in memberBars"
-                  :key="bar.key"
-                  class="flex-1 flex flex-col items-center gap-1 min-w-0"
-                  :title="bar.label"
-                >
-                  <div
-                    class="w-full rounded-t"
-                    :class="bar.projected ? 'bg-blue-300' : 'bg-green-500'"
-                    :style="{ height: memberBarPx(bar.count) + 'px' }"
-                  ></div>
-                  <div class="w-full text-center leading-tight overflow-hidden">
-                    <span class="block text-[10px] text-gray-500">{{ bar.mon }}</span>
-                    <span class="block text-[10px] text-gray-400">{{ bar.yr }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <ul class="mt-2 space-y-1 text-xs text-gray-500">
-              <li>Joined in the last 12 months — {{ memberTrend.total12 }}</li>
-              <li>Average — {{ memberTrend.avg.toFixed(1) }} per month</li>
-              <li>Projected next 12 months — {{ projectedMemberLabel }} new members</li>
-              <li>Projected total — {{ projectedTotalLabel }} members</li>
-            </ul>
-          </div>
         </div>
 
         <p class="text-xs text-gray-400 mt-4">
           Method: expected collections rebuild each active loan's diminishing-balance schedule from
           its release date, principal, rate and term, and cross off the instalments already covered
           by verified payments — a receipt submitted through the app is not counted until an
-          administrator verifies it. The membership figure extends the average of the last 12 months
-          forward; it is a trend projection, not a prediction.
+          administrator verifies it.
         </p>
       </section>
 
@@ -943,67 +905,6 @@ function forecastBarPx(amount) {
   return Math.max(amount > 0 ? 6 : 2, Math.round((amount / forecastMax.value) * 110))
 }
 
-// Membership: the average of the last 12 months carried forward.
-// Deliberately labeled a trend projection — no predictive model.
-const memberTrend = computed(() => {
-  const now = new Date()
-  const counts = new Map()
-  for (let i = 11; i >= 0; i -= 1) {
-    const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    counts.set(`${date.getFullYear()}-${date.getMonth()}`, 0)
-  }
-  membersStore.members.forEach((member) => {
-    if (!member.dateJoined) return
-    const date = new Date(`${member.dateJoined}T00:00:00`)
-    const key = `${date.getFullYear()}-${date.getMonth()}`
-    if (counts.has(key)) counts.set(key, counts.get(key) + 1)
-  })
-  const total12 = [...counts.values()].reduce((sum, count) => sum + count, 0)
-  const avg = total12 / 12
-  return { total12, avg, projected12: avg * 12, projectedTotal: memberTotal.value + avg * 12 }
-})
-
-const memberBars = computed(() => {
-  const now = new Date()
-  const counts = new Map()
-  membersStore.members.forEach((member) => {
-    if (!member.dateJoined) return
-    const date = new Date(`${member.dateJoined}T00:00:00`)
-    const key = `${date.getFullYear()}-${date.getMonth()}`
-    counts.set(key, (counts.get(key) || 0) + 1)
-  })
-  const bars = []
-  for (let i = -11; i < FORECAST_MONTHS; i += 1) {
-    const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
-    const key = `${date.getFullYear()}-${date.getMonth()}`
-    const projected = i >= 0
-    bars.push({
-      key,
-      label: `${monthLabel(date.getFullYear(), date.getMonth())}${projected ? ' (projected)' : ''}`,
-      ...monthParts(date.getFullYear(), date.getMonth()),
-      projected,
-      count: projected ? memberTrend.value.avg : counts.get(key) || 0,
-    })
-  }
-  return bars
-})
-
-const memberBarMax = computed(() => Math.max(1, ...memberBars.value.map((bar) => bar.count)))
-
-function memberBarPx(count) {
-  return Math.max(count > 0 ? 6 : 2, Math.round((count / memberBarMax.value) * 110))
-}
-
-const projectedMemberLabel = computed(() => {
-  const value = memberTrend.value.projected12
-  return Number.isInteger(value) ? String(value) : value.toFixed(1)
-})
-
-const projectedTotalLabel = computed(() => {
-  const value = memberTrend.value.projectedTotal
-  return Number.isInteger(value) ? String(value) : value.toFixed(1)
-})
-
 function shortPeso(amount) {
   const value = Number(amount) || 0
   return `₱${value.toLocaleString('en-PH', { notation: 'compact', maximumFractionDigits: 1 })}`
@@ -1176,10 +1077,6 @@ function exportForecast() {
       ['Due in 60 days', forecastTotals.value.due60.toFixed(2)],
       ['Due in 90 days', forecastTotals.value.due90.toFixed(2)],
       ['Beyond 12 months', forecastTotals.value.beyond.toFixed(2)],
-      ['Joined in the last 12 months', String(memberTrend.value.total12)],
-      ['Average new members per month', memberTrend.value.avg.toFixed(2)],
-      ['Projected new members — next 12 months', projectedMemberLabel.value],
-      ['Projected total members', projectedTotalLabel.value],
     ],
   )
 }

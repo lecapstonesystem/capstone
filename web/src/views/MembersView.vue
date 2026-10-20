@@ -1423,7 +1423,7 @@ async function saveMember() {
     dateJoined: form.dateJoined,
   }
 
-  let saveError = null
+  let saveError
   try {
     saveError =
       modalMode.value === 'add'

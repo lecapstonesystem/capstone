@@ -39,6 +39,8 @@ count — trust in the data is the deliverable.
    - typist reads the sheet and types,
    - verifier reads back member no., full name, birthday, contact, personal email, work email, capital.
 3. Print 2–3 data sheets and compare field-by-field with the paper originals.
+   (The printed Email box shows **only the work email** — the personal address
+   is the app login and is never printed. Blank there is correct.)
 4. Ask the money questions below; write the answers and **who said them**.
 5. Run the survey — signed, complete.
 6. If a member wants app access and has a working **personal** email: Issue

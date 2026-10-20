@@ -103,9 +103,10 @@ function sheetValues(member) {
     presentAddress: member.address,
     landline: member.landline,
     mobile: member.phone,
-    // The coop's paper form carries the official (DepEd) address, so
-    // print that when we have it; otherwise the personal login email.
-    email: member.workEmail || member.email,
+    // The sheet is the coop's paper record — the member's personal
+    // address is a login credential and never goes on paper. Only the
+    // work / office address is stamped (blank if we have none).
+    email: member.workEmail,
     tinNumber: member.tinNumber,
     gsisNumber: member.gsisNumber,
     sssNumber: member.sssNumber,

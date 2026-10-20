@@ -94,6 +94,9 @@ function rowToMember(row, capitals = new Map(), entries = new Map()) {
     pagibigNumber: row.pagibig_number || '',
     philhealthNumber: row.philhealth_number || '',
     email: row.email || '',
+    // Work / office address from the paper sheet (e.g. DepEd) — a
+    // record only. Login, resets and duplicate checks use `email`.
+    workEmail: row.work_email || '',
     phone: row.contact_number || '',
     address: row.address || '',
     status: titleCase(row.status) || 'Active',
@@ -140,6 +143,7 @@ function toRow(data) {
     pagibig_number: data.pagibigNumber || null,
     philhealth_number: data.philhealthNumber || null,
     email: data.email || null,
+    work_email: data.workEmail || null,
     contact_number: data.phone || null,
     address: data.address || null,
     status: data.status || 'Active',
@@ -168,7 +172,7 @@ export const useMembersStore = defineStore('members', () => {
     dateJoined: (member) => member.dateJoined,
   }
 
-  // Search matches name, member number, or email; status filter applies on top
+  // Search matches name, member number, or either email; status filter applies on top
   const filteredMembers = computed(() => {
     const query = search.value.trim().toLowerCase()
     const filtered = members.value.filter((member) => {
@@ -178,7 +182,8 @@ export const useMembersStore = defineStore('members', () => {
         !query ||
         fullName.includes(query) ||
         member.memberNo.toLowerCase().includes(query) ||
-        member.email.toLowerCase().includes(query)
+        member.email.toLowerCase().includes(query) ||
+        member.workEmail.toLowerCase().includes(query)
       return matchesStatus && matchesSearch
     })
     return sortRows(filtered, sortKey.value, sortDir.value, accessors)

@@ -150,6 +150,13 @@ supabase.from("member").insert(
 (portal-managed: checklist and timeline have defaults, remarks are
 the admin's), or any `status` other than `'Pending'`.
 
+**Email policy.** `email` is the member's **personal** address and becomes
+their app login — ask for it as "personal email", not the DepEd address.
+DepEd accounts are deactivated when staff leave and DepEd's guidelines
+restrict their use for non-official services. The portal keeps the DepEd /
+office address in `work_email`, which is **record only**: the app never
+reads or writes it and it is never used for sign-in or password resets.
+
 4. Track the result: re-read your own row — `status` moves
    `Pending → Under Review → Active` (approved, `member_no`
    assigned), or `→ Returned` (fix and re-submit) / `→ Rejected`.

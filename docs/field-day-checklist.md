@@ -8,6 +8,7 @@ count — trust in the data is the deliverable.
 
 - [ ] Live site opens and is on the latest push: https://ucms-admin.pages.dev (log in, F5).
 - [ ] Test member KHS-0092 cleaned up (typed-confirmation delete; `member`/`loan` rows = 0; audit line present).
+- [ ] Migrations 23, 24 and 25 run in the SQL Editor (notification delete fix, co-maker names, work email column).
 - [ ] Agree who types and who verifies — or split by member-number ranges and refresh between batches.
 - [ ] Bring: survey forms, consent forms, this checklist, notebooks.
 - [ ] Decide who asks the money questions and who writes the answers down.
@@ -16,7 +17,12 @@ count — trust in the data is the deliverable.
 
 - Names: First / Middle / Last separately. **Comma on the paper = surname first** ("Macayan, Nenita" = Last: Macayan, First: Nenita).
 - Phone: exactly 11 digits (09XXXXXXXXX).
-- Email: only if the member actually gave one — **leave blank otherwise; never invent placeholders**.
+- Email: two boxes on the form.
+  - **Personal email** — the app login. Only if the member actually gave
+    one; **leave blank otherwise; never invent placeholders**.
+  - **Work email** — the address written on the paper sheet (usually
+    `@deped.gov.ph`). Record only; it is never used to sign in or send
+    reset links. Leave blank if the sheet has none.
 - Address: the member's **present/current** address (v1.0 holds one address).
 - Birthday from the sheet (date picker), Gender + Civil Status likewise.
 - Married → spouse name required by the form.
@@ -30,13 +36,14 @@ count — trust in the data is the deliverable.
 2. Entry batch, one record at a time:
    - search the list first (not already encoded?),
    - typist reads the sheet and types,
-   - verifier reads back member no., full name, birthday, contact, email, capital.
+   - verifier reads back member no., full name, birthday, contact, personal email, work email, capital.
 3. Print 2–3 data sheets and compare field-by-field with the paper originals.
 4. Ask the money questions below; write the answers and **who said them**.
 5. Run the survey — signed, complete.
-6. If a member wants app access and has a working email: Issue Credentials, write
-   the one-time password on paper, and verify one real login works before issuing
-   more. Never invent an email to get past this.
+6. If a member wants app access and has a working **personal** email: Issue
+   Credentials, write the one-time password on paper, and verify one real login
+   works before issuing more. Never invent an email to get past this, and never
+   use the DepEd address as the login.
 
 ## Money questions (they unblock the defense)
 

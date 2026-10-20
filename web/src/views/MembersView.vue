@@ -317,8 +317,16 @@
               <p v-if="photoError" class="text-xs text-red-600 mt-1">{{ photoError }}</p>
             </div>
             <div>
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Email</p>
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                Personal Email
+              </p>
               <p class="text-gray-700 break-all">{{ detailMember.email || '—' }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                Work Email
+              </p>
+              <p class="text-gray-700 break-all">{{ detailMember.workEmail || '—' }}</p>
             </div>
             <div>
               <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Phone</p>
@@ -771,16 +779,29 @@
             />
           </div>
 
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1"
-              >Email (optional — for the app login)</label
-            >
-            <input
-              v-model="form.email"
-              type="email"
-              placeholder="member@example.com"
-              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Personal email (optional — app login)</label
+              >
+              <input
+                v-model="form.email"
+                type="email"
+                placeholder="member@example.com"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Work email (optional — record only)</label
+              >
+              <input
+                v-model="form.workEmail"
+                type="email"
+                placeholder="name@deped.gov.ph"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1317,6 +1338,7 @@ const emptyForm = {
   civilStatus: 'Single',
   spouseName: '',
   email: '',
+  workEmail: '',
   phone: '',
   landline: '',
   address: '',
@@ -1353,6 +1375,7 @@ function openEditModal(member) {
     civilStatus: member.civilStatus || 'Single',
     spouseName: member.spouseName || '',
     email: member.email,
+    workEmail: member.workEmail || '',
     phone: member.phone,
     landline: member.landline || '',
     address: member.address,
@@ -1391,6 +1414,10 @@ async function saveMember() {
     formError.value = 'Please enter a valid email address.'
     return
   }
+  if (form.workEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.workEmail.trim())) {
+    formError.value = 'Please enter a valid work email address.'
+    return
+  }
   if (form.phone && form.phone.length !== 11) {
     formError.value = 'Phone number must be exactly 11 digits.'
     return
@@ -1410,6 +1437,7 @@ async function saveMember() {
     civilStatus: form.civilStatus,
     spouseName: form.civilStatus === 'Married' ? form.spouseName.trim() : '',
     email: form.email.trim(),
+    workEmail: form.workEmail.trim(),
     phone: form.phone.trim(),
     landline: form.landline.trim(),
     address: form.address.trim(),

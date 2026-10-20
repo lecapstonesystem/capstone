@@ -790,6 +790,9 @@
                 placeholder="member@example.com"
                 class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
+              <p class="text-xs text-gray-400 mt-1">
+                Used to sign in to the app. Leave blank if the member has no personal address.
+              </p>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1"
@@ -798,9 +801,13 @@
               <input
                 v-model="form.workEmail"
                 type="email"
-                placeholder="name@deped.gov.ph"
+                placeholder="office@example.com"
                 class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
+              <p class="text-xs text-gray-400 mt-1">
+                Any address written on the sheet — not only DepEd. Leave blank if unknown; it is
+                never used to sign in.
+              </p>
             </div>
           </div>
 
@@ -1415,7 +1422,8 @@ async function saveMember() {
     return
   }
   if (form.workEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.workEmail.trim())) {
-    formError.value = 'Please enter a valid work email address.'
+    formError.value =
+      'That work email does not look complete — check for a missing @ or a space. Leave it blank if you do not have it.'
     return
   }
   if (form.phone && form.phone.length !== 11) {

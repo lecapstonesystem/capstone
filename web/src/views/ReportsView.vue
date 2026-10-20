@@ -318,7 +318,133 @@
         </div>
       </section>
 
-      <!-- 4. Cash Flow -->
+      <!-- 4. Forecasting -->
+      <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="font-semibold text-gray-800">Forecasting</h2>
+            <p class="text-xs text-gray-400">
+              Expected collections come from the active loans' own amortization schedules ·
+              membership extends the average of the last 12 months
+            </p>
+          </div>
+          <button
+            @click="exportForecast"
+            class="text-xs font-medium text-green-700 hover:text-green-800 no-print"
+          >
+            CSV
+          </button>
+        </div>
+
+        <!-- Collection windows -->
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+          <div class="bg-red-50 rounded-lg p-3">
+            <p class="text-xs text-red-600">Already overdue</p>
+            <p class="text-lg font-bold text-red-600">{{ formatPeso(forecastTotals.overdue) }}</p>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <p class="text-xs text-gray-500">Due in 30 days</p>
+            <p class="text-lg font-bold text-gray-800">{{ formatPeso(forecastTotals.due30) }}</p>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <p class="text-xs text-gray-500">Due in 60 days</p>
+            <p class="text-lg font-bold text-gray-800">{{ formatPeso(forecastTotals.due60) }}</p>
+          </div>
+          <div class="bg-gray-50 rounded-lg p-3">
+            <p class="text-xs text-gray-500">Due in 90 days</p>
+            <p class="text-lg font-bold text-gray-800">{{ formatPeso(forecastTotals.due90) }}</p>
+          </div>
+          <div class="bg-blue-50 rounded-lg p-3">
+            <p class="text-xs text-blue-700">Beyond 12 months</p>
+            <p class="text-lg font-bold text-blue-700">{{ formatPeso(forecastTotals.beyond) }}</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Expected collections per month -->
+          <div>
+            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
+              Expected collections — next 12 months
+            </p>
+            <div v-if="forecastMonths.length > 0" class="overflow-x-auto">
+              <div
+                class="flex items-end gap-1 h-44 border-b border-gray-100 pb-1"
+                :style="{ minWidth: forecastMonths.length * 22 + 'px' }"
+              >
+                <div
+                  v-for="point in forecastMonths"
+                  :key="point.key"
+                  class="flex-1 flex flex-col items-center gap-1 min-w-0"
+                  :title="`${point.label}: ${formatPeso(point.amount)}`"
+                >
+                  <span class="text-xs font-medium text-gray-600">
+                    {{ point.amount > 0 ? shortPeso(point.amount) : '0' }}
+                  </span>
+                  <div
+                    class="w-full bg-green-500 rounded-t"
+                    :style="{ height: forecastBarPx(point.amount) + 'px' }"
+                  ></div>
+                  <div class="w-full text-center leading-tight overflow-hidden">
+                    <span class="block text-[10px] text-gray-500">{{ point.mon }}</span>
+                    <span class="block text-[10px] text-gray-400">{{ point.yr }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p v-else class="text-sm text-gray-400 py-8 text-center">No active loans to project.</p>
+            <p class="text-xs text-gray-400 mt-2">
+              {{ activeLoanCount }} active loan<span v-if="activeLoanCount !== 1">s</span> ·
+              {{ formatPeso(forecastTwelve) }} expected within 12 months
+            </p>
+          </div>
+
+          <!-- Membership trend -->
+          <div>
+            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
+              Membership — last 12 months (green) and projected (blue)
+            </p>
+            <div class="overflow-x-auto">
+              <div
+                class="flex items-end gap-1 h-44 border-b border-gray-100 pb-1"
+                :style="{ minWidth: memberBars.length * 18 + 'px' }"
+              >
+                <div
+                  v-for="bar in memberBars"
+                  :key="bar.key"
+                  class="flex-1 flex flex-col items-center gap-1 min-w-0"
+                  :title="bar.label"
+                >
+                  <div
+                    class="w-full rounded-t"
+                    :class="bar.projected ? 'bg-blue-300' : 'bg-green-500'"
+                    :style="{ height: memberBarPx(bar.count) + 'px' }"
+                  ></div>
+                  <div class="w-full text-center leading-tight overflow-hidden">
+                    <span class="block text-[10px] text-gray-500">{{ bar.mon }}</span>
+                    <span class="block text-[10px] text-gray-400">{{ bar.yr }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <ul class="mt-2 space-y-1 text-xs text-gray-500">
+              <li>Joined in the last 12 months — {{ memberTrend.total12 }}</li>
+              <li>Average — {{ memberTrend.avg.toFixed(1) }} per month</li>
+              <li>Projected next 12 months — {{ projectedMemberLabel }} new members</li>
+              <li>Projected total — {{ projectedTotalLabel }} members</li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="text-xs text-gray-400 mt-4">
+          Method: expected collections rebuild each active loan's diminishing-balance schedule from
+          its release date, principal, rate and term, and cross off the instalments already covered
+          by verified payments — a receipt submitted through the app is not counted until an
+          administrator verifies it. The membership figure extends the average of the last 12 months
+          forward; it is a trend projection, not a prediction.
+        </p>
+      </section>
+
+      <!-- 5. Cash Flow -->
       <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
         <div class="flex items-center justify-between mb-4">
           <h2 class="font-semibold text-gray-800">Cash Flow</h2>
@@ -434,7 +560,7 @@
         </div>
       </section>
 
-      <!-- 5. Financial Summary -->
+      <!-- 6. Financial Summary -->
       <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
         <div class="flex items-center justify-between mb-4">
           <div>
@@ -471,6 +597,7 @@ import { useMembersStore } from '../stores/members'
 import { useApplicationsStore } from '../stores/applications'
 import { useLoansStore, LOAN_TYPES } from '../stores/loans'
 import { useLedgerStore } from '../stores/ledger'
+import { buildSchedule } from '../utils/amortization'
 
 const membersStore = useMembersStore()
 const appsStore = useApplicationsStore()
@@ -719,7 +846,170 @@ function typeBarPct(total) {
   return Math.max(2, Math.round((total / loansByTypeMax.value) * 100))
 }
 
-// ---------- 4. Cash flow ----------
+// ---------- 4. Forecasting ----------
+const FORECAST_MONTHS = 12
+
+const round2 = (value) => Math.round(value * 100) / 100
+
+// Remaining instalments of one active loan: rebuild the loan's own
+// amortization schedule from its terms and cross off what verified
+// payments have already covered — the same rule as paidOf: a Pending
+// receipt is not money the coop has accepted yet.
+function remainingInstalments(loan) {
+  if (loan.status !== 'Released') return []
+  const paidSum = loansStore.paidOf(loan)
+  const rows = buildSchedule({
+    principal: loan.principal,
+    ratePercent: loan.ratePercent,
+    termMonths: loan.termMonths,
+    startDate: loan.releasedAt,
+  })
+  let cumulative = 0
+  const remaining = []
+  for (const row of rows) {
+    cumulative += row.payment
+    if (paidSum < cumulative - 0.01) remaining.push(row)
+  }
+  return remaining
+}
+
+const activeLoans = computed(() => loansStore.loans.filter((loan) => loan.status === 'Released'))
+
+const activeLoanCount = computed(() => activeLoans.value.length)
+
+// Windows a treasurer actually asks about: already late, and what
+// falls due inside the next 30 / 60 / 90 days. Anything past the
+// 12-month chart is reported separately so no money is hidden.
+const forecastTotals = computed(() => {
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const day = 24 * 60 * 60 * 1000
+  const in30 = new Date(startOfToday.getTime() + 30 * day)
+  const in60 = new Date(startOfToday.getTime() + 60 * day)
+  const in90 = new Date(startOfToday.getTime() + 90 * day)
+  const lastBucket = new Date(now.getFullYear(), now.getMonth() + FORECAST_MONTHS, 0)
+  const totals = { overdue: 0, due30: 0, due60: 0, due90: 0, beyond: 0 }
+  activeLoans.value.forEach((loan) => {
+    remainingInstalments(loan).forEach((row) => {
+      const due = new Date(row.dueDate)
+      if (due < startOfToday) totals.overdue += row.payment
+      else if (due <= in30) totals.due30 += row.payment
+      else if (due <= in60) totals.due60 += row.payment
+      else if (due <= in90) totals.due90 += row.payment
+      if (due > lastBucket) totals.beyond += row.payment
+    })
+  })
+  return {
+    overdue: round2(totals.overdue),
+    due30: round2(totals.due30),
+    due60: round2(totals.due60),
+    due90: round2(totals.due90),
+    beyond: round2(totals.beyond),
+  }
+})
+
+const forecastMonths = computed(() => {
+  const now = new Date()
+  const buckets = []
+  for (let i = 0; i < FORECAST_MONTHS; i += 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
+    buckets.push({
+      key: `${date.getFullYear()}-${date.getMonth()}`,
+      label: monthLabel(date.getFullYear(), date.getMonth()),
+      amount: 0,
+      ...monthParts(date.getFullYear(), date.getMonth()),
+    })
+  }
+  activeLoans.value.forEach((loan) => {
+    remainingInstalments(loan).forEach((row) => {
+      const due = new Date(row.dueDate)
+      const key = `${due.getFullYear()}-${due.getMonth()}`
+      const bucket = buckets.find((item) => item.key === key)
+      if (bucket) bucket.amount += row.payment
+    })
+  })
+  return buckets.map((bucket) => ({ ...bucket, amount: round2(bucket.amount) }))
+})
+
+const forecastMax = computed(() =>
+  Math.max(1, ...forecastMonths.value.map((point) => point.amount)),
+)
+
+const forecastTwelve = computed(() =>
+  round2(forecastMonths.value.reduce((sum, point) => sum + point.amount, 0)),
+)
+
+function forecastBarPx(amount) {
+  return Math.max(amount > 0 ? 6 : 2, Math.round((amount / forecastMax.value) * 110))
+}
+
+// Membership: the average of the last 12 months carried forward.
+// Deliberately labeled a trend projection — no predictive model.
+const memberTrend = computed(() => {
+  const now = new Date()
+  const counts = new Map()
+  for (let i = 11; i >= 0; i -= 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    counts.set(`${date.getFullYear()}-${date.getMonth()}`, 0)
+  }
+  membersStore.members.forEach((member) => {
+    if (!member.dateJoined) return
+    const date = new Date(`${member.dateJoined}T00:00:00`)
+    const key = `${date.getFullYear()}-${date.getMonth()}`
+    if (counts.has(key)) counts.set(key, counts.get(key) + 1)
+  })
+  const total12 = [...counts.values()].reduce((sum, count) => sum + count, 0)
+  const avg = total12 / 12
+  return { total12, avg, projected12: avg * 12, projectedTotal: memberTotal.value + avg * 12 }
+})
+
+const memberBars = computed(() => {
+  const now = new Date()
+  const counts = new Map()
+  membersStore.members.forEach((member) => {
+    if (!member.dateJoined) return
+    const date = new Date(`${member.dateJoined}T00:00:00`)
+    const key = `${date.getFullYear()}-${date.getMonth()}`
+    counts.set(key, (counts.get(key) || 0) + 1)
+  })
+  const bars = []
+  for (let i = -11; i < FORECAST_MONTHS; i += 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
+    const key = `${date.getFullYear()}-${date.getMonth()}`
+    const projected = i >= 0
+    bars.push({
+      key,
+      label: `${monthLabel(date.getFullYear(), date.getMonth())}${projected ? ' (projected)' : ''}`,
+      ...monthParts(date.getFullYear(), date.getMonth()),
+      projected,
+      count: projected ? memberTrend.value.avg : counts.get(key) || 0,
+    })
+  }
+  return bars
+})
+
+const memberBarMax = computed(() => Math.max(1, ...memberBars.value.map((bar) => bar.count)))
+
+function memberBarPx(count) {
+  return Math.max(count > 0 ? 6 : 2, Math.round((count / memberBarMax.value) * 110))
+}
+
+const projectedMemberLabel = computed(() => {
+  const value = memberTrend.value.projected12
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+})
+
+const projectedTotalLabel = computed(() => {
+  const value = memberTrend.value.projectedTotal
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+})
+
+function shortPeso(amount) {
+  const value = Number(amount) || 0
+  return `₱${value.toLocaleString('en-PH', { notation: 'compact', maximumFractionDigits: 1 })}`
+}
+
+// ---------- 5. Cash flow ----------
 const rangeTxns = computed(() => ledgerStore.transactions.filter((txn) => inRange(txn.date)))
 
 const flow = computed(() => {
@@ -786,7 +1076,7 @@ const topCategories = computed(() => {
     .slice(0, 5)
 })
 
-// ---------- 5. Financial summary ----------
+// ---------- 6. Financial summary ----------
 const capitalTotal = computed(() =>
   membersStore.members.reduce((sum, member) => sum + (member.capitalShare || 0), 0),
 )
@@ -869,6 +1159,28 @@ function exportLoans() {
       loan.status,
       loansStore.isDelinquent(loan) ? 'Yes' : 'No',
     ]),
+  )
+}
+
+function exportForecast() {
+  download(
+    'ucms-forecast.csv',
+    ['Line', 'Value'],
+    [
+      ...forecastMonths.value.map((point) => [
+        `Expected collections — ${point.label}`,
+        point.amount.toFixed(2),
+      ]),
+      ['Already overdue', forecastTotals.value.overdue.toFixed(2)],
+      ['Due in 30 days', forecastTotals.value.due30.toFixed(2)],
+      ['Due in 60 days', forecastTotals.value.due60.toFixed(2)],
+      ['Due in 90 days', forecastTotals.value.due90.toFixed(2)],
+      ['Beyond 12 months', forecastTotals.value.beyond.toFixed(2)],
+      ['Joined in the last 12 months', String(memberTrend.value.total12)],
+      ['Average new members per month', memberTrend.value.avg.toFixed(2)],
+      ['Projected new members — next 12 months', projectedMemberLabel.value],
+      ['Projected total members', projectedTotalLabel.value],
+    ],
   )
 }
 

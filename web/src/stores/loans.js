@@ -793,6 +793,10 @@ export const useLoansStore = defineStore('loans', () => {
     for (const row of pays.data || []) if (row.receipt_image_url) paths.add(row.receipt_image_url)
 
     const steps = [
+      // Notifications point at the loan with ON DELETE SET NULL, and the
+      // content-freeze trigger rejects that system nulling — clearing
+      // them first keeps the loan delete (and the inbox) clean.
+      ['notification', supabase.from('notification').delete().eq('loan_id', loan.id)],
       ['attachment', supabase.from('attachment').delete().eq('loan_id', loan.id)],
       ['co_maker', supabase.from('co_maker').delete().eq('loan_id', loan.id)],
       ['payment', supabase.from('payment').delete().eq('loan_id', loan.id)],

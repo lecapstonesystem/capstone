@@ -735,6 +735,10 @@ export const useMembersStore = defineStore('members', () => {
       ['payment', supabase.from('payment').delete().or(`member_id.eq.${member.id}${loanFilter}`)],
       ['loan_application', supabase.from('loan_application').delete().eq('member_id', member.id)],
       ['share_capital', supabase.from('share_capital').delete().eq('member_id', member.id)],
+      // Notifications cascade with the member, but deleting their loans
+      // first would null notification.loan_id — and the content-freeze
+      // trigger rejects that system change. Clear the inbox first.
+      ['notification', supabase.from('notification').delete().eq('member_id', member.id)],
       ['loan', supabase.from('loan').delete().eq('member_id', member.id)],
       ['member', supabase.from('member').delete().eq('member_id', member.id)],
     ]

@@ -57,6 +57,16 @@ UPDATE member
 SET email = lower('REPLACE-new-email@example.com')
 WHERE member_no = 'REPLACE-member-no';
 
+-- 4) Leave a trail — the portal's Activity list is append-only, and a
+--    script-level change should not be invisible there either.
+INSERT INTO audit_log (actor, entity_type, entity_id, action)
+SELECT 'System administrator (SQL)',
+       'member',
+       m.member_id::text,
+       'App login email changed to ' || m.email || ' (previous address unreachable)'
+FROM member m
+WHERE m.member_no = 'REPLACE-member-no';
+
 COMMIT;
 
 -- Verify: all three must show the SAME new address

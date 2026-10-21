@@ -233,7 +233,7 @@
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       @click.self="detailMember = null"
     >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-xl max-h-[90vh] flex flex-col">
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-4xl max-h-[95vh] flex flex-col">
         <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <h2 class="text-lg font-semibold text-gray-800">Member Details</h2>
           <button
@@ -244,7 +244,7 @@
           </button>
         </div>
 
-        <div class="px-6 py-5 space-y-5 overflow-y-auto flex-1 min-h-0">
+        <div class="px-6 py-5 space-y-4 overflow-y-auto flex-1 min-h-0">
           <!-- Identity — photo on record takes the avatar spot so the
                face, not initials, is what counter staff see. -->
           <div class="flex items-center gap-4">
@@ -278,9 +278,9 @@
             </span>
           </div>
 
-          <!-- Fields -->
-          <div class="grid grid-cols-1 gap-4 text-sm">
-            <div>
+          <!-- Fields — two columns so the record fits one screen -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div class="sm:col-span-2">
               <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
                 Profile Photo
               </p>
@@ -332,6 +332,12 @@
               <p class="text-gray-700">{{ detailMember.phone || '—' }}</p>
             </div>
             <div>
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                Landline
+              </p>
+              <p class="text-gray-700">{{ detailMember.landline || '—' }}</p>
+            </div>
+            <div class="sm:col-span-2">
               <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Address</p>
               <p class="text-gray-700">{{ detailMember.address || '—' }}</p>
             </div>
@@ -352,13 +358,7 @@
                 >
               </p>
             </div>
-            <div>
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-                Landline
-              </p>
-              <p class="text-gray-700">{{ detailMember.landline || '—' }}</p>
-            </div>
-            <div>
+            <div class="sm:col-span-2">
               <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
                 Government IDs
               </p>
@@ -451,47 +451,8 @@
             <p v-if="sheetError" class="text-xs text-red-600 mt-2">{{ sheetError }}</p>
           </div>
 
-          <!-- Loans -->
-          <div class="border-t border-gray-100 pt-4 space-y-3">
-            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">
-              Loans ({{ memberLoans.length }})
-            </p>
-            <p v-if="memberLoans.length === 0" class="text-sm text-gray-500">
-              No loans recorded for this member yet.
-            </p>
-            <div
-              v-for="loan in memberLoans"
-              :key="loan.id"
-              class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 space-y-1.5"
-            >
-              <div class="flex items-center justify-between gap-3">
-                <span class="text-sm font-medium text-gray-700">
-                  {{ loan.loanNo }} · {{ loanTypeLabel(loan.type) }}
-                </span>
-                <span
-                  class="px-2.5 py-1 rounded-full text-xs font-medium shrink-0"
-                  :class="loanStatusBadgeClass(loan.status)"
-                >
-                  {{ loan.status }}
-                </span>
-              </div>
-              <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                <span>
-                  {{ formatPeso(loan.principal) }} · {{ loan.termMonths }} mo ·
-                  {{ loan.ratePercent }}/mo
-                </span>
-                <span>Balance {{ formatPeso(loansStore.balanceOf(loan)) }}</span>
-                <span v-if="loan.payments.length > 0">
-                  {{ loan.payments.length }} payment{{ loan.payments.length > 1 ? 's' : '' }}
-                </span>
-                <span v-if="loansStore.isDelinquent(loan)" class="text-red-600 font-medium">
-                  Delinquent
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Account Management -->
+          <!-- Account Management — above the record lists so login and
+               membership controls are visible without scrolling -->
           <div class="border-t border-gray-100 pt-4 space-y-3">
             <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Account</p>
 
@@ -602,6 +563,48 @@
               >
                 Delete Test Member
               </button>
+            </div>
+          </div>
+
+          <!-- Loans — two columns so a long loan history stays compact -->
+          <div class="border-t border-gray-100 pt-4 space-y-3">
+            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">
+              Loans ({{ memberLoans.length }})
+            </p>
+            <p v-if="memberLoans.length === 0" class="text-sm text-gray-500">
+              No loans recorded for this member yet.
+            </p>
+            <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div
+                v-for="loan in memberLoans"
+                :key="loan.id"
+                class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 space-y-1.5"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-sm font-medium text-gray-700">
+                    {{ loan.loanNo }} · {{ loanTypeLabel(loan.type) }}
+                  </span>
+                  <span
+                    class="px-2.5 py-1 rounded-full text-xs font-medium shrink-0"
+                    :class="loanStatusBadgeClass(loan.status)"
+                  >
+                    {{ loan.status }}
+                  </span>
+                </div>
+                <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                  <span>
+                    {{ formatPeso(loan.principal) }} · {{ loan.termMonths }} mo ·
+                    {{ loan.ratePercent }}/mo
+                  </span>
+                  <span>Balance {{ formatPeso(loansStore.balanceOf(loan)) }}</span>
+                  <span v-if="loan.payments.length > 0">
+                    {{ loan.payments.length }} payment{{ loan.payments.length > 1 ? 's' : '' }}
+                  </span>
+                  <span v-if="loansStore.isDelinquent(loan)" class="text-red-600 font-medium">
+                    Delinquent
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 

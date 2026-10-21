@@ -12,7 +12,7 @@
           <p class="text-sm text-gray-500 font-medium">Total Members</p>
           <p class="text-3xl font-bold text-gray-800 mt-1">{{ membersStore.totalCount }}</p>
           <p class="text-xs text-green-600 mt-2">
-            {{ membersStore.activeCount }} active · {{ suspendedOrDropped }} suspended/dropped
+            {{ membersStore.activeCount }} active · {{ inactiveCount }} inactive
           </p>
         </div>
 
@@ -155,7 +155,7 @@ const monthIncome = computed(() =>
     .reduce((sum, txn) => sum + txn.amount, 0),
 )
 
-const suspendedOrDropped = computed(() => membersStore.totalCount - membersStore.activeCount)
+const inactiveCount = computed(() => membersStore.totalCount - membersStore.activeCount)
 
 const delinquentAmount = computed(() =>
   loansStore.loans

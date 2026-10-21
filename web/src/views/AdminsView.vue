@@ -642,7 +642,7 @@ const ROLE_GUIDE = [
     name: 'Admin',
     summary: 'Day-to-day cooperative work — the normal role for coop staff.',
     can: [
-      'Members: register, edit, suspend or drop; issue app credentials',
+      'Members: register, edit, activate or deactivate; issue app credentials',
       'Loans: create, review and release; verify payments; print Loan Notes',
       'Registrations, Ledger, Reports, Notifications and the Activity Log',
       'View this account list — management stays with Super Admins',

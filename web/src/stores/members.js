@@ -11,13 +11,15 @@ import { useAuthStore } from './auth'
 /**
  * Members store — live Supabase data (swapped from mocks).
  *
- * Account management model (unchanged):
- *   Active    — full member, can log into the mobile app
- *   Suspended — temporarily blocked (login disabled), reversible
- *   Dropped   — member left / archived, record is kept forever
+ * Account management model:
+ *   Active   — full member, can log into the mobile app
+ *   Inactive — login disabled (suspended or left the coop), reversible
  *
- * Cooperatives must keep member records, so permanent deletion is a
- * last resort — the UI pushes suspend/drop instead.
+ * Deactivation replaced the old Suspended/Dropped pair: the record and
+ * its history are kept forever (RA 9520) and the reason is written to
+ * the audit log. Registration-queue rows never reach this store, so
+ * they keep their own Pending / Under Review / Returned / Rejected
+ * values in the same column.
  *
  * Mapping to public.member (database/03 + 04):
  *   phone -> contact_number, govIdNumber -> government_id.
@@ -99,7 +101,7 @@ function rowToMember(row, capitals = new Map(), entries = new Map()) {
     workEmail: row.work_email || '',
     phone: row.contact_number || '',
     address: row.address || '',
-    status: titleCase(row.status) || 'Active',
+    status: membershipStatus(row.status),
     dateJoined: (row.date_joined || '').slice(0, 10),
     capitalShare: capitals.get(row.member_id) || 0,
     capitalEntries: entries.get(row.member_id) || [],
@@ -119,6 +121,15 @@ function rowToMember(row, capitals = new Map(), entries = new Map()) {
     appEvents: Array.isArray(row.app_events) ? row.app_events : [],
     history: [],
   }
+}
+
+// Legacy three-state rows (Suspended / Dropped) may exist until
+// 26_member_status_inactive.sql runs; both collapse to Inactive so the
+// interface never shows a third membership state.
+function membershipStatus(value) {
+  const status = titleCase(value) || 'Active'
+  if (status === 'Suspended' || status === 'Dropped') return 'Inactive'
+  return status
 }
 
 // The app writes all four name columns together; `name` keeps the
@@ -419,8 +430,9 @@ export const useMembersStore = defineStore('members', () => {
     return null
   }
 
-  // Lifecycle: every change is logged and keeps the record
-  async function setStatus(id, status) {
+  // Lifecycle: every change is logged and keeps the record. Deactivation
+  // carries the admin's written reason into the activity trail.
+  async function setStatus(id, status, reason = '') {
     const current = members.value.find((item) => item.id === id)
     if (!current || current.status === status) return
     const patch = { status, login_enabled: status === 'Active' }
@@ -436,7 +448,13 @@ export const useMembersStore = defineStore('members', () => {
       return
     }
     const updated = replaceLocal(rowToMember(row, keepCapital(current)))
-    if (updated) logAction(updated, `Status changed to ${status}`)
+    const note = String(reason || '').trim()
+    if (updated) {
+      logAction(
+        updated,
+        note ? `Status changed to ${status} — ${note}` : `Status changed to ${status}`,
+      )
+    }
   }
 
   /**

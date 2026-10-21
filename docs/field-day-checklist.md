@@ -8,7 +8,7 @@ count — trust in the data is the deliverable.
 
 - [ ] Live site opens and is on the latest push: https://ucms-admin.pages.dev (log in, F5).
 - [ ] Test member KHS-0092 cleaned up (typed-confirmation delete; `member`/`loan` rows = 0; audit line present).
-- [ ] Migrations 23, 24 and 25 run in the SQL Editor (notification delete fix, co-maker names, work email column).
+- [ ] Migrations 23–26 run in the SQL Editor (notification delete fix, co-maker names, work email column, member status collapse to Active/Inactive).
 - [ ] Agree who types and who verifies — or split by member-number ranges and refresh between batches.
 - [ ] Bring: survey forms, consent forms, this checklist, notebooks.
 - [ ] Decide who asks the money questions and who writes the answers down.

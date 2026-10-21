@@ -53,7 +53,7 @@ reset end-to-end (Admins → Reset → check the email → open the link).
 
 ## 3. Nothing else to configure
 
-- Database schema, RLS policies, audit log: migrations 01–25 in
+- Database schema, RLS policies, audit log: migrations 01–26 in
   `database/` (run in order; 23–25 are the newest).
 - Storage bucket `member-documents`: already private, policies in 13.
 - The Android app talks to Supabase directly — the web deploy does

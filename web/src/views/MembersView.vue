@@ -33,8 +33,7 @@
         >
           <option value="All">All Statuses</option>
           <option value="Active">Active</option>
-          <option value="Suspended">Suspended</option>
-          <option value="Dropped">Dropped</option>
+          <option value="Inactive">Inactive</option>
         </select>
 
         <!-- Column visibility -->
@@ -583,25 +582,18 @@
             <!-- Membership status actions -->
             <div class="flex flex-wrap gap-2 pt-1">
               <button
-                v-if="detailMember.status !== 'Active'"
+                v-if="detailMember.status === 'Active'"
+                @click="requestStatusChange(detailMember, 'Inactive')"
+                class="border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-amber-50 transition duration-200"
+              >
+                Deactivate
+              </button>
+              <button
+                v-else-if="detailMember.status === 'Inactive'"
                 @click="requestStatusChange(detailMember, 'Active')"
                 class="border border-green-300 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-50 transition duration-200"
               >
-                {{ detailMember.status === 'Dropped' ? 'Restore Member' : 'Reactivate' }}
-              </button>
-              <button
-                v-if="detailMember.status === 'Active'"
-                @click="requestStatusChange(detailMember, 'Suspended')"
-                class="border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-amber-50 transition duration-200"
-              >
-                Suspend
-              </button>
-              <button
-                v-if="detailMember.status === 'Active'"
-                @click="requestStatusChange(detailMember, 'Dropped')"
-                class="border border-red-300 text-red-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-50 transition duration-200"
-              >
-                Drop Member
+                Reactivate
               </button>
               <button
                 v-if="auth.isDeveloper"
@@ -859,8 +851,7 @@
                 class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               >
                 <option value="Active">Active</option>
-                <option value="Suspended">Suspended</option>
-                <option value="Dropped">Dropped</option>
+                <option value="Inactive">Inactive</option>
               </select>
             </div>
             <div>
@@ -1137,31 +1128,23 @@ function runConfirm() {
 function requestStatusChange(member, newStatus) {
   const name = `${member.firstName} ${member.lastName}`
   const presets = {
-    Suspended: {
-      title: 'Suspend Member?',
-      message: `${name} will be suspended and their app login will be disabled. You can reactivate anytime.`,
-      confirmLabel: 'Suspend',
-      danger: false,
+    Inactive: {
+      title: 'Deactivate Member?',
+      message: `${name} will be marked inactive and their app login disabled. The record and its history are kept, and you can reactivate anytime.`,
+      confirmLabel: 'Deactivate',
+      danger: true,
+      reason: true,
     },
     Active: {
-      title: member.status === 'Dropped' ? 'Restore Member?' : 'Reactivate Member?',
-      message:
-        member.status === 'Dropped'
-          ? `${name}'s record will be restored as an Active member.`
-          : `${name} will be reactivated and their login re-enabled.`,
+      title: 'Reactivate Member?',
+      message: `${name} will be marked active and their login re-enabled.`,
       confirmLabel: 'Reactivate',
       danger: false,
-    },
-    Dropped: {
-      title: 'Drop Member?',
-      message: `${name} will be marked as dropped (left the coop). The record is kept, login is disabled.`,
-      confirmLabel: 'Drop Member',
-      danger: true,
     },
   }
   confirmAction.value = {
     ...presets[newStatus],
-    run: () => membersStore.setStatus(member.id, newStatus),
+    run: (reason) => membersStore.setStatus(member.id, newStatus, reason),
   }
 }
 
@@ -1510,8 +1493,8 @@ async function printDataSheet() {
 
 function statusBadgeClass(status) {
   if (status === 'Active') return 'bg-green-100 text-green-700'
-  if (status === 'Suspended') return 'bg-amber-100 text-amber-700'
-  return 'bg-gray-100 text-gray-500' // Dropped
+  if (status === 'Pending') return 'bg-amber-100 text-amber-700'
+  return 'bg-gray-100 text-gray-500' // Inactive
 }
 
 function formatDate(dateString) {

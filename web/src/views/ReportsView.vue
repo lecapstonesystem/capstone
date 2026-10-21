@@ -111,12 +111,8 @@
                   Active — {{ statusCounts.Active }}
                 </li>
                 <li class="flex items-center gap-2">
-                  <span class="w-3 h-3 rounded-full bg-amber-500"></span>
-                  Suspended — {{ statusCounts.Suspended }}
-                </li>
-                <li class="flex items-center gap-2">
                   <span class="w-3 h-3 rounded-full bg-gray-400"></span>
-                  Dropped — {{ statusCounts.Dropped }}
+                  Inactive — {{ statusCounts.Inactive }}
                 </li>
               </ul>
             </div>
@@ -664,8 +660,7 @@ const rangeMembers = computed(() =>
 
 const statusCounts = computed(() => ({
   Active: membersStore.members.filter((member) => member.status === 'Active').length,
-  Suspended: membersStore.members.filter((member) => member.status === 'Suspended').length,
-  Dropped: membersStore.members.filter((member) => member.status === 'Dropped').length,
+  Inactive: membersStore.members.filter((member) => member.status === 'Inactive').length,
 }))
 
 // New members grouped by month (only months that have joins)
@@ -695,10 +690,7 @@ const donutStyle = computed(() => {
   const total = memberTotal.value
   if (!total) return '#e5e7eb'
   const active = (statusCounts.value.Active / total) * 100
-  const suspended = (statusCounts.value.Suspended / total) * 100
-  const activeEnd = active
-  const suspendedEnd = active + suspended
-  return `conic-gradient(#22c55e 0 ${activeEnd}%, #f59e0b ${activeEnd}% ${suspendedEnd}%, #9ca3af ${suspendedEnd}% 100%)`
+  return `conic-gradient(#22c55e 0 ${active}%, #9ca3af ${active}% 100%)`
 })
 
 // ---------- 2. Applications ----------

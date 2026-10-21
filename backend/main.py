@@ -44,7 +44,7 @@ import ucms_analytics as ua  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from store import load_all  # noqa: E402  (Supabase-first, CSV fallback)
-from loan_simulator import loan_totals, round2  # noqa: E402  (single impl, shared with web)
+from loan_simulator import loan_totals, round2, simulate_loan  # noqa: E402  (single impl, shared with web)
 
 API_KEY = os.environ.get("UCMS_API_KEY", "")  # empty = dev-open, warns at startup
 # Comma-separated frontend origin(s) allowed to call this API in browsers.
@@ -160,6 +160,15 @@ class ReceiptIn(BaseModel):
     tol: float = 1.0
 
 
+class LoanSimulateIn(BaseModel):
+    principal: float
+    term_months: int
+    rate_percent: float | None = None
+    loan_type: str | None = None
+    start_date: str | None = None
+    payments: list[float] = []
+
+
 @app.get("/health")
 def health():
     require_key()
@@ -180,6 +189,26 @@ def eligibility(body: EligibilityIn, _: bool = require_key()):
                                        body.term_months, loans, shares,
                                        body.loan_type)
     return {"eligible": ok, "reasons": reasons}
+
+
+@app.post("/loan/simulate")
+def loan_simulate(body: LoanSimulateIn, _: bool = require_key()):
+    """Diminishing-balance schedule and totals for a prospective loan.
+
+    The single source of truth for loan math - the portal's pre-application
+    preview calls this instead of recomputing the formula in JavaScript.
+    """
+    if body.principal <= 0 or body.term_months <= 0:
+        raise HTTPException(status_code=422,
+                            detail="principal and term_months must be positive")
+    return simulate_loan(
+        body.principal,
+        body.term_months,
+        rate_percent=body.rate_percent,
+        loan_type=body.loan_type,
+        start=body.start_date,
+        payments=body.payments,
+    )
 
 
 @app.post("/applications")

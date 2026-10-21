@@ -120,8 +120,14 @@
         </div>
       </section>
 
-      <!-- 2. Applications Summary -->
-      <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+      <!-- 2. Applications Summary — HIDDEN for v1.0. The coop has no
+           online/app registration (face-to-face only), so the portal
+           ships without the Registrations module. Flip
+           SHOW_REGISTRATIONS to true to bring this section back. -->
+      <section
+        v-if="SHOW_REGISTRATIONS"
+        class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6"
+      >
         <div class="flex items-center justify-between mb-4">
           <h2 class="font-semibold text-gray-800">Registrations Summary</h2>
           <button
@@ -562,6 +568,12 @@ const appsStore = useApplicationsStore()
 const loansStore = useLoansStore()
 const ledgerStore = useLedgerStore()
 
+// HIDDEN for v1.0 — the Registrations module. The coop registers
+// members face-to-face at the office, so the portal ships without the
+// registration queue (view + sidebar entry also hidden). Flipping this
+// flag restores the "Registrations Summary" panel in this view.
+const SHOW_REGISTRATIONS = false
+
 const todayLabel = new Date().toLocaleDateString('en-PH', {
   year: 'numeric',
   month: 'long',
@@ -1000,8 +1012,10 @@ const summaryRows = computed(() => [
     formatPeso(delinquentAmount.value),
     delinquentAmount.value > 0 ? 'text-red-600' : 'text-gray-800',
   ],
-  ['Registrations received', String(appStats.value.received)],
-  ['Registrations approved', String(appStats.value.approved)],
+  // Registrations rows — HIDDEN for v1.0 (module disabled; face-to-face
+  // registration only). Restore together with SHOW_REGISTRATIONS.
+  // ['Registrations received', String(appStats.value.received)],
+  // ['Registrations approved', String(appStats.value.approved)],
 ])
 
 // ---------- CSV export ----------

@@ -61,7 +61,10 @@
           Loans
         </RouterLink>
 
-        <RouterLink
+        <!-- Registrations — HIDDEN for v1.0 (face-to-face only; no
+             online/app registration). Remove these comment markers to
+             restore the module entry. -->
+        <!-- <RouterLink
           to="/registrations"
           class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition duration-200"
           :class="
@@ -71,7 +74,7 @@
           "
         >
           Registrations
-        </RouterLink>
+        </RouterLink> -->
 
         <RouterLink
           to="/reports"
@@ -217,7 +220,8 @@ const currentPageTitle = computed(() => {
     '/members': 'Members',
     '/ledger': 'Ledger',
     '/loans': 'Loans',
-    '/registrations': 'Registrations',
+    // '/registrations' title entry — HIDDEN with the module for v1.0.
+    // '/registrations': 'Registrations',
     '/reports': 'Reports',
     '/notifications': 'Notifications',
     '/admins': 'Admin Accounts',

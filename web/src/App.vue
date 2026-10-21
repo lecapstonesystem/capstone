@@ -9,7 +9,8 @@ import { useAuthStore } from './stores/auth'
 import { useMembersStore } from './stores/members'
 import { useLoansStore } from './stores/loans'
 import { useLedgerStore } from './stores/ledger'
-import { useApplicationsStore } from './stores/applications'
+// HIDDEN for v1.0 — Registrations module (face-to-face registration only).
+// import { useApplicationsStore } from './stores/applications'
 import { useAdminsStore } from './stores/admins'
 import { useAuditStore } from './stores/audit'
 
@@ -44,7 +45,8 @@ function refresh() {
   useMembersStore().fetchMembers()
   useLoansStore().fetchLoans()
   useLedgerStore().fetchLedger()
-  useApplicationsStore().fetchApplications()
+  // HIDDEN with the Registrations module (v1.0).
+  // useApplicationsStore().fetchApplications()
   useAdminsStore().fetchAdmins()
   useAuditStore().fetchRecent()
 }

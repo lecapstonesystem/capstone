@@ -119,14 +119,15 @@
 import { computed } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import { useMembersStore } from '../stores/members'
-import { useApplicationsStore } from '../stores/applications'
+// HIDDEN for v1.0 — Registrations module (face-to-face registration only).
+// import { useApplicationsStore } from '../stores/applications'
 import { useLoansStore } from '../stores/loans'
 import { useLedgerStore } from '../stores/ledger'
 import { useAuditStore } from '../stores/audit'
 import { KIND_META, kindMeta, auditLabel, formatDateTime } from '../utils/activity'
 
 const membersStore = useMembersStore()
-const appsStore = useApplicationsStore()
+// const appsStore = useApplicationsStore() // HIDDEN with the Registrations module (v1.0)
 const loansStore = useLoansStore()
 const ledgerStore = useLedgerStore()
 const auditStore = useAuditStore()
@@ -166,14 +167,15 @@ const delinquentAmount = computed(() =>
 // ⚠️ Items waiting for the admin (from each module's counts)
 const attentionItems = computed(() => {
   const items = []
-  const appCount = appsStore.pendingCount + appsStore.underReviewCount
-  if (appCount > 0) {
-    items.push({
-      to: '/registrations',
-      text: `${appCount} registration${appCount > 1 ? 's' : ''} waiting for review`,
-      tone: 'text-gray-700',
-    })
-  }
+  // Registrations attention item — HIDDEN for v1.0 (module disabled).
+  // const appCount = appsStore.pendingCount + appsStore.underReviewCount
+  // if (appCount > 0) {
+  //   items.push({
+  //     to: '/registrations',
+  //     text: `${appCount} registration${appCount > 1 ? 's' : ''} waiting for review`,
+  //     tone: 'text-gray-700',
+  //   })
+  // }
   if (loansStore.forApprovalCount > 0) {
     items.push({
       to: '/loans',
@@ -193,8 +195,7 @@ const attentionItems = computed(() => {
 
 // Recent activity: the durable audit trail (members, loans, admins,
 // ledger postings and corrections — every line names who did it)
-// plus application review timelines (kept on the member row as
-// app_events) — newest first.
+// — newest first.
 const recentActivity = computed(() => {
   const entries = auditStore.recent.map((row) => ({
     at: row.created_at,
@@ -204,17 +205,19 @@ const recentActivity = computed(() => {
     kind: KIND_META[row.entity_type] ? row.entity_type : 'ledger',
   }))
 
-  appsStore.applications.forEach((application) => {
-    application.history?.forEach((entry) => {
-      entries.push({
-        at: entry.at,
-        label: `${application.appNo} · ${application.firstName} ${application.lastName}`,
-        action: entry.action,
-        actor: entry.by,
-        kind: 'application',
-      })
-    })
-  })
+  // Application review timelines — HIDDEN for v1.0 (Registrations
+  // module disabled; no online/app registration exists).
+  // appsStore.applications.forEach((application) => {
+  //   application.history?.forEach((entry) => {
+  //     entries.push({
+  //       at: entry.at,
+  //       label: `${application.appNo} · ${application.firstName} ${application.lastName}`,
+  //       action: entry.action,
+  //       actor: entry.by,
+  //       kind: 'application',
+  //     })
+  //   })
+  // })
 
   return entries.sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 8)
 })

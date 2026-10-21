@@ -321,17 +321,17 @@ export const useMembersStore = defineStore('members', () => {
       }
       members.value = (membersRes.data || []).map((row) => rowToMember(row, capitals, entries))
       // Fill each member's Activity list from the durable audit
-      // trail, merged with the registration timeline kept on the
-      // row itself — newest first.
+      // trail — newest first. The registration review timeline kept
+      // on the row as app_events (15) is HIDDEN for v1.0 together
+      // with the Registrations module (no app/online registration
+      // exists); restore `...member.appEvents` with the module.
       const histories = await useAuditStore().loadHistories(
         'member',
         members.value.map((member) => String(member.id)),
       )
       members.value.forEach((member) => {
         const fromAudit = histories.get(String(member.id)) || []
-        member.history = [...fromAudit, ...member.appEvents].sort(
-          (a, b) => new Date(b.at) - new Date(a.at),
-        )
+        member.history = [...fromAudit].sort((a, b) => new Date(b.at) - new Date(a.at))
       })
     } catch (error) {
       lastError.value = errorMessage(error)

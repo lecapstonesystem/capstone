@@ -644,7 +644,7 @@ const ROLE_GUIDE = [
     can: [
       'Members: register, edit, activate or deactivate; issue app credentials',
       'Loans: create, review and release; verify payments; print Loan Notes',
-      'Registrations, Ledger, Reports, Notifications and the Activity Log',
+      'Ledger, Reports, Notifications and the Activity Log',
       'View this account list — management stays with Super Admins',
     ],
   },

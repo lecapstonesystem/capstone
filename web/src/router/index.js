@@ -5,7 +5,8 @@ import DashboardView from '../views/DashboardView.vue'
 import MembersView from '../views/MembersView.vue'
 import LedgerView from '../views/LedgerView.vue'
 import LoansView from '../views/LoansView.vue'
-import ApplicationsView from '../views/ApplicationsView.vue'
+// HIDDEN for v1.0 — the Registrations module (see the routes below).
+// import ApplicationsView from '../views/ApplicationsView.vue'
 import NotificationsView from '../views/NotificationsView.vue'
 import ReportsView from '../views/ReportsView.vue'
 import ActivityView from '../views/ActivityView.vue'
@@ -48,21 +49,34 @@ const router = createRouter({
       component: LoansView,
       meta: { requiresAuth: true },
     },
+    // ── Registrations module — HIDDEN for v1.0 ─────────────────────────
+    // The coop registers members face-to-face at the office, so the
+    // portal ships without the registration queue. The view
+    // (views/ApplicationsView.vue) and its store stay in the codebase.
+    // To restore the module: uncomment the import above and the route
+    // block below, remove the /registrations redirect, and flip
+    // SHOW_REGISTRATIONS to true in AppLayout.vue, DashboardView.vue
+    // and ReportsView.vue (plus the fetch in App.vue).
+    // {
+    //   path: '/registrations',
+    //   name: 'registrations',
+    //   component: ApplicationsView,
+    //   meta: { requiresAuth: true },
+    // },
     {
-      path: '/registrations',
-      name: 'registrations',
-      component: ApplicationsView,
-      meta: { requiresAuth: true },
-    },
-    {
-      // old URLs still work — renamed from Verification Queue, then
-      // Applications (the module is the member REGISTRATION queue)
+      // Old bookmarks land safely on the dashboard.
       path: '/verification',
-      redirect: '/registrations',
+      redirect: '/dashboard',
     },
     {
       path: '/applications',
-      redirect: '/registrations',
+      redirect: '/dashboard',
+    },
+    {
+      // Typing /registrations directly also lands on the dashboard while
+      // the module is hidden (drop this entry when restoring).
+      path: '/registrations',
+      redirect: '/dashboard',
     },
     {
       path: '/reports',

@@ -74,6 +74,19 @@ export const useAdminsStore = defineStore('admins', () => {
     () => admins.value.find((admin) => admin.id === currentAdminId.value) || null,
   )
 
+  /**
+   * Only Super Admins and the Developer manage accounts (adviser UAT
+   * fix). Every mutating action below starts with this check, so a
+   * stale button or a console call cannot create, edit, reset or
+   * disable an account. Reading the list stays open to all admins.
+   * Migration 27 enforces the same rule inside the database.
+   */
+  const canManageAccounts = computed(() => auth.role === 'Super Admin' || auth.role === 'Developer')
+  const MANAGE_DENIED = {
+    ok: false,
+    message: 'Only a Super Admin or the Developer can manage admin accounts.',
+  }
+
   function emailTaken(email, exceptId = null) {
     const normalized = String(email || '')
       .trim()
@@ -240,6 +253,7 @@ export const useAdminsStore = defineStore('admins', () => {
    */
   async function addAdmin({ firstName, lastName, email, role }) {
     lastError.value = ''
+    if (!canManageAccounts.value) return MANAGE_DENIED
     const normalized = String(email || '')
       .trim()
       .toLowerCase()
@@ -348,6 +362,7 @@ export const useAdminsStore = defineStore('admins', () => {
    */
   async function updateAdmin(id, { firstName, lastName, role }) {
     lastError.value = ''
+    if (!canManageAccounts.value) return MANAGE_DENIED
     const admin = admins.value.find((entry) => entry.id === id)
     if (!admin) {
       return { ok: false, message: 'That admin account no longer exists.' }
@@ -396,6 +411,7 @@ export const useAdminsStore = defineStore('admins', () => {
    */
   async function resetPassword(email) {
     lastError.value = ''
+    if (!canManageAccounts.value) return MANAGE_DENIED
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(String(email || '').trim(), {
         redirectTo: `${window.location.origin}/reset-password`,
@@ -458,6 +474,7 @@ export const useAdminsStore = defineStore('admins', () => {
 
   async function setLoginEnabled(id, enabled) {
     lastError.value = ''
+    if (!canManageAccounts.value) return MANAGE_DENIED
     const admin = admins.value.find((entry) => entry.id === id)
     if (!admin) {
       return { ok: false, message: 'That admin account no longer exists.' }
@@ -494,6 +511,7 @@ export const useAdminsStore = defineStore('admins', () => {
     currentAdminId,
     currentAdmin,
     superAdminCount,
+    canManageAccounts,
     filteredAdmins,
     paginatedAdmins,
     page,

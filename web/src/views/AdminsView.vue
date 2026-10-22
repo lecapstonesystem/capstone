@@ -12,6 +12,7 @@
           </p>
         </div>
         <button
+          v-if="adminsStore.canManageAccounts"
           @click="openAddModal"
           class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
         >
@@ -25,7 +26,10 @@
       >
         New admins receive a <strong>temporary password</strong> to hand over face-to-face and must
         change it on first login. A forgotten password is reset by <strong>email link</strong>. Only
-        a <strong>Super Admin</strong> can manage accounts.
+        a <strong>Super Admin</strong> or the <strong>Developer</strong> can manage accounts.
+        <span v-if="!adminsStore.canManageAccounts" class="block mt-1 text-green-700">
+          You are signed in as {{ auth.role || 'Admin' }}, so this page is view-only.
+        </span>
       </div>
 
       <!-- Role guide — what each role can access and do -->
@@ -382,7 +386,7 @@
               </button>
             </div>
 
-            <div class="flex flex-wrap gap-2">
+            <div v-if="adminsStore.canManageAccounts" class="flex flex-wrap gap-2">
               <button
                 @click="requestResetPassword(detailAdmin)"
                 class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700 transition duration-200"
@@ -412,7 +416,7 @@
             </div>
 
             <!-- Role -->
-            <div class="pt-1">
+            <div v-if="adminsStore.canManageAccounts" class="pt-1">
               <label class="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
                 Role
               </label>
@@ -460,6 +464,7 @@
 
         <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
           <button
+            v-if="adminsStore.canManageAccounts"
             @click="openEditModal(detailAdmin)"
             class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
           >
@@ -617,8 +622,10 @@ import { persistentColumns } from '../lib/uiPrefs'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import { useAdminsStore } from '../stores/admins'
+import { useAuthStore } from '../stores/auth'
 
 const adminsStore = useAdminsStore()
+const auth = useAuthStore()
 
 // Column visibility — Name, Login status and Actions always show
 const columns = persistentColumns('admins', { email: true, role: true, lastLogin: true })
@@ -645,14 +652,15 @@ const ROLE_GUIDE = [
       'Members: register, edit, activate or deactivate; issue app credentials',
       'Loans: create, review and release; verify payments; print Loan Notes',
       'Ledger, Reports, Notifications and the Activity Log',
-      'View this account list — management stays with Super Admins',
+      'View this account list — management stays with Super Admins and the Developer',
     ],
   },
   {
     name: 'Developer',
     summary:
-      'Everything an Admin can do, plus cleanup of TEST data during development and testing.',
+      'Everything an Admin can do, plus account management and cleanup of TEST data during development and testing.',
     can: [
+      'Manage admin accounts together with Super Admins — add, change roles, enable or disable logins, reset passwords',
       'Delete test members and test loans — requires typing the record number and is written to the audit log',
       'Deletion is blocked for every other role inside the database itself (row-level security)',
       'Not a coop duty: real member records are never deleted through the portal (RA 9520)',

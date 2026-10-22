@@ -64,7 +64,7 @@ export const LOAN_TYPES = [
   { value: 'Emergency', label: 'Emergency', rate: 1.5 },
 ]
 
-export const PAYMENT_CHANNELS = ['Cash', 'GCash', 'Cheque', 'ATM Deduction']
+export const PAYMENT_CHANNELS = ['Cash', 'Cheque', 'ATM Deduction']
 export const RELEASE_CHANNELS = ['Cash', 'Cheque']
 
 export const CEILING_CAP = 200000 // ⚠️ client said ₱150k–200k — using 200k

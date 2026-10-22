@@ -259,8 +259,8 @@ supabase.from("payment").insert(
         "amount" to amount,                 // > 0
         "date" to LocalDate.now().toString(),
         "status" to "Pending",              // FORCED by RLS until an admin verifies
-        "channel" to channel,               // Cash | GCash | Cheque | ATM Deduction | Salary Deduction
-        "reference_number" to refNo,        // GCash / transaction reference, optional
+        "channel" to channel,               // Cash | Cheque | ATM Deduction | Salary Deduction (GCash removed 10/2026 — portal dropdown no longer offers it)
+        "reference_number" to refNo,        // bank / transaction reference, optional
         "receipt_image_url" to path,
         // optional schedule hints if the app shows them:
         "installment_no" to n, "expected_amount" to expected, "due_date" to due,

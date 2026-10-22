@@ -1057,6 +1057,48 @@
             {{ payError }}
           </div>
 
+          <!-- Installments the recorded payments have not reached yet -->
+          <div v-if="payInstallments.length > 0">
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Apply to installment
+              <span class="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <div class="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+              <button
+                v-for="inst in payInstallments"
+                :key="inst.month"
+                type="button"
+                @click="pickInstallment(inst)"
+                class="w-full flex items-center justify-between gap-2 border rounded-lg px-3 py-2 text-sm text-left transition duration-200"
+                :class="
+                  payForm.installment === inst.month
+                    ? 'border-green-600 bg-green-50'
+                    : 'border-gray-200 hover:border-green-300 hover:bg-gray-50'
+                "
+              >
+                <span class="flex items-center gap-2 min-w-0">
+                  <span class="text-xs text-gray-400">#{{ inst.month }}</span>
+                  <span class="text-gray-700 whitespace-nowrap">{{
+                    formatDate(inst.dueDate)
+                  }}</span>
+                  <span
+                    v-if="inst.badge"
+                    class="text-xs font-medium"
+                    :class="inst.badge === 'Overdue' ? 'text-red-600' : 'text-amber-600'"
+                  >
+                    {{ inst.badge }}
+                  </span>
+                </span>
+                <span class="font-medium text-gray-800 whitespace-nowrap">
+                  {{ formatPeso(inst.amount) }}
+                </span>
+              </button>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">
+              Picking an installment fills the amount below — any amount can still be typed.
+            </p>
+          </div>
+
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Amount (₱)</label>
             <div class="flex gap-2">
@@ -1066,9 +1108,10 @@
                 min="1"
                 placeholder="0.00"
                 class="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                @input="payForm.installment = null"
               />
               <button
-                @click="payForm.amount = String(pendingBalance)"
+                @click="fillFullBalance"
                 class="border border-gray-300 text-gray-600 px-3 py-2 rounded-lg text-xs font-medium hover:bg-gray-100 transition duration-200"
               >
                 Full balance
@@ -2099,6 +2142,7 @@ const payForm = reactive({
   at: new Date().toISOString().split('T')[0],
   channel: 'Cash',
   note: '',
+  installment: null, // schedule row last picked in the modal, if any
 })
 
 // Optional receipt photo on the payment being recorded.
@@ -2151,12 +2195,53 @@ function requestRemoveReceipt(payment) {
 
 const pendingBalance = computed(() => loanBalance.value)
 
+const round2 = (value) => Math.round(value * 100) / 100
+
+// Installments the recorded payments have not reached yet — the same
+// earliest-first walk as nextDue, so row N's amount is what brings the
+// loan current through that row (covering any arrears on earlier rows).
+const payInstallments = computed(() => {
+  const paid = paidSum.value
+  const balanceCap = pendingBalance.value
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const rows = []
+  let cumulative = 0
+  for (const row of schedule.value) {
+    cumulative += row.payment
+    if (paid >= cumulative - 0.01) continue
+    const overdue = String(row.dueDate).slice(0, 10) < today
+    rows.push({
+      month: row.month,
+      dueDate: row.dueDate,
+      amount: Math.min(balanceCap, Math.max(0, round2(cumulative - paid))),
+      badge: overdue ? 'Overdue' : rows.length === 0 ? 'Next due' : '',
+    })
+  }
+  return rows
+})
+
+function pickInstallment(inst) {
+  if (payForm.installment === inst.month) {
+    payForm.installment = null // second click un-picks, amount stays
+    return
+  }
+  payForm.installment = inst.month
+  payForm.amount = String(inst.amount)
+}
+
+function fillFullBalance() {
+  payForm.installment = null
+  payForm.amount = String(pendingBalance.value)
+}
+
 function openPayment() {
   payError.value = ''
   payForm.amount = ''
   payForm.at = new Date().toISOString().split('T')[0]
   payForm.channel = 'Cash'
   payForm.note = ''
+  payForm.installment = null
   clearPayReceipt()
   showPayment.value = true
 }

@@ -388,16 +388,27 @@ export const useLoansStore = defineStore('loans', () => {
     loan.history.unshift(useAuditStore().record('loan', loan.id, action))
   }
 
-  // Co-makers must be members (public.co_maker references member_id):
-  // typed names are matched against live members; no match stays
-  // on the row only, until the page reloads. Shared by portal-filed
-  // loans and approvals of app-filed requests.
-  async function linkCoMakers(loanId, names, today) {
+  // Co-makers must be members (public.co_maker references member_id).
+  // The portal's co-maker fields are member pickers, so they send the
+  // picked member's id straight into the row. A typed name (the names
+  // the member entered in the app) is matched against live members;
+  // no match stays on the row only, until the page reloads. Shared by
+  // portal-filed loans and approvals of app-filed requests.
+  async function linkCoMakers(loanId, entries, today) {
     const membersStore = useMembersStore()
     const coMakerRows = []
     const displayNames = []
-    for (const raw of names) {
-      const norm = raw.trim().toLowerCase().replace(/\s+/g, ' ')
+    for (const entry of entries) {
+      if (typeof entry === 'number') {
+        const picked = membersStore.members.find((cand) => cand.id === entry)
+        coMakerRows.push({ loan_id: loanId, member_id: entry, signed_at: today })
+        displayNames.push(picked ? `${picked.firstName} ${picked.lastName}` : `Member #${entry}`)
+        continue
+      }
+      const norm = String(entry || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
       const member = membersStore.members.find((cand) => {
         const full = `${cand.firstName} ${cand.middleName} ${cand.lastName}`
           .replace(/\s+/g, ' ')
@@ -411,7 +422,7 @@ export const useLoansStore = defineStore('loans', () => {
         coMakerRows.push({ loan_id: loanId, member_id: member.id, signed_at: today })
         displayNames.push(`${member.firstName} ${member.lastName}`)
       } else {
-        displayNames.push(raw.trim())
+        displayNames.push(String(entry).trim())
       }
     }
     if (coMakerRows.length) {
@@ -419,6 +430,21 @@ export const useLoansStore = defineStore('loans', () => {
       if (coMakerError) lastError.value = errorMessage(coMakerError) // loan itself is safe
     }
     return displayNames
+  }
+
+  // Guard for picked co-makers (adviser UAT fix): no member may
+  // co-make their own loan, and the same member may not fill both
+  // slots. Only id picks are checked — typed names from the app are
+  // matched in linkCoMakers and stay display-only when unmatched.
+  function validateCoMakerIds(entries, memberId) {
+    const ids = entries.filter((entry) => typeof entry === 'number')
+    if (ids.includes(memberId)) {
+      return 'The borrower cannot be their own co-maker. Pick a different member.'
+    }
+    if (new Set(ids).size !== ids.length) {
+      return 'The same member is picked twice as co-maker. Pick a different member for each slot.'
+    }
+    return ''
   }
 
   // ---------- actions ----------
@@ -449,13 +475,19 @@ export const useLoansStore = defineStore('loans', () => {
     }
 
     const requiredCoMakers = amount >= COMAKER_THRESHOLD ? 2 : 1
-    const filledCoMakers = coMakers.filter((name) => name && name.trim())
+    // Entries are picked member ids (portal) or typed names (app).
+    const filledCoMakers = coMakers.filter((entry) =>
+      typeof entry === 'number' ? entry : Boolean(entry && entry.trim()),
+    )
     if (filledCoMakers.length < requiredCoMakers) {
       return {
         ok: false,
         message: `${requiredCoMakers} co-maker${requiredCoMakers > 1 ? 's' : ''} required for this amount (₱100,000 and above need 2).`,
       }
     }
+
+    const coMakerProblem = validateCoMakerIds(filledCoMakers, memberId)
+    if (coMakerProblem) return { ok: false, message: coMakerProblem }
 
     const unchecked = requirements.filter((item) => !item.checked)
     if (unchecked.length > 0) {
@@ -1026,13 +1058,19 @@ export const useLoansStore = defineStore('loans', () => {
     }
 
     const requiredCoMakers = amount >= COMAKER_THRESHOLD ? 2 : 1
-    const filledCoMakers = coMakers.filter((name) => name && name.trim())
+    // Entries are picked member ids (portal) or typed names (app).
+    const filledCoMakers = coMakers.filter((entry) =>
+      typeof entry === 'number' ? entry : Boolean(entry && entry.trim()),
+    )
     if (filledCoMakers.length < requiredCoMakers) {
       return {
         ok: false,
         message: `${requiredCoMakers} co-maker${requiredCoMakers > 1 ? 's' : ''} required for this amount (₱100,000 and above need 2).`,
       }
     }
+
+    const coMakerProblem = validateCoMakerIds(filledCoMakers, request.memberId)
+    if (coMakerProblem) return { ok: false, message: coMakerProblem }
 
     const now = new Date().toISOString()
     const today = todayLocal()

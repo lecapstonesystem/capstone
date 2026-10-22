@@ -929,20 +929,17 @@
               </span>
             </label>
             <div class="space-y-2">
-              <input
-                v-model="newForm.coMakers[0]"
-                type="text"
-                placeholder="Co-maker full name"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-              <input
+              <MemberPicker v-model="newForm.coMakers[0]" :options="coMakerOptions(0)" />
+              <MemberPicker
                 v-if="requiredCoMakers > 1"
                 v-model="newForm.coMakers[1]"
-                type="text"
-                placeholder="Second co-maker full name"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                :options="coMakerOptions(1)"
               />
             </div>
+            <p class="text-xs text-gray-500 mt-1.5">
+              Only active members can be co-makers. The same member cannot fill both slots, and the
+              borrower cannot co-make their own loan.
+            </p>
           </div>
 
           <!-- Requirements -->
@@ -1255,19 +1252,21 @@
               {{ requiredCoMakerCount }} required for this amount
             </p>
             <p v-if="reviewRequest?.requestedCoMakers?.length" class="text-xs text-gray-500 mb-2">
-              Entered in the app: {{ reviewRequest.requestedCoMakers.join(', ') }} — confirm each
-              person is a member before approving.
+              Entered in the app: {{ reviewRequest.requestedCoMakers.join(', ') }} — names that
+              match an active member are already filled in below. Verify each one before approving.
             </p>
             <div class="space-y-2">
-              <input
+              <MemberPicker
                 v-for="(_, index) in coMakerDrafts"
                 :key="index"
                 v-model="coMakerDrafts[index]"
-                type="text"
-                :placeholder="`Co-maker ${index + 1} — member name or KHS number`"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                :options="reviewCoMakerOptions(index)"
               />
             </div>
+            <p class="text-xs text-gray-500 mt-1.5">
+              Only active members can be co-makers. A name typed in the app that matches an active
+              member is already filled in — verify it, then pick any missing co-maker.
+            </p>
           </div>
 
           <div>
@@ -1863,13 +1862,37 @@ function openRequest(request) {
   requestDocs.value = []
   docsError.value = ''
   // Start from the names the member typed in the app (if the app sent
-  // them) — the admin still verifies each is a member.
+  // them): a name that matches an active member pre-fills that member
+  // in the picker; anything unmatched stays empty for the admin to
+  // pick, so nothing invalid can be approved by accident.
   const required = Number(request.amount) >= COMAKER_THRESHOLD ? 2 : 1
   const suggested = (request.requestedCoMakers || []).slice(0, required)
-  coMakerDrafts.value = Array.from({ length: required }, (_, index) => suggested[index] || '')
+  coMakerDrafts.value = Array.from({ length: required }, (_, index) =>
+    matchActiveMemberId(suggested[index] || ''),
+  )
   approvalNote.value = ''
   requestRemarks.value = ''
   loadRequestDocuments(request)
+}
+
+// Typed app name -> active member id (same matching rules as the
+// store's linkCoMakers: full name, short name or member number).
+function matchActiveMemberId(raw) {
+  const norm = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+  if (!norm) return null
+  const match = memberOptions.value.find((option) => {
+    const full = `${option.firstName} ${option.middleName || ''} ${option.lastName}`
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase()
+    const short = `${option.firstName} ${option.lastName}`.toLowerCase().replace(/\s+/g, ' ')
+    const memberNo = String(option.memberNo || '').toLowerCase()
+    return full === norm || short === norm || (memberNo && memberNo === norm)
+  })
+  return match ? match.id : null
 }
 
 function closeRequest() {
@@ -2086,7 +2109,7 @@ const newForm = reactive({
   type: 'Regular',
   principal: '',
   termMonths: 12,
-  coMakers: ['', ''],
+  coMakers: [null, null],
 })
 
 const reqs = reactive({
@@ -2103,9 +2126,30 @@ const memberOptions = computed(() =>
       id: member.id,
       memberNo: member.memberNo,
       firstName: member.firstName,
+      middleName: member.middleName,
       lastName: member.lastName,
     })),
 )
+
+// Co-maker options for the new-loan form: active members only,
+// minus the borrower and whoever is already picked in the other
+// slot — the guards in loansStore.addLoan back this up.
+function coMakerOptions(slotIndex) {
+  const otherPick = newForm.coMakers[slotIndex === 0 ? 1 : 0]
+  return memberOptions.value.filter(
+    (option) => option.id !== newForm.memberId && option.id !== otherPick,
+  )
+}
+
+// Same rules for the approval review of an app-filed request.
+function reviewCoMakerOptions(slotIndex) {
+  const otherPick = coMakerDrafts.value[slotIndex === 0 ? 1 : 0]
+  return memberOptions.value.filter(
+    (option) =>
+      option.id !== reviewRequest.value?.memberId &&
+      (otherPick === undefined || otherPick === null || option.id !== otherPick),
+  )
+}
 
 const eligibility = computed(() => loansStore.eligibility(newForm.memberId, newForm.type))
 
@@ -2163,7 +2207,7 @@ function openNewLoan() {
   newForm.type = 'Regular'
   newForm.principal = ''
   newForm.termMonths = 12
-  newForm.coMakers = ['', '']
+  newForm.coMakers = [null, null]
   reqs.id = false
   reqs.financialLiteracy = false
   reqs.salaryProof = false

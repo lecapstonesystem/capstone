@@ -16,8 +16,51 @@
         {{ error }}
       </div>
 
+      <!-- Reset sent confirmation -->
+      <div
+        v-if="resetSent"
+        class="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg mb-4 text-sm"
+      >
+        If that email belongs to an account, a password reset link has been sent. Open the email and
+        follow the link to set a new password. The link expires — request a new one if it is no
+        longer there.
+      </div>
+
+      <!-- Forgot password — self-service emailed reset link -->
+      <div v-if="showForgot" class="space-y-4">
+        <div>
+          <h2 class="text-sm font-semibold text-gray-800">Reset your password</h2>
+          <p class="text-xs text-gray-500 mt-1">
+            Enter the email address of your admin account. We will send a link to set a new
+            password.
+          </p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1"> Email Address </label>
+          <input
+            v-model="forgotEmail"
+            type="email"
+            placeholder="Enter your email"
+            class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
+        </div>
+        <button
+          @click="handleForgot"
+          :disabled="forgotBusy"
+          class="w-full bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {{ forgotBusy ? 'Sending...' : 'Send reset link' }}
+        </button>
+        <button
+          @click="closeForgot"
+          class="w-full text-center text-sm text-gray-500 hover:text-gray-700 transition duration-200"
+        >
+          Back to log in
+        </button>
+      </div>
+
       <!-- Form -->
-      <div class="space-y-4">
+      <div v-else class="space-y-4">
         <!-- Email -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1"> Email Address </label>
@@ -46,6 +89,12 @@
               {{ showPassword ? 'Hide' : 'Show' }}
             </button>
           </div>
+          <button
+            @click="openForgot"
+            class="text-xs font-medium text-green-700 hover:text-green-800 mt-1.5 transition duration-200"
+          >
+            Forgot password?
+          </button>
         </div>
 
         <!-- Keep me signed in -->
@@ -93,6 +142,46 @@ const showPassword = ref(false)
 const remember = ref(getPersistMode())
 const router = useRouter()
 const auth = useAuthStore()
+
+// Self-service reset (adviser UAT #3) — email link only, same as the
+// Admin Accounts reset. Both paths die until custom SMTP is set up.
+const showForgot = ref(false)
+const forgotEmail = ref('')
+const forgotBusy = ref(false)
+const resetSent = ref(false)
+
+function openForgot() {
+  error.value = ''
+  resetSent.value = false
+  forgotEmail.value = email.value.trim() // pre-fill what they already typed
+  showForgot.value = true
+}
+
+function closeForgot() {
+  error.value = ''
+  resetSent.value = false
+  showForgot.value = false
+}
+
+async function handleForgot() {
+  error.value = ''
+  const address = forgotEmail.value.trim().toLowerCase()
+  if (!address || !address.includes('@') || !address.includes('.')) {
+    error.value = 'Enter a valid email address.'
+    return
+  }
+  forgotBusy.value = true
+  // Same outcome either way on purpose: the message never confirms
+  // whether an account exists (no account guessing from the login page).
+  const result = await auth.forgotPassword(address)
+  forgotBusy.value = false
+  if (result.ok) {
+    resetSent.value = true
+    showForgot.value = false
+  } else {
+    error.value = result.message
+  }
+}
 
 const handleLogin = async () => {
   // Basic validation

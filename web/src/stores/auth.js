@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '../lib/supabase'
 import { setPersistMode } from '../lib/authStorage'
+import { errorMessage } from '../utils/errorText'
 
 /**
  * Auth store — real Supabase Auth for the admin portal.
@@ -179,6 +180,76 @@ export const useAuthStore = defineStore('auth', () => {
     return { ok: true }
   }
 
+  /**
+   * Self-service password reset from the login page (adviser UAT:
+   * "a forget password button in the login page"). Same emailed link
+   * the Admin Accounts page sends — Supabase delivers it, the link
+   * lands on /reset-password. Errors are translated the same way as
+   * adminsStore.resetPassword; this lives here so the login page
+   * never has to touch the admins store (which fetches the account
+   * list).
+   */
+  async function forgotPassword(email) {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(String(email || '').trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (error) throw error
+      return { ok: true }
+    } catch (error) {
+      console.error('[UCMS] reset email failed:', error)
+      const message = String(error?.message || '').toLowerCase()
+      if (
+        message.includes('rate limit') ||
+        message.includes('security purposes') ||
+        message.includes('too many')
+      ) {
+        return {
+          ok: false,
+          message: 'Too many reset emails requested. Wait a few minutes, then try again.',
+        }
+      }
+      if (message.includes('not confirmed')) {
+        return {
+          ok: false,
+          message:
+            'That account still needs its email confirmed. Ask a Super Admin to reset the password from Admin Accounts.',
+        }
+      }
+      if (message.includes('redirect')) {
+        return {
+          ok: false,
+          message:
+            'The reset link address is not allowed yet. Add this site to Redirect URLs in the Supabase dashboard (Authentication → URL Configuration).',
+        }
+      }
+      if (message.includes('is invalid') && message.includes('email')) {
+        return {
+          ok: false,
+          message:
+            'That email address cannot receive mail. Use the address on your admin account, or ask a Super Admin to reset it in Admin Accounts.',
+        }
+      }
+      if (
+        message.includes('smtp') ||
+        message.includes('error sending') ||
+        message.includes('fail')
+      ) {
+        return {
+          ok: false,
+          message: 'The reset email could not be sent. Wait a few minutes and try again.',
+        }
+      }
+      if (message.includes('not found')) {
+        return {
+          ok: false,
+          message: 'No login was found for that email address. Check the address.',
+        }
+      }
+      return { ok: false, message: errorMessage(error) }
+    }
+  }
+
   async function signOut() {
     await supabase.auth.signOut()
     session.value = null
@@ -215,5 +286,6 @@ export const useAuthStore = defineStore('auth', () => {
     signIn,
     signOut,
     changeOwnPassword,
+    forgotPassword,
   }
 })

@@ -111,6 +111,46 @@
           <div v-else class="text-center text-gray-400 text-sm py-8">No recent activity yet.</div>
         </div>
       </div>
+
+      <!-- Members with an active loan (adviser UAT: show WHO has one,
+           not just the count on the Active Loans card) -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-md font-semibold text-gray-700">
+            Members with an active loan
+            <span class="text-sm font-normal text-gray-400">({{ activeLoanMembers.length }})</span>
+          </h3>
+          <RouterLink to="/loans" class="text-xs font-medium text-green-700 hover:text-green-800">
+            View all loans
+          </RouterLink>
+        </div>
+
+        <ul
+          v-if="activeLoanMembers.length > 0"
+          class="divide-y divide-gray-100 max-h-72 overflow-y-auto"
+        >
+          <li
+            v-for="entry in activeLoanMembers"
+            :key="entry.memberId"
+            class="flex items-center justify-between gap-3 py-2.5"
+          >
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-gray-800 truncate">{{ entry.memberName }}</p>
+              <p class="text-xs text-gray-400">
+                {{ entry.memberNo }} · {{ entry.loanCount }} active loan{{
+                  entry.loanCount > 1 ? 's' : ''
+                }}
+              </p>
+            </div>
+            <span class="text-sm font-semibold text-gray-800 whitespace-nowrap">
+              {{ formatPeso(entry.balance) }}
+            </span>
+          </li>
+        </ul>
+        <div v-else class="text-center text-sm py-6">
+          <p class="text-gray-400">No active loans right now.</p>
+        </div>
+      </div>
     </div>
   </AppLayout>
 </template>
@@ -163,6 +203,28 @@ const delinquentAmount = computed(() =>
     .filter((loan) => loansStore.isDelinquent(loan))
     .reduce((sum, loan) => sum + loansStore.balanceOf(loan), 0),
 )
+
+// Who currently has an active loan — one row per member, largest
+// balance first. The Active Loans card counts them; this lists them
+// (adviser UAT: "show when member has an active loan").
+const activeLoanMembers = computed(() => {
+  const byMember = new Map()
+  for (const loan of loansStore.loans) {
+    if (loan.status !== 'Released') continue
+    const key = loan.memberId
+    const entry = byMember.get(key) || {
+      memberId: loan.memberId,
+      memberNo: loan.memberNo,
+      memberName: loan.memberName,
+      loanCount: 0,
+      balance: 0,
+    }
+    entry.loanCount += 1
+    entry.balance += loansStore.balanceOf(loan)
+    byMember.set(key, entry)
+  }
+  return [...byMember.values()].sort((a, b) => b.balance - a.balance)
+})
 
 // ⚠️ Items waiting for the admin (from each module's counts)
 const attentionItems = computed(() => {

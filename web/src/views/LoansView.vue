@@ -698,6 +698,38 @@
                 Release Loan
               </button>
             </div>
+
+            <!-- Optional proof photo (adviser UAT: proof when releasing cash) -->
+            <div>
+              <label class="block text-xs font-medium text-green-800 mb-1">
+                Proof of release photo <span class="font-normal">(optional)</span>
+              </label>
+              <input
+                ref="releaseProofInput"
+                type="file"
+                :accept="PHOTO_ACCEPT"
+                class="hidden"
+                @change="onReleaseProofPicked"
+              />
+              <div class="flex items-center gap-2">
+                <button
+                  @click="releaseProofInput?.click()"
+                  class="border border-green-300 text-green-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-green-100 transition duration-200 max-w-[220px] truncate"
+                >
+                  {{ releaseProofName || '+ Choose photo' }}
+                </button>
+                <button
+                  v-if="releaseProofName"
+                  @click="clearReleaseProof"
+                  class="text-xs text-gray-500 hover:text-gray-700"
+                >
+                  Remove
+                </button>
+              </div>
+              <p class="text-xs text-green-700 mt-1">
+                A photo of the cash or cheque handed over. It is saved with the loan's files.
+              </p>
+            </div>
           </div>
 
           <!-- Activity History -->
@@ -1604,12 +1636,14 @@ import {
 } from '../stores/loans'
 import { useMembersStore } from '../stores/members'
 import { useAuthStore } from '../stores/auth'
+import { useAttachmentsStore } from '../stores/attachments'
 import { generateLoanNote } from '../lib/loanNotePdf'
 import { loanTotals, buildSchedule, nextDue } from '../utils/amortization'
 
 const loansStore = useLoansStore()
 const auth = useAuthStore()
 const membersStore = useMembersStore()
+const attachmentsStore = useAttachmentsStore()
 
 // Column visibility — Loan No, Member and Actions always show
 const columns = persistentColumns('loans', {
@@ -1694,6 +1728,27 @@ const actionError = ref('')
 const remarksDraft = ref('')
 const releaseChannel = ref('Cash')
 
+// Optional proof-of-release photo (adviser UAT: "proof when
+// releasing cash") — chosen in the release panel, uploaded to the
+// loan's Files right after the release succeeds. Same pattern as
+// the receipt photo on Record Payment.
+const releaseProofInput = ref(null)
+const releaseProofFile = ref(null)
+const releaseProofName = ref('')
+
+function onReleaseProofPicked(event) {
+  const file = event.target.files?.[0]
+  event.target.value = '' // the same file can be re-chosen
+  if (!file) return
+  releaseProofFile.value = file
+  releaseProofName.value = file.name
+}
+
+function clearReleaseProof() {
+  releaseProofFile.value = null
+  releaseProofName.value = ''
+}
+
 // Developer-only test-data cleanup (22_developer_role.sql) — typed
 // loan number, RLS-gated role, audit-logged removal.
 const deleteLoanTestOpen = ref(false)
@@ -1754,6 +1809,7 @@ function openDetails(loan) {
   actionError.value = ''
   remarksDraft.value = loan.remarks || ''
   releaseChannel.value = 'Cash'
+  clearReleaseProof() // never carry a proof photo between loans
 }
 
 // ---------- confirmation ----------
@@ -1792,12 +1848,37 @@ function requestReject() {
 
 function requestRelease() {
   const loan = detailLoan.value
+  const proofFile = releaseProofFile.value
   confirmAction.value = {
     title: 'Release Loan?',
-    message: `${loan.loanNo} — ${formatPeso(loan.principal)} will be released via ${releaseChannel.value}. The member must claim it in person.`,
+    message: `${loan.loanNo} — ${formatPeso(loan.principal)} will be released via ${releaseChannel.value}. The member must claim it in person.${
+      proofFile ? ' The proof photo will be saved with the loan.' : ''
+    }`,
     confirmLabel: 'Release',
     danger: false,
-    run: () => loansStore.releaseLoan(loan.id, releaseChannel.value),
+    run: async () => {
+      const result = await loansStore.releaseLoan(loan.id, releaseChannel.value)
+      if (!result.ok) return result
+      // Release is done — the optional proof photo follows. A failed
+      // upload never undoes the release; it is reported so the admin
+      // can attach the photo from the Files panel instead.
+      if (proofFile) {
+        const saved = await attachmentsStore.addAttachment(
+          'loan',
+          loan.id,
+          proofFile,
+          `Proof of release — ${releaseChannel.value}`,
+        )
+        clearReleaseProof()
+        if (!saved.ok) {
+          return {
+            ok: false,
+            message: `The loan was released, but the proof photo could not be saved (${saved.message}). You can attach it from the Files panel below.`,
+          }
+        }
+      }
+      return result
+    },
   }
 }
 

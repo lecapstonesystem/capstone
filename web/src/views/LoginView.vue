@@ -80,11 +80,15 @@
               ref="passwordInput"
               v-model="password"
               :type="showPassword ? 'text' : 'password'"
+              autocomplete="off"
               placeholder="Enter your password"
               class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              @keydown="userEditedPassword = true"
+              @paste="userEditedPassword = true"
+              @cut="userEditedPassword = true"
             />
             <button
-              @click="showPassword = !showPassword"
+              @click="togglePassword"
               class="absolute right-3 top-2 text-gray-400 hover:text-gray-600 text-xs"
             >
               {{ showPassword ? 'Hide' : 'Show' }}
@@ -138,8 +142,12 @@ const password = ref('')
 const error = ref('')
 const loading = ref(false)
 const showPassword = ref(false)
-// Password field element — used by the clear-on-arrival scrub below.
+// Password field element — used by the scrub below.
 const passwordInput = ref(null)
+// True once a person has actually edited the field (keys, paste, cut).
+// Password managers refill WITHOUT any of those events, so this is
+// what tells deliberate entry apart from a phantom autofill.
+const userEditedPassword = ref(false)
 // Pre-check from the last choice: staff who always stay signed in
 // don't have to tick it every time.
 const remember = ref(getPersistMode())
@@ -208,16 +216,25 @@ const handleLogin = async () => {
   loading.value = false
 }
 
-// Logout must land on a clean form. The refs start empty, but a
-// password saved in the browser's manager refills the field the moment
-// the page loads — wipe it so a shared office computer never shows the
-// previous admin's credentials. Never touches the field while it has
-// focus, so anything being typed is left alone.
+// No phantom autofill may ever sit in the password field: the refs
+// start empty, but a password saved in the browser's manager can
+// refill the input the moment the page loads — or the moment its type
+// changes under the Show/Hide toggle, which is how a stored credential
+// could reappear in a cleared field. Never wipes while focused, after
+// real editing, or anything else the admin typed on purpose.
 function scrubPassword() {
   const el = passwordInput.value
-  if (!el || document.activeElement === el) return
+  if (!el || userEditedPassword.value || document.activeElement === el) return
   el.value = ''
   password.value = ''
+}
+
+function togglePassword() {
+  showPassword.value = !showPassword.value
+  // Managers react to the type change itself — re-check right away
+  // and once more shortly after the re-render settles.
+  requestAnimationFrame(scrubPassword)
+  setTimeout(scrubPassword, 400)
 }
 
 onMounted(() => {

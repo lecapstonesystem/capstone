@@ -182,6 +182,7 @@ val row = supabase.from("loan_application").insert(
         "status" to "Pending",              // FORCED by RLS
         "date_submitted" to LocalDate.now().toString(),
         "requested_co_makers" to requestedCoMakers, // 1–2 names the member typed (optional)
+        "co_maker_ids"        to coMakerIds,        // member ids the app looked up (optional)
     )
 ).select().decodeSingleOrNull()              // returns the inserted row —
                                              // you need its id for the
@@ -197,6 +198,16 @@ shows it on the review screen and pre-fills the co-maker boxes. Approval still
 requires the admin to confirm each co-maker is an existing member — the app
 cannot check that (members only read their own row under RLS). Omitting the
 field is fine; the review boxes simply start empty.
+
+`co_maker_ids` (migration 28) is the stronger form of the same suggestion: the
+member ids the app's co-maker search returned, e.g. `[123, 456]`. The portal
+tries these first — it shows "Co-makers chosen in the app" with each name and
+KHS number, and pre-fills the boxes with those members. An id that is not an
+active member is ignored and the box falls back to `requested_co_makers`
+matching, then stays empty. Approval still requires the admin's confirmation
+in the pickers; the ids never bypass it. Send plain integers (from the member
+table's `member_id`), 1–2 entries, in the same order as the names. Omitting it
+is fine — old requests behave exactly as before.
 
 ### 6b. Required documents (shown to the admin during review)
 

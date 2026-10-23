@@ -1356,7 +1356,26 @@
                 Co-maker<span v-if="requiredCoMakerCount > 1">s</span> —
                 {{ requiredCoMakerCount }} required for this amount
               </p>
-              <p v-if="reviewRequest?.requestedCoMakers?.length" class="text-xs text-gray-500 mb-2">
+              <!-- What the app picked (co_maker_ids) — read-only; the
+                   pickers below are still the admin's confirmation. -->
+              <div
+                v-if="reviewCoMakers.length"
+                class="rounded-lg bg-gray-50 border border-gray-100 px-4 py-3 mb-3"
+              >
+                <p class="text-sm font-medium text-gray-700 mb-1">Co-makers chosen in the app</p>
+                <ul class="text-sm text-gray-800 space-y-1">
+                  <li v-for="coMaker in reviewCoMakers" :key="coMaker.id">
+                    {{ coMaker.name }}
+                    <span class="text-gray-500">({{ coMaker.memberNo }})</span>
+                  </li>
+                </ul>
+              </div>
+              <!-- Fallback for requests filed before the app sent ids:
+                   only names to suggest from. -->
+              <p
+                v-if="!reviewCoMakers.length && reviewRequest?.requestedCoMakers?.length"
+                class="text-xs text-gray-500 mb-2"
+              >
                 Entered in the app: {{ reviewRequest.requestedCoMakers.join(', ') }} — names that
                 match an active member are already filled in below. Verify each one before
                 approving.
@@ -2035,15 +2054,21 @@ function openRequest(request) {
   approvalNotice.value = ''
   requestDocs.value = []
   docsError.value = ''
-  // Start from the names the member typed in the app (if the app sent
-  // them): a name that matches an active member pre-fills that member
-  // in the picker; anything unmatched stays empty for the admin to
-  // pick, so nothing invalid can be approved by accident.
+  // Prefill order: the exact member ids the app picked (co_maker_ids,
+  // migration 28) when they resolve to an active member — the picker
+  // then holds the id, so approval links exactly. Fallback for older
+  // requests: the names the member typed, matched to an active member
+  // the same way as before. Anything unmatched stays empty for the
+  // admin to pick, so nothing invalid can be approved by accident.
   const required = Number(request.amount) >= COMAKER_THRESHOLD ? 2 : 1
+  const ids = Array.isArray(request.coMakerIds) ? request.coMakerIds : []
   const suggested = (request.requestedCoMakers || []).slice(0, required)
-  coMakerDrafts.value = Array.from({ length: required }, (_, index) =>
-    matchActiveMemberId(suggested[index] || ''),
-  )
+  const activeIds = new Set(memberOptions.value.map((option) => option.id))
+  coMakerDrafts.value = Array.from({ length: required }, (_, index) => {
+    const id = Number(ids[index])
+    if (id && activeIds.has(id)) return id
+    return matchActiveMemberId(suggested[index] || '')
+  })
   approvalNote.value = ''
   requestRemarks.value = ''
   loadRequestDocuments(request)
@@ -2111,6 +2136,19 @@ function docSizeLabel(size) {
 
 const requiredCoMakerCount = computed(() =>
   reviewRequest.value && reviewRequest.value.amount >= COMAKER_THRESHOLD ? 2 : 1,
+)
+
+// Who the app picked, shown read-only on the review screen — the
+// pickers below still hold the admin's confirmation of each one.
+const reviewCoMakers = computed(() =>
+  (reviewRequest.value?.coMakerIds || [])
+    .map((id) => membersStore.members.find((member) => member.id === id))
+    .filter(Boolean)
+    .map((member) => ({
+      id: member.id,
+      name: `${member.firstName} ${member.lastName}`,
+      memberNo: member.memberNo,
+    })),
 )
 
 // Live rules check — capital share, 2-month wait, ceilings, limits.

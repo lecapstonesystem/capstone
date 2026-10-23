@@ -891,6 +891,11 @@ export const useLoansStore = defineStore('loans', () => {
       requestedCoMakers: Array.isArray(row.requested_co_makers)
         ? row.requested_co_makers.map((name) => String(name || '').trim()).filter(Boolean)
         : [],
+      // Exact member ids the updated app looked up (28). Tried first
+      // in the review prefill; empty for rows filed before that build.
+      coMakerIds: Array.isArray(row.co_maker_ids)
+        ? row.co_maker_ids.map(Number).filter(Boolean)
+        : [],
     }
   }
 

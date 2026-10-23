@@ -1,0 +1,32 @@
+# Render Blueprint — the UCMS analytics API, permanently in the cloud.
+#
+# This makes the Python backend run 24/7 on Render's free tier with a FIXED
+# url, so the defense demo needs no laptop and no tunnel:
+#
+#   frontend (Cloudflare Pages)  ->  this service (Render)  ->  backup Supabase
+#
+# buildCommand : install Python deps (pandas, supabase, fastapi...)
+# startCommand : run uvicorn from backend/ exactly like the local :8003 setup,
+#                because main.py imports ../scripts/ucms_analytics.py by path.
+# envVars with sync:false are secrets you paste once in the Render dashboard.
+services:
+  - type: web
+    name: ucms-analytics-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      # Backup Supabase project (esxtstbnqxeepafoaljc) — paste in dashboard:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Shared key the frontend sends as X-API-Key — paste in dashboard:
+      - key: UCMS_API_KEY
+        sync: false
+      # Which site may call the API from the browser (Cloudflare Pages origin):
+      - key: UCMS_CORS_ORIGINS
+        value: https://ucms-defense.pages.dev

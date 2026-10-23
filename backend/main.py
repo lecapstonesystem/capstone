@@ -34,10 +34,14 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+# Load backend/.env BEFORE ucms_analytics/store read env vars at import time.
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import ucms_analytics as ua  # noqa: E402
@@ -170,20 +174,19 @@ class LoanSimulateIn(BaseModel):
 
 
 @app.get("/health")
-def health():
-    require_key()
+def health(_: bool = Depends(require_key)):
     return {"ok": True, "service": "ucms-analytics"}
 
 
 @app.get("/dashboard")
-def dashboard(_: bool = require_key()):
+def dashboard(_: bool = Depends(require_key)):
     loans, _pays, stats, shares = load()
     m = ua.dashboard_metrics(loans, stats, shares)
     return {k: jsonable(v) for k, v in m.items()}
 
 
 @app.post("/eligibility")
-def eligibility(body: EligibilityIn, _: bool = require_key()):
+def eligibility(body: EligibilityIn, _: bool = Depends(require_key)):
     loans, _pays, _stats, shares = load()
     ok, reasons = ua.check_eligibility(body.member, body.amount,
                                        body.term_months, loans, shares,
@@ -192,7 +195,7 @@ def eligibility(body: EligibilityIn, _: bool = require_key()):
 
 
 @app.post("/loan/simulate")
-def loan_simulate(body: LoanSimulateIn, _: bool = require_key()):
+def loan_simulate(body: LoanSimulateIn, _: bool = Depends(require_key)):
     """Diminishing-balance schedule and totals for a prospective loan.
 
     The single source of truth for loan math - the portal's pre-application
@@ -212,7 +215,7 @@ def loan_simulate(body: LoanSimulateIn, _: bool = require_key()):
 
 
 @app.post("/applications")
-def create_application(body: ApplicationIn, _: bool = require_key()):
+def create_application(body: ApplicationIn, _: bool = Depends(require_key)):
     app_id = ua.submit_application(body.member, body.amount,
                                    body.term_months, body.loan_type,
                                    body.purpose)
@@ -220,7 +223,7 @@ def create_application(body: ApplicationIn, _: bool = require_key()):
 
 
 @app.post("/applications/{app_id}/review")
-def review_application(app_id: str, body: ReviewIn, _: bool = require_key()):
+def review_application(app_id: str, body: ReviewIn, _: bool = Depends(require_key)):
     try:
         return ua.review_application(app_id, body.decision,
                                      body.reviewer, body.reason)
@@ -230,7 +233,7 @@ def review_application(app_id: str, body: ReviewIn, _: bool = require_key()):
 
 @app.get("/forecast/disbursements")
 def forecast_disbursements(months: int = Query(default=6, ge=1, le=24),
-                           _: bool = require_key()):
+                           _: bool = Depends(require_key)):
     months = plain(months, 6)
     loans, _pays, _stats, _shares = load()
     return frame_rows(ua.forecast_disbursements(loans, months=months))
@@ -238,7 +241,7 @@ def forecast_disbursements(months: int = Query(default=6, ge=1, le=24),
 
 @app.get("/forecast/collections")
 def forecast_collections(months: int = Query(default=6, ge=1, le=24),
-                         _: bool = require_key()):
+                         _: bool = Depends(require_key)):
     months = plain(months, 6)
     loans, pays, _stats, _shares = load()
     return frame_rows(ua.forecast_collections(loans, pays, months=months))
@@ -248,7 +251,7 @@ def forecast_collections(months: int = Query(default=6, ge=1, le=24),
 # FastAPI matches in order, otherwise "delinquent" is read as a name.
 @app.get("/risk/delinquent")
 def delinquent_list(limit: int = Query(default=20, ge=1, le=100),
-                    _: bool = require_key()):
+                    _: bool = Depends(require_key)):
     """Riskiest members first — feeds Dashboard's Delinquent card and the
     Reports delinquent-accounts table (replaces client-side mock math)."""
     limit = plain(limit, 20)
@@ -273,7 +276,7 @@ def delinquent_list(limit: int = Query(default=20, ge=1, le=100),
 
 
 @app.get("/risk/{member}")
-def risk(member: str, _: bool = require_key()):
+def risk(member: str, _: bool = Depends(require_key)):
     loans, pays, stats, _shares = load()
     feat = ua.member_features(member, loans, stats, pays)
     score = ua.risk_score(feat)
@@ -287,7 +290,7 @@ def risk(member: str, _: bool = require_key()):
 
 
 @app.get("/reports/summary")
-def reports_summary(_: bool = require_key()):
+def reports_summary(_: bool = Depends(require_key)):
     """One-pager JSON for the Reports Financial Summary section + BOD export."""
     loans, pays, stats, _shares = load()
     by_type = (
@@ -315,7 +318,7 @@ def reports_summary(_: bool = require_key()):
 
 
 @app.get("/analytics/by-term")
-def by_term(_: bool = require_key()):
+def by_term(_: bool = Depends(require_key)):
     """Loans + pesos per term selection — feeds forecast/term charts."""
     loans, _pays, _stats, _shares = load()
     if len(loans) == 0:
@@ -541,7 +544,7 @@ def portal_member_rows(loans: pd.DataFrame):
 
 
 @app.get("/portal/members")
-def portal_members(_: bool = require_key()):
+def portal_members(_: bool = Depends(require_key)):
     """MembersView shape: memberNo, names, status, dates. Unknown fields
     are "" / 0 / None (see source_notes) — never invented."""
     loans, _pays, _stats, _shares = load()
@@ -551,7 +554,7 @@ def portal_members(_: bool = require_key()):
 @app.get("/portal/loans")
 def portal_loans(status: str = Query(default="All"),
                  loan_type: str = Query(default="All"),
-                 _: bool = require_key()):
+                 _: bool = Depends(require_key)):
     """LoansView shape incl. payments[], balance, delinquent flag."""
     status, loan_type = plain(status, "All"), plain(loan_type, "All")
     loans, pays, stats, _shares = load()
@@ -564,7 +567,7 @@ def portal_loans(status: str = Query(default="All"),
 
 
 @app.get("/portal/dashboard")
-def portal_dashboard(_: bool = require_key()):
+def portal_dashboard(_: bool = Depends(require_key)):
     """The four Dashboard cards + attention items + recent activity,
     computed with the same rules as the Vue computed props."""
     loans, pays, stats, _shares = load()
@@ -607,7 +610,7 @@ def portal_dashboard(_: bool = require_key()):
 
 
 @app.get("/portal/applications")
-def portal_applications(_: bool = require_key()):
+def portal_applications(_: bool = Depends(require_key)):
     """ApplicationsView shape. The sample tree has no filed applications
     yet (loan_applications.csv absent) — returns [] honestly, mapped when
     present. Statuses map PENDING->Pending, APPROVED->Approved,
@@ -639,7 +642,7 @@ def portal_applications(_: bool = require_key()):
 
 
 @app.post("/report")
-def report(_: bool = require_key()):
+def report(_: bool = Depends(require_key)):
     loans, pays, stats, _shares = load()
     out = ua.generate_report(loans, stats, pays)
     return FileResponse(path=out, filename=Path(out).name,
@@ -648,7 +651,7 @@ def report(_: bool = require_key()):
 
 
 @app.post("/receipt/verify")
-def receipt_verify(body: ReceiptIn, _: bool = require_key()):
+def receipt_verify(body: ReceiptIn, _: bool = Depends(require_key)):
     fields = ua.extract_receipt_fields(raw_text=body.raw_text)
     verdict = ua.verify_receipt(fields, body.expected_amount, body.tol)
     fields["date"] = jsonable(fields.get("date"))

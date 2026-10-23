@@ -80,9 +80,12 @@
               ref="passwordInput"
               v-model="password"
               :type="showPassword ? 'text' : 'password'"
+              :readonly="passwordReadonly"
               autocomplete="off"
               placeholder="Enter your password"
               class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              @focus="unlockPassword"
+              @input="scrubPassword"
               @keydown="userEditedPassword = true"
               @paste="userEditedPassword = true"
               @cut="userEditedPassword = true"
@@ -148,6 +151,19 @@ const passwordInput = ref(null)
 // Password managers refill WITHOUT any of those events, so this is
 // what tells deliberate entry apart from a phantom autofill.
 const userEditedPassword = ref(false)
+
+// Starts read-only: browsers skip read-only inputs when auto-filling
+// on page load, so a saved password never lands on a shared screen
+// before the admin has clicked anything. Unlocking happens on focus —
+// synchronously on the element, so a manager that fills the instant
+// the field receives focus still gets through. Typing and picking a
+// saved login work exactly as before.
+const passwordReadonly = ref(true)
+
+function unlockPassword() {
+  passwordReadonly.value = false
+  if (passwordInput.value) passwordInput.value.readOnly = false
+}
 // Pre-check from the last choice: staff who always stay signed in
 // don't have to tick it every time.
 const remember = ref(getPersistMode())

@@ -69,6 +69,8 @@
             type="email"
             placeholder="Enter your email"
             class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            @focus="unlockPassword"
+            @input="armForm"
           />
         </div>
 
@@ -84,7 +86,7 @@
               autocomplete="off"
               placeholder="Enter your password"
               class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              @focus="unlockPassword"
+              @focus="armForm"
               @input="scrubPassword"
               @keydown="userEditedPassword = true"
               @paste="userEditedPassword = true"
@@ -154,15 +156,25 @@ const userEditedPassword = ref(false)
 
 // Starts read-only: browsers skip read-only inputs when auto-filling
 // on page load, so a saved password never lands on a shared screen
-// before the admin has clicked anything. Unlocking happens on focus —
-// synchronously on the element, so a manager that fills the instant
-// the field receives focus still gets through. Typing and picking a
-// saved login work exactly as before.
+// before the admin has clicked anything.
 const passwordReadonly = ref(true)
+
+// Armed = a deliberate act has happened inside the form (a saved-login
+// pick or typed entry in the email field, or focusing the password
+// field). From that moment the password manager behaves like it does
+// on other sites — picking the email's saved login fills the password
+// along with it — while before the first click NOTHING is allowed to
+// fill, because that state belongs to whoever used this computer last.
+const formArmed = ref(false)
 
 function unlockPassword() {
   passwordReadonly.value = false
   if (passwordInput.value) passwordInput.value.readOnly = false
+}
+
+function armForm() {
+  formArmed.value = true
+  unlockPassword()
 }
 // Pre-check from the last choice: staff who always stay signed in
 // don't have to tick it every time.
@@ -236,11 +248,12 @@ const handleLogin = async () => {
 // start empty, but a password saved in the browser's manager can
 // refill the input the moment the page loads — or the moment its type
 // changes under the Show/Hide toggle, which is how a stored credential
-// could reappear in a cleared field. Never wipes while focused, after
-// real editing, or anything else the admin typed on purpose.
+// could reappear in a cleared field. Skips once the form is armed (a
+// deliberate pick or entry), while focused, and after real editing —
+// so what the admin chose or typed is never wiped.
 function scrubPassword() {
   const el = passwordInput.value
-  if (!el || userEditedPassword.value || document.activeElement === el) return
+  if (!el || formArmed.value || userEditedPassword.value || document.activeElement === el) return
   el.value = ''
   password.value = ''
 }

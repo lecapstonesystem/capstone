@@ -13,6 +13,9 @@ import { useLedgerStore } from '../stores/ledger'
 export const KIND_META = {
   member: { bg: 'bg-green-500' },
   loan: { bg: 'bg-blue-500' },
+  // App-filed loan requests are their own entity in audit_log but
+  // belong to the Loans module — same blue dot as loans.
+  loan_application: { bg: 'bg-blue-500' },
   application: { bg: 'bg-amber-500' },
   admin: { bg: 'bg-purple-500' },
   ledger: { bg: 'bg-gray-400' },
@@ -41,7 +44,20 @@ export function auditLabel(row) {
     const txn = useLedgerStore().transactions.find((item) => String(item.id) === id)
     return txn ? `${txn.refNo} · ${txn.description}` : `Ledger entry #${id}`
   }
-  return row.entity_type
+  if (row.entity_type === 'loan_application') {
+    // A decision on an app-filed request — name the member who filed it,
+    // in the same "record no · name" style as the other rows. Without a
+    // branch here the raw audit_log value printed as the bold label,
+    // which read like a database string instead of plain language.
+    const request = useLoansStore().requests.find((item) => String(item.id) === id)
+    if (request?.memberNo) return `${request.memberNo} · ${request.memberName || 'Member'}`
+    if (request?.memberName) return request.memberName
+    return 'Loan request'
+  }
+  if (row.entity_type === 'application') return 'Registration application'
+  // Unknown future type — at worst read as words, never as a table name.
+  const words = String(row.entity_type || 'record').replace(/_/g, ' ')
+  return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
 /** "Oct 18, 10:42 AM" — the activity feed's timestamp format. */

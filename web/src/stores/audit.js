@@ -104,7 +104,11 @@ export const useAuditStore = defineStore('audit', () => {
       .select('entity_type, entity_id, created_at, action, actor', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
-    if (kind !== 'all') query = query.eq('entity_type', kind)
+    // The Loans module filter must also return app-filed request rows
+    // (entity_type 'loan_application') — a plain eq('loan') silently hid
+    // every request decision from the Loans filter.
+    if (kind === 'loan') query = query.in('entity_type', ['loan', 'loan_application'])
+    else if (kind !== 'all') query = query.eq('entity_type', kind)
     if (days > 0) {
       query = query.gte('created_at', new Date(Date.now() - days * 86400000).toISOString())
     }

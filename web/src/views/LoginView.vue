@@ -93,6 +93,7 @@
               @cut="userEditedPassword = true"
             />
             <button
+              v-if="canRevealPassword"
               @click="togglePassword"
               class="absolute right-3 top-2 text-gray-400 hover:text-gray-600 text-xs"
             >
@@ -137,7 +138,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getPersistMode } from '../lib/authStorage'
@@ -176,6 +177,21 @@ function armForm() {
   formArmed.value = true
   unlockPassword()
 }
+
+// The reveal button exists only when BOTH fields carry input. An empty
+// password gives Show/Hide nothing to show anyway, and the type change
+// it causes is exactly what tempts a password manager to refill the
+// field out of nowhere (the reappearing-credentials bug) — with no
+// button on a cold page, there is no click left to trigger it. Email
+// must carry input too: a real sign-in always starts there, so a
+// password without it is never something worth revealing.
+const canRevealPassword = computed(() => email.value.trim() !== '' && password.value !== '')
+
+// Never stay in revealed mode once the form no longer qualifies —
+// whatever gets typed next should start masked.
+watch(canRevealPassword, (visible) => {
+  if (!visible) showPassword.value = false
+})
 // Pre-check from the last choice: staff who always stay signed in
 // don't have to tick it every time.
 const remember = ref(getPersistMode())

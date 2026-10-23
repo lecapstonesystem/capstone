@@ -128,7 +128,7 @@
       <!-- Logout -->
       <div class="px-4 py-4 border-t border-green-700">
         <button
-          @click="handleLogout"
+          @click="logoutOpen = true"
           class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-green-200 hover:bg-green-700 hover:text-white transition duration-200 w-full"
         >
           Logout
@@ -192,6 +192,36 @@
         <slot />
       </main>
     </div>
+
+    <!-- Logout confirmation — nothing ends a session by a single click -->
+    <div
+      v-if="logoutOpen"
+      class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      @click.self="logoutOpen = false"
+    >
+      <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-6">
+        <h2 class="text-lg font-semibold text-gray-800">Log out?</h2>
+        <p class="text-sm text-gray-500 mt-1">
+          You will be returned to the login screen, and any unsaved changes in this window will be
+          discarded.
+        </p>
+        <div class="flex justify-end gap-3 mt-5">
+          <button
+            @click="logoutOpen = false"
+            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+          >
+            Cancel
+          </button>
+          <button
+            @click="handleLogout"
+            :disabled="loggingOut"
+            class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {{ loggingOut ? 'Logging out...' : 'Log out' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -237,8 +267,16 @@ const avatarInitials = computed(() => {
   return (first + last).toUpperCase()
 })
 
+// Confirm-first logout — the modal opens from the sidebar button.
+const logoutOpen = ref(false)
+const loggingOut = ref(false)
+
 const handleLogout = async () => {
+  if (loggingOut.value) return
+  loggingOut.value = true
   await auth.signOut()
+  logoutOpen.value = false
+  loggingOut.value = false
   router.push('/login')
 }
 </script>

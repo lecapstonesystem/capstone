@@ -77,6 +77,7 @@
           <label class="block text-sm font-medium text-gray-700 mb-1"> Password </label>
           <div class="relative">
             <input
+              ref="passwordInput"
               v-model="password"
               :type="showPassword ? 'text' : 'password'"
               placeholder="Enter your password"
@@ -127,7 +128,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getPersistMode } from '../lib/authStorage'
@@ -137,6 +138,8 @@ const password = ref('')
 const error = ref('')
 const loading = ref(false)
 const showPassword = ref(false)
+// Password field element — used by the clear-on-arrival scrub below.
+const passwordInput = ref(null)
 // Pre-check from the last choice: staff who always stay signed in
 // don't have to tick it every time.
 const remember = ref(getPersistMode())
@@ -144,7 +147,7 @@ const router = useRouter()
 const auth = useAuthStore()
 
 // Self-service reset (adviser UAT #3) — email link only, same as the
-// Admin Accounts reset. Both paths die until custom SMTP is set up.
+// Admin Accounts reset; both run through the dedicated mail account.
 const showForgot = ref(false)
 const forgotEmail = ref('')
 const forgotBusy = ref(false)
@@ -204,4 +207,21 @@ const handleLogin = async () => {
 
   loading.value = false
 }
+
+// Logout must land on a clean form. The refs start empty, but a
+// password saved in the browser's manager refills the field the moment
+// the page loads — wipe it so a shared office computer never shows the
+// previous admin's credentials. Never touches the field while it has
+// focus, so anything being typed is left alone.
+function scrubPassword() {
+  const el = passwordInput.value
+  if (!el || document.activeElement === el) return
+  el.value = ''
+  password.value = ''
+}
+
+onMounted(() => {
+  requestAnimationFrame(scrubPassword)
+  setTimeout(scrubPassword, 600) // browsers autofill after load
+})
 </script>

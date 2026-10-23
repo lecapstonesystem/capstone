@@ -270,7 +270,11 @@ function makeHelpers(doc) {
     doc.text(captionRight, PAGE_LEFT + WIDTH - half / 2, y + 4, { align: 'center' })
     if (valueRight) {
       doc.setFontSize(8)
-      doc.text(valueRight, PAGE_LEFT + WIDTH - half + 1, y - 1.5)
+      // Centered on the rule — directly above its own caption, like a
+      // pre-filled line rather than handwriting starting at the left.
+      doc.text(valueRight, PAGE_LEFT + WIDTH - half / 2, y - 1.5, {
+        align: 'center',
+      })
     }
   }
 

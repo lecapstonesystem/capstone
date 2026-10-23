@@ -15,15 +15,34 @@
           <h1 class="text-2xl font-bold text-gray-800">Reports</h1>
           <p class="text-sm text-gray-500 mt-1">{{ rangeLabel }} · generated {{ todayLabel }}</p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <select
             v-model="range"
+            aria-label="Report period"
             class="border border-gray-300 rounded-lg px-4 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
           >
-            <option v-for="option in RANGES" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
+            <optgroup v-for="group in rangeGroups" :key="group.label" :label="group.label">
+              <option v-for="option in group.options" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </optgroup>
           </select>
+          <!-- Custom range: pick the exact days the report should cover -->
+          <template v-if="range === 'custom'">
+            <input
+              v-model="customStart"
+              type="date"
+              aria-label="From date"
+              class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+            <span class="text-sm text-gray-500">to</span>
+            <input
+              v-model="customEnd"
+              type="date"
+              aria-label="To date"
+              class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+          </template>
           <button
             @click="printReports"
             class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition duration-200"
@@ -555,7 +574,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import AppLayout from '../components/AppLayout.vue'
 import { useMembersStore } from '../stores/members'
 import { useApplicationsStore } from '../stores/applications'
@@ -581,18 +600,123 @@ const todayLabel = new Date().toLocaleDateString('en-PH', {
 })
 
 // ---------- date range ----------
+// Grouped short-to-long in the dropdown (days, months, years, then
+// custom/all). Labels stay plain — "This year so far" instead of the
+// jargon "Year to date"; the exact dates covered appear in the page
+// header and the printed header via rangeLabel.
 const RANGES = [
-  { value: 'all', label: 'All time' },
-  { value: 'month', label: 'This month' },
-  { value: 'lastMonth', label: 'Last month' },
-  { value: 'ytd', label: 'Year to date' },
-  { value: 'last12', label: 'Last 12 months' },
+  { value: 'today', label: 'Today', group: 'Days' },
+  { value: 'yesterday', label: 'Yesterday', group: 'Days' },
+  { value: 'last7', label: 'Last 7 days', group: 'Days' },
+  { value: 'last30', label: 'Last 30 days', group: 'Days' },
+  { value: 'month', label: 'This month', group: 'Months' },
+  { value: 'lastMonth', label: 'Last month', group: 'Months' },
+  { value: 'ytd', label: 'This year so far', group: 'Years' },
+  { value: 'lastYear', label: 'Last year', group: 'Years' },
+  { value: 'last12', label: 'Last 12 months', group: 'Years' },
+  { value: 'custom', label: 'Custom range', group: 'Other' },
+  { value: 'all', label: 'All time', group: 'Other' },
 ]
 const range = ref('all')
 
-const rangeLabel = computed(
-  () => RANGES.find((option) => option.value === range.value)?.label || 'All time',
-)
+const rangeGroups = computed(() => {
+  const groups = []
+  for (const option of RANGES) {
+    let group = groups.find((item) => item.label === option.group)
+    if (!group) {
+      group = { label: option.group, options: [] }
+      groups.push(group)
+    }
+    group.options.push(option)
+  }
+  return groups
+})
+
+function isoDay(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+// Custom range inputs — default to this month when first chosen, so
+// the report is never silently filtered by an empty range.
+const customStart = ref('')
+const customEnd = ref('')
+watch(range, (value) => {
+  if (value !== 'custom' || customStart.value || customEnd.value) return
+  const now = new Date()
+  customStart.value = isoDay(new Date(now.getFullYear(), now.getMonth(), 1))
+  customEnd.value = isoDay(now)
+})
+
+// The exact dates the selected range covers, shown next to its name
+// so nobody has to guess what "Last 12 months" includes.
+const rangeSpan = computed(() => {
+  const today = startOfDay(new Date())
+  const offsetDay = (days) =>
+    new Date(today.getFullYear(), today.getMonth(), today.getDate() + days)
+  const fmt = (date) =>
+    date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+  const span = (from, to) => {
+    if (!from || !to) return ''
+    if (from.getTime() === to.getTime()) return fmt(from)
+    const left = from.toLocaleDateString('en-PH', {
+      month: 'short',
+      day: 'numeric',
+      year: from.getFullYear() === to.getFullYear() ? undefined : 'numeric',
+    })
+    return `${left} – ${fmt(to)}`
+  }
+  switch (range.value) {
+    case 'today':
+      return fmt(today)
+    case 'yesterday':
+      return fmt(offsetDay(-1))
+    case 'last7':
+      return span(offsetDay(-6), today)
+    case 'last30':
+      return span(offsetDay(-29), today)
+    case 'month':
+      return span(
+        new Date(today.getFullYear(), today.getMonth(), 1),
+        new Date(today.getFullYear(), today.getMonth() + 1, 0),
+      )
+    case 'lastMonth':
+      return span(
+        new Date(today.getFullYear(), today.getMonth() - 1, 1),
+        new Date(today.getFullYear(), today.getMonth(), 0),
+      )
+    case 'ytd':
+      return span(new Date(today.getFullYear(), 0, 1), today)
+    case 'lastYear':
+      return span(
+        new Date(today.getFullYear() - 1, 0, 1),
+        new Date(today.getFullYear() - 1, 11, 31),
+      )
+    case 'last12':
+      return span(new Date(today.getFullYear(), today.getMonth() - 12, today.getDate()), today)
+    case 'custom': {
+      if (!customStart.value && !customEnd.value) return ''
+      const from = customStart.value ? new Date(`${customStart.value}T00:00:00`) : null
+      const to = customEnd.value ? new Date(`${customEnd.value}T00:00:00`) : null
+      if (from && to) return span(from, to)
+      if (from) return `from ${fmt(from)}`
+      return `up to ${fmt(to)}`
+    }
+    default:
+      return '' // All time — the whole record, no dates to quote
+  }
+})
+
+const rangeLabel = computed(() => {
+  const label = RANGES.find((option) => option.value === range.value)?.label || 'All time'
+  return rangeSpan.value ? `${label} (${rangeSpan.value})` : label
+})
 
 // Accepts 'YYYY-MM-DD' or full ISO strings
 function inRange(dateStr) {
@@ -600,6 +724,24 @@ function inRange(dateStr) {
   if (range.value === 'all') return true
   const date = new Date(dateStr.length === 10 ? `${dateStr}T00:00:00` : dateStr)
   const now = new Date()
+  // Day-level ranges compare normalized local days, so a timestamp
+  // late on a boundary day still counts as that day.
+  const day = startOfDay(date)
+  const midnight = startOfDay(now)
+  if (range.value === 'today') return day.getTime() === midnight.getTime()
+  if (range.value === 'yesterday') {
+    const yesterday = new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate() - 1)
+    return day.getTime() === yesterday.getTime()
+  }
+  if (range.value === 'last7' || range.value === 'last30') {
+    const days = range.value === 'last7' ? 7 : 30
+    const cutoff = new Date(
+      midnight.getFullYear(),
+      midnight.getMonth(),
+      midnight.getDate() - (days - 1),
+    )
+    return day.getTime() >= cutoff.getTime()
+  }
   if (range.value === 'month') {
     return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
   }
@@ -608,9 +750,15 @@ function inRange(dateStr) {
     return date.getFullYear() === previous.getFullYear() && date.getMonth() === previous.getMonth()
   }
   if (range.value === 'ytd') return date.getFullYear() === now.getFullYear()
+  if (range.value === 'lastYear') return date.getFullYear() === now.getFullYear() - 1
   if (range.value === 'last12') {
     const cutoff = new Date(now.getFullYear(), now.getMonth() - 12, now.getDate())
-    return date.getTime() >= cutoff.getTime()
+    return day.getTime() >= startOfDay(cutoff).getTime()
+  }
+  if (range.value === 'custom') {
+    if (customStart.value && day < new Date(`${customStart.value}T00:00:00`)) return false
+    if (customEnd.value && day > new Date(`${customEnd.value}T00:00:00`)) return false
+    return true
   }
   return true
 }

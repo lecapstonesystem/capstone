@@ -1,10 +1,12 @@
 <template>
   <RouterView />
+  <ToastHost />
 </template>
 
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import ToastHost from './components/ToastHost.vue'
 import { useAuthStore } from './stores/auth'
 import { useMembersStore } from './stores/members'
 import { useLoansStore } from './stores/loans'

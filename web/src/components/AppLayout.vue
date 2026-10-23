@@ -137,11 +137,13 @@
     </aside>
 
     <!-- Backdrop behind the slide-in sidebar (phones/tablets only) -->
-    <div
-      v-if="navOpen"
-      class="fixed inset-0 bg-black/50 z-30 md:hidden"
-      @click="navOpen = false"
-    ></div>
+    <Transition name="fade">
+      <div
+        v-if="navOpen"
+        class="fixed inset-0 bg-black/50 z-30 md:hidden"
+        @click="navOpen = false"
+      ></div>
+    </Transition>
 
     <!-- Main Content — min-w-0 lets this column shrink below the
     data tables' min-width, so overflow-x-auto scrolls the table
@@ -194,34 +196,36 @@
     </div>
 
     <!-- Logout confirmation — nothing ends a session by a single click -->
-    <div
-      v-if="logoutOpen"
-      class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      @click.self="logoutOpen = false"
-    >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-6">
-        <h2 class="text-lg font-semibold text-gray-800">Log out?</h2>
-        <p class="text-sm text-gray-500 mt-1">
-          You will be returned to the login screen, and any unsaved changes in this window will be
-          discarded.
-        </p>
-        <div class="flex justify-end gap-3 mt-5">
-          <button
-            @click="logoutOpen = false"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
-          >
-            Cancel
-          </button>
-          <button
-            @click="handleLogout"
-            :disabled="loggingOut"
-            class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {{ loggingOut ? 'Logging out...' : 'Log out' }}
-          </button>
+    <Transition name="dialog">
+      <div
+        v-if="logoutOpen"
+        class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        @click.self="logoutOpen = false"
+      >
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-6">
+          <h2 class="text-lg font-semibold text-gray-800">Log out?</h2>
+          <p class="text-sm text-gray-500 mt-1">
+            You will be returned to the login screen, and any unsaved changes in this window will be
+            discarded.
+          </p>
+          <div class="flex justify-end gap-3 mt-5">
+            <button
+              @click="logoutOpen = false"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              @click="handleLogout"
+              :disabled="loggingOut"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {{ loggingOut ? 'Logging out...' : 'Log out' }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
@@ -229,10 +233,12 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useToastsStore } from '../stores/toasts'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const toasts = useToastsStore()
 
 // Phone/tablet: the sidebar slides in over the page instead of
 // taking permanent width. Any navigation closes it.
@@ -278,5 +284,6 @@ const handleLogout = async () => {
   logoutOpen.value = false
   loggingOut.value = false
   router.push('/login')
+  toasts.success('Signed out.')
 }
 </script>

@@ -13,21 +13,23 @@
     </button>
 
     <!-- Full-size preview — backdrop click, × or Esc closes -->
-    <div
-      v-if="open && url"
-      class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4"
-      @click.self="open = false"
-    >
-      <button
-        type="button"
-        class="absolute top-4 right-4 text-white text-3xl leading-none hover:text-gray-300"
-        aria-label="Close preview"
-        @click="open = false"
+    <Transition name="dialog">
+      <div
+        v-if="open && url"
+        class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4"
+        @click.self="open = false"
       >
-        &times;
-      </button>
-      <img :src="url" alt="Attachment" class="max-h-[85vh] max-w-[90vw] rounded-lg shadow-2xl" />
-    </div>
+        <button
+          type="button"
+          class="absolute top-4 right-4 text-white text-3xl leading-none hover:text-gray-300"
+          aria-label="Close preview"
+          @click="open = false"
+        >
+          &times;
+        </button>
+        <img :src="url" alt="Attachment" class="max-h-[85vh] max-w-[90vw] rounded-lg shadow-2xl" />
+      </div>
+    </Transition>
   </div>
 </template>
 

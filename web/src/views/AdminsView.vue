@@ -280,339 +280,351 @@
     </div>
 
     <!-- Admin Details / Management Modal -->
-    <div
-      v-if="detailAdmin"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      @click.self="detailAdmin = null"
-    >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-md max-h-[90vh] flex flex-col">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h2 class="text-lg font-semibold text-gray-800">Manage Admin</h2>
-          <button
-            @click="detailAdmin = null"
-            class="text-gray-400 hover:text-gray-600 text-xl leading-none"
-          >
-            &times;
-          </button>
-        </div>
-
-        <div class="px-6 py-5 space-y-5 overflow-y-auto flex-1 min-h-0">
-          <!-- Identity -->
-          <div class="flex items-center gap-4">
-            <div
-              class="w-14 h-14 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-lg font-bold shrink-0"
-            >
-              {{ detailAdmin.firstName.charAt(0) }}{{ detailAdmin.lastName.charAt(0) }}
-            </div>
-            <div class="min-w-0">
-              <p class="text-lg font-semibold text-gray-800 truncate">
-                {{ detailAdmin.firstName }} {{ detailAdmin.lastName }}
-              </p>
-              <p class="text-sm text-gray-500 truncate">{{ detailAdmin.email }}</p>
-            </div>
-            <span
-              class="ml-auto px-2.5 py-1 rounded-full text-xs font-medium shrink-0"
-              :class="
-                detailAdmin.role === 'Super Admin'
-                  ? 'bg-green-100 text-green-700'
-                  : detailAdmin.role === 'Developer'
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-gray-100 text-gray-600'
-              "
-            >
-              {{ detailAdmin.role }}
-            </span>
-          </div>
-
-          <!-- Error message -->
+    <Transition name="dialog">
+      <div
+        v-if="detailAdmin"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="detailAdmin = null"
+      >
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-md max-h-[90vh] flex flex-col">
           <div
-            v-if="detailsError"
-            class="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm"
+            class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0"
           >
-            {{ detailsError }}
+            <h2 class="text-lg font-semibold text-gray-800">Manage Admin</h2>
+            <button
+              @click="detailAdmin = null"
+              class="text-gray-400 hover:text-gray-600 text-xl leading-none"
+            >
+              &times;
+            </button>
           </div>
 
-          <!-- Confirmation notice (e.g. reset email sent) -->
-          <div
-            v-if="detailsNotice"
-            class="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm"
-          >
-            {{ detailsNotice }}
-          </div>
-
-          <!-- Account Management -->
-          <div class="border-t border-gray-100 pt-4 space-y-3">
-            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Account</p>
-
-            <div class="flex flex-wrap items-center gap-2 text-sm">
+          <div class="px-6 py-5 space-y-5 overflow-y-auto flex-1 min-h-0">
+            <!-- Identity -->
+            <div class="flex items-center gap-4">
+              <div
+                class="w-14 h-14 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-lg font-bold shrink-0"
+              >
+                {{ detailAdmin.firstName.charAt(0) }}{{ detailAdmin.lastName.charAt(0) }}
+              </div>
+              <div class="min-w-0">
+                <p class="text-lg font-semibold text-gray-800 truncate">
+                  {{ detailAdmin.firstName }} {{ detailAdmin.lastName }}
+                </p>
+                <p class="text-sm text-gray-500 truncate">{{ detailAdmin.email }}</p>
+              </div>
               <span
-                class="px-2.5 py-1 rounded-full text-xs font-medium"
+                class="ml-auto px-2.5 py-1 rounded-full text-xs font-medium shrink-0"
                 :class="
-                  detailAdmin.account.loginEnabled
+                  detailAdmin.role === 'Super Admin'
                     ? 'bg-green-100 text-green-700'
-                    : 'bg-red-100 text-red-600'
+                    : detailAdmin.role === 'Developer'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-gray-100 text-gray-600'
                 "
               >
-                Login {{ detailAdmin.account.loginEnabled ? 'Enabled' : 'Disabled' }}
-              </span>
-              <span
-                v-if="detailAdmin.account.mustChangePassword"
-                class="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700"
-              >
-                Must change password on first login
+                {{ detailAdmin.role }}
               </span>
             </div>
 
-            <!-- Temporary password -->
+            <!-- Error message -->
             <div
-              v-if="detailAdmin.account.tempPassword"
-              class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between gap-3"
+              v-if="detailsError"
+              class="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm"
             >
-              <div class="min-w-0">
-                <p class="text-xs text-gray-400">Temporary password</p>
-                <p class="font-mono text-sm font-semibold text-gray-800 truncate">
-                  {{ detailAdmin.account.tempPassword }}
-                </p>
-                <p class="text-xs text-amber-600 mt-1">
-                  Shown once and never stored — copy it now. If it's lost, use Reset Password to
-                  email a new sign-in link.
+              {{ detailsError }}
+            </div>
+
+            <!-- Confirmation notice (e.g. reset email sent) -->
+            <div
+              v-if="detailsNotice"
+              class="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm"
+            >
+              {{ detailsNotice }}
+            </div>
+
+            <!-- Account Management -->
+            <div class="border-t border-gray-100 pt-4 space-y-3">
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Account</p>
+
+              <div class="flex flex-wrap items-center gap-2 text-sm">
+                <span
+                  class="px-2.5 py-1 rounded-full text-xs font-medium"
+                  :class="
+                    detailAdmin.account.loginEnabled
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-red-100 text-red-600'
+                  "
+                >
+                  Login {{ detailAdmin.account.loginEnabled ? 'Enabled' : 'Disabled' }}
+                </span>
+                <span
+                  v-if="detailAdmin.account.mustChangePassword"
+                  class="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700"
+                >
+                  Must change password on first login
+                </span>
+              </div>
+
+              <!-- Temporary password -->
+              <div
+                v-if="detailAdmin.account.tempPassword"
+                class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between gap-3"
+              >
+                <div class="min-w-0">
+                  <p class="text-xs text-gray-400">Temporary password</p>
+                  <p class="font-mono text-sm font-semibold text-gray-800 truncate">
+                    {{ detailAdmin.account.tempPassword }}
+                  </p>
+                  <p class="text-xs text-amber-600 mt-1">
+                    Shown once and never stored — copy it now. If it's lost, use Reset Password to
+                    email a new sign-in link.
+                  </p>
+                </div>
+                <button
+                  @click="copyTempPassword"
+                  class="text-xs font-medium text-green-700 hover:text-green-800 shrink-0"
+                >
+                  {{ copied ? 'Copied!' : 'Copy' }}
+                </button>
+              </div>
+
+              <div v-if="adminsStore.canManageAccounts" class="flex flex-wrap gap-2">
+                <button
+                  @click="requestResetPassword(detailAdmin)"
+                  class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700 transition duration-200"
+                >
+                  Reset Password
+                </button>
+                <button
+                  v-if="detailAdmin.account.loginEnabled"
+                  @click="requestToggleLogin(detailAdmin, false)"
+                  :disabled="detailAdmin.id === adminsStore.currentAdminId"
+                  class="border border-red-300 text-red-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-50 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                  :title="
+                    detailAdmin.id === adminsStore.currentAdminId
+                      ? 'You cannot disable your own login'
+                      : ''
+                  "
+                >
+                  Disable Login
+                </button>
+                <button
+                  v-else
+                  @click="requestToggleLogin(detailAdmin, true)"
+                  class="border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-100 transition duration-200"
+                >
+                  Enable Login
+                </button>
+              </div>
+
+              <!-- Role -->
+              <div v-if="adminsStore.canManageAccounts" class="pt-1">
+                <label
+                  class="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1"
+                >
+                  Role
+                </label>
+                <select
+                  :key="roleSelectKey"
+                  :value="detailAdmin.role"
+                  @change="requestRoleChange(detailAdmin, $event.target.value)"
+                  :disabled="detailAdmin.id === adminsStore.currentAdminId"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <option value="Super Admin">Super Admin</option>
+                  <option value="Admin">Admin</option>
+                  <option value="Developer">Developer</option>
+                </select>
+                <p class="text-xs text-gray-400 mt-1">
+                  {{
+                    detailAdmin.id === adminsStore.currentAdminId
+                      ? 'You cannot change your own role.'
+                      : 'Changing the role takes effect after confirmation.'
+                  }}
                 </p>
               </div>
-              <button
-                @click="copyTempPassword"
-                class="text-xs font-medium text-green-700 hover:text-green-800 shrink-0"
-              >
-                {{ copied ? 'Copied!' : 'Copy' }}
-              </button>
             </div>
 
-            <div v-if="adminsStore.canManageAccounts" class="flex flex-wrap gap-2">
-              <button
-                @click="requestResetPassword(detailAdmin)"
-                class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700 transition duration-200"
-              >
-                Reset Password
-              </button>
-              <button
-                v-if="detailAdmin.account.loginEnabled"
-                @click="requestToggleLogin(detailAdmin, false)"
-                :disabled="detailAdmin.id === adminsStore.currentAdminId"
-                class="border border-red-300 text-red-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-50 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                :title="
-                  detailAdmin.id === adminsStore.currentAdminId
-                    ? 'You cannot disable your own login'
-                    : ''
-                "
-              >
-                Disable Login
-              </button>
-              <button
-                v-else
-                @click="requestToggleLogin(detailAdmin, true)"
-                class="border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-100 transition duration-200"
-              >
-                Enable Login
-              </button>
-            </div>
-
-            <!-- Role -->
-            <div v-if="adminsStore.canManageAccounts" class="pt-1">
-              <label class="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-                Role
-              </label>
-              <select
-                :key="roleSelectKey"
-                :value="detailAdmin.role"
-                @change="requestRoleChange(detailAdmin, $event.target.value)"
-                :disabled="detailAdmin.id === adminsStore.currentAdminId"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <option value="Super Admin">Super Admin</option>
-                <option value="Admin">Admin</option>
-                <option value="Developer">Developer</option>
-              </select>
-              <p class="text-xs text-gray-400 mt-1">
-                {{
-                  detailAdmin.id === adminsStore.currentAdminId
-                    ? 'You cannot change your own role.'
-                    : 'Changing the role takes effect after confirmation.'
-                }}
-              </p>
+            <!-- Activity History -->
+            <div class="border-t border-gray-100 pt-4 space-y-3">
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Activity</p>
+              <ul class="space-y-2 max-h-44 overflow-y-auto">
+                <li
+                  v-for="(entry, index) in detailAdmin.history"
+                  :key="index"
+                  class="flex gap-3 text-sm"
+                >
+                  <span class="text-gray-400 whitespace-nowrap text-xs self-center">{{
+                    formatDateTime(entry.at)
+                  }}</span>
+                  <span class="text-gray-600">{{ entry.action }}</span>
+                </li>
+                <li v-if="!detailAdmin.history?.length" class="text-sm text-gray-400">
+                  No activity recorded yet.
+                </li>
+              </ul>
             </div>
           </div>
 
-          <!-- Activity History -->
-          <div class="border-t border-gray-100 pt-4 space-y-3">
-            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Activity</p>
-            <ul class="space-y-2 max-h-44 overflow-y-auto">
-              <li
-                v-for="(entry, index) in detailAdmin.history"
-                :key="index"
-                class="flex gap-3 text-sm"
-              >
-                <span class="text-gray-400 whitespace-nowrap text-xs self-center">{{
-                  formatDateTime(entry.at)
-                }}</span>
-                <span class="text-gray-600">{{ entry.action }}</span>
-              </li>
-              <li v-if="!detailAdmin.history?.length" class="text-sm text-gray-400">
-                No activity recorded yet.
-              </li>
-            </ul>
+          <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
+            <button
+              v-if="adminsStore.canManageAccounts"
+              @click="openEditModal(detailAdmin)"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+            >
+              Edit
+            </button>
+            <button
+              @click="detailAdmin = null"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+            >
+              Close
+            </button>
           </div>
-        </div>
-
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
-          <button
-            v-if="adminsStore.canManageAccounts"
-            @click="openEditModal(detailAdmin)"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
-          >
-            Edit
-          </button>
-          <button
-            @click="detailAdmin = null"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
-          >
-            Close
-          </button>
         </div>
       </div>
-    </div>
+    </Transition>
 
     <!-- Add / Edit Admin Modal -->
-    <div
-      v-if="showModal"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      @click.self="closeModal"
-    >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h2 class="text-lg font-semibold text-gray-800">
-            {{ modalMode === 'add' ? 'Add Admin' : 'Edit Admin' }}
-          </h2>
-          <button
-            @click="closeModal"
-            class="text-gray-400 hover:text-gray-600 text-xl leading-none"
-          >
-            &times;
-          </button>
-        </div>
-
-        <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
-          <!-- Error message -->
+    <Transition name="dialog">
+      <div
+        v-if="showModal"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="closeModal"
+      >
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] flex flex-col">
           <div
-            v-if="formError"
-            class="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm"
+            class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0"
           >
-            {{ formError }}
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-              <input
-                v-model="form.firstName"
-                type="text"
-                placeholder="e.g. Juan"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-              <input
-                v-model="form.lastName"
-                type="text"
-                placeholder="e.g. Dela Cruz"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              v-model="form.email"
-              type="email"
-              placeholder="e.g. juan.delacruz@gmail.com"
-              :disabled="modalMode === 'edit'"
-              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-50 disabled:cursor-not-allowed"
-            />
-            <p v-if="modalMode === 'edit'" class="text-xs text-gray-400 mt-1">
-              The email is the login and cannot be changed here.
-            </p>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
-            <select
-              v-model="form.role"
-              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            <h2 class="text-lg font-semibold text-gray-800">
+              {{ modalMode === 'add' ? 'Add Admin' : 'Edit Admin' }}
+            </h2>
+            <button
+              @click="closeModal"
+              class="text-gray-400 hover:text-gray-600 text-xl leading-none"
             >
-              <option value="Admin">Admin</option>
-              <option value="Super Admin">Super Admin</option>
-              <option value="Developer">Developer</option>
-            </select>
+              &times;
+            </button>
           </div>
 
-          <div
-            v-if="modalMode === 'add'"
-            class="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm"
-          >
-            A <strong>temporary password</strong> will be generated after saving. Hand it to the new
-            admin face-to-face — they must change it on first login.
-          </div>
-        </div>
+          <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
+            <!-- Error message -->
+            <div
+              v-if="formError"
+              class="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm"
+            >
+              {{ formError }}
+            </div>
 
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
-          <button
-            @click="closeModal"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
-          >
-            Cancel
-          </button>
-          <button
-            @click="saveAdmin"
-            class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
-          >
-            {{ modalMode === 'add' ? 'Add Admin' : 'Save Changes' }}
-          </button>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                <input
+                  v-model="form.firstName"
+                  type="text"
+                  placeholder="e.g. Juan"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                <input
+                  v-model="form.lastName"
+                  type="text"
+                  placeholder="e.g. Dela Cruz"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                v-model="form.email"
+                type="email"
+                placeholder="e.g. juan.delacruz@gmail.com"
+                :disabled="modalMode === 'edit'"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-50 disabled:cursor-not-allowed"
+              />
+              <p v-if="modalMode === 'edit'" class="text-xs text-gray-400 mt-1">
+                The email is the login and cannot be changed here.
+              </p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
+              <select
+                v-model="form.role"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="Admin">Admin</option>
+                <option value="Super Admin">Super Admin</option>
+                <option value="Developer">Developer</option>
+              </select>
+            </div>
+
+            <div
+              v-if="modalMode === 'add'"
+              class="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm"
+            >
+              A <strong>temporary password</strong> will be generated after saving. Hand it to the
+              new admin face-to-face — they must change it on first login.
+            </div>
+          </div>
+
+          <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
+            <button
+              @click="closeModal"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              @click="saveAdmin"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
+            >
+              {{ modalMode === 'add' ? 'Add Admin' : 'Save Changes' }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
 
     <!-- Confirmation Modal -->
-    <div
-      v-if="confirmAction"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      @click.self="confirmAction = null"
-    >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-2">{{ confirmAction.title }}</h2>
-        <p class="text-sm text-gray-500 mb-6">
-          {{ confirmAction.message }}
-        </p>
-        <div class="flex justify-end gap-3">
-          <button
-            @click="cancelConfirm"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
-          >
-            Cancel
-          </button>
-          <button
-            @click="runConfirm"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-white transition duration-200"
-            :class="
-              confirmAction.danger
-                ? 'bg-red-600 hover:bg-red-700'
-                : 'bg-green-600 hover:bg-green-700'
-            "
-          >
-            {{ confirmAction.confirmLabel }}
-          </button>
+    <Transition name="dialog">
+      <div
+        v-if="confirmAction"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="confirmAction = null"
+      >
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+          <h2 class="text-lg font-semibold text-gray-800 mb-2">{{ confirmAction.title }}</h2>
+          <p class="text-sm text-gray-500 mb-6">
+            {{ confirmAction.message }}
+          </p>
+          <div class="flex justify-end gap-3">
+            <button
+              @click="cancelConfirm"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              @click="runConfirm"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-white transition duration-200"
+              :class="
+                confirmAction.danger
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : 'bg-green-600 hover:bg-green-700'
+              "
+            >
+              {{ confirmAction.confirmLabel }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
   </AppLayout>
 </template>
 
@@ -623,9 +635,11 @@ import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import { useAdminsStore } from '../stores/admins'
 import { useAuthStore } from '../stores/auth'
+import { useToastsStore } from '../stores/toasts'
 
 const adminsStore = useAdminsStore()
 const auth = useAuthStore()
+const toasts = useToastsStore()
 
 // Column visibility — Name, Login status and Actions always show
 const columns = persistentColumns('admins', { email: true, role: true, lastLogin: true })
@@ -696,6 +710,7 @@ async function runConfirm() {
     if (confirmAction.value?.revert) confirmAction.value.revert()
   } else {
     detailsError.value = ''
+    if (confirmAction.value?.success) toasts.success(confirmAction.value.success)
   }
   confirmAction.value = null
 }
@@ -732,6 +747,7 @@ function requestToggleLogin(admin, enabled) {
       : `${name} will no longer be able to log into the system until re-enabled.`,
     confirmLabel: enabled ? 'Enable Login' : 'Disable Login',
     danger: !enabled,
+    success: enabled ? 'Login enabled.' : 'Login disabled.',
     run: () => adminsStore.setLoginEnabled(admin.id, enabled),
   }
 }
@@ -748,6 +764,7 @@ function requestRoleChange(admin, newRole) {
     }`,
     confirmLabel: 'Change Role',
     danger: false,
+    success: `Role changed to ${newRole}.`,
     run: () =>
       adminsStore.updateAdmin(admin.id, {
         firstName: admin.firstName,
@@ -856,7 +873,9 @@ async function saveAdmin() {
   // After adding: open the new admin's details so the temp password can be
   // copied right away. After editing: refresh the open details modal.
   if (result.admin) detailAdmin.value = result.admin
+  const wasAdd = modalMode.value === 'add'
   closeModal()
+  toasts.success(wasAdd ? 'Admin account created.' : 'Admin record updated.')
 }
 
 function formatDateTime(isoString) {

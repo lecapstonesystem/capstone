@@ -342,7 +342,7 @@ export const useMembersStore = defineStore('members', () => {
   }
 
   // Both save actions return an error message (or null) so the form
-  // can stay open and show it — the view has no toast layer.
+  // can stay open and show it inline — toasts carry success only.
   // One-off load for printing a member's data sheet from the
   // Registrations module — the row plus its capital share, mapped
   // exactly like fetchMembers does.

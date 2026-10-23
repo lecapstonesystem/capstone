@@ -141,6 +141,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useToastsStore } from '../stores/toasts'
 import { getPersistMode } from '../lib/authStorage'
 
 const email = ref('')
@@ -197,6 +198,7 @@ watch(canRevealPassword, (visible) => {
 const remember = ref(getPersistMode())
 const router = useRouter()
 const auth = useAuthStore()
+const toasts = useToastsStore()
 
 // Self-service reset (adviser UAT #3) — email link only, same as the
 // Admin Accounts reset; both run through the dedicated mail account.
@@ -252,6 +254,9 @@ const handleLogin = async () => {
   // come back as messages from the auth store.
   const result = await auth.signIn(email.value.trim().toLowerCase(), password.value, remember.value)
   if (result.ok) {
+    // Fires right as the dashboard mounts — the toast host lives in
+    // App.vue, so it survives the navigation.
+    toasts.success('Signed in.')
     router.push('/dashboard')
   } else {
     error.value = result.message

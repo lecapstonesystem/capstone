@@ -74,6 +74,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth'
+import { useToastsStore } from '../stores/toasts'
 
 /**
  * One screen serves both password-setting moments:
@@ -92,6 +93,7 @@ import { useAuthStore } from '../stores/auth'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const toasts = useToastsStore()
 
 const isRecovery = computed(() => route.meta.mode === 'recovery')
 
@@ -135,9 +137,11 @@ async function submit() {
       // Leave the recovery session behind — sign in fresh.
       await auth.signOut()
       router.push('/login')
+      toasts.success('Password changed — sign in with your new password.')
     } else {
       // Flag is already cleared; the router guard lets every page through.
       router.push('/dashboard')
+      toasts.success('Password changed.')
     }
   } finally {
     busy.value = false

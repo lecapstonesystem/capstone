@@ -248,155 +248,161 @@
     </div>
 
     <!-- Add / Edit Modal -->
-    <div
-      v-if="showModal"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      @click.self="closeModal"
-    >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h2 class="text-lg font-semibold text-gray-800">
-            {{ modalMode === 'add' ? 'Add Transaction' : 'Edit Transaction' }}
-          </h2>
-          <button
-            @click="closeModal"
-            class="text-gray-400 hover:text-gray-600 text-xl leading-none"
-          >
-            &times;
-          </button>
-        </div>
-
-        <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
-          <!-- Error message -->
+    <Transition name="dialog">
+      <div
+        v-if="showModal"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="closeModal"
+      >
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] flex flex-col">
           <div
-            v-if="formError"
-            class="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm"
+            class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0"
           >
-            {{ formError }}
+            <h2 class="text-lg font-semibold text-gray-800">
+              {{ modalMode === 'add' ? 'Add Transaction' : 'Edit Transaction' }}
+            </h2>
+            <button
+              @click="closeModal"
+              class="text-gray-400 hover:text-gray-600 text-xl leading-none"
+            >
+              &times;
+            </button>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
+            <!-- Error message -->
+            <div
+              v-if="formError"
+              class="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm"
+            >
+              {{ formError }}
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                <input
+                  v-model="form.date"
+                  type="date"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <select
+                  v-model="form.type"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option value="Income">Income</option>
+                  <option value="Expense">Expense</option>
+                </select>
+              </div>
+            </div>
+
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+              <select
+                v-model="form.category"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <optgroup label="Income">
+                  <option value="Canteen Sales">Canteen Sales</option>
+                  <option value="Membership Fees">Membership Fees</option>
+                  <option value="Loan Payments">Loan Payments</option>
+                  <option value="Other Income">Other Income</option>
+                </optgroup>
+                <optgroup label="Expense">
+                  <option value="Supplies">Supplies</option>
+                  <option value="Utilities">Utilities</option>
+                  <option value="Miscellaneous">Miscellaneous</option>
+                </optgroup>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <input
-                v-model="form.date"
-                type="date"
+                v-model="form.description"
+                type="text"
+                placeholder="e.g. Daily canteen sales — Monday"
                 class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
             </div>
+
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
-              <select
-                v-model="form.type"
+              <label class="block text-sm font-medium text-gray-700 mb-1">Amount (₱)</label>
+              <input
+                v-model.number="form.amount"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="0.00"
                 class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                <option value="Income">Income</option>
-                <option value="Expense">Expense</option>
-              </select>
+              />
             </div>
           </div>
 
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <select
-              v-model="form.category"
-              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
+            <button
+              @click="closeModal"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
             >
-              <optgroup label="Income">
-                <option value="Canteen Sales">Canteen Sales</option>
-                <option value="Membership Fees">Membership Fees</option>
-                <option value="Loan Payments">Loan Payments</option>
-                <option value="Other Income">Other Income</option>
-              </optgroup>
-              <optgroup label="Expense">
-                <option value="Supplies">Supplies</option>
-                <option value="Utilities">Utilities</option>
-                <option value="Miscellaneous">Miscellaneous</option>
-              </optgroup>
-            </select>
+              Cancel
+            </button>
+            <button
+              @click="saveTransaction"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
+            >
+              {{ modalMode === 'add' ? 'Add Transaction' : 'Save Changes' }}
+            </button>
           </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <input
-              v-model="form.description"
-              type="text"
-              placeholder="e.g. Daily canteen sales — Monday"
-              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Amount (₱)</label>
-            <input
-              v-model.number="form.amount"
-              type="number"
-              min="0"
-              step="1"
-              placeholder="0.00"
-              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
-          <button
-            @click="closeModal"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
-          >
-            Cancel
-          </button>
-          <button
-            @click="saveTransaction"
-            class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
-          >
-            {{ modalMode === 'add' ? 'Add Transaction' : 'Save Changes' }}
-          </button>
         </div>
       </div>
-    </div>
+    </Transition>
 
     <!-- Delete Confirmation Modal -->
-    <div
-      v-if="txnToDelete"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      @click.self="txnToDelete = null"
-    >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-2">Delete Transaction?</h2>
-        <p class="text-sm text-gray-500 mb-4">
-          Are you sure you want to delete
-          <span class="font-medium text-gray-700">{{ txnToDelete.refNo }}</span>
-          ({{ txnToDelete.description }})? The entry leaves the ledger, but the removal — including
-          your reason — is kept in the activity trail.
-        </p>
-        <div class="mb-6">
-          <label class="block text-xs font-medium text-gray-500 mb-1">Reason (required)</label>
-          <textarea
-            v-model="deleteReason"
-            rows="2"
-            placeholder="Why is this entry being removed? e.g. Recorded under the wrong category"
-            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-          ></textarea>
-        </div>
-        <p v-if="deleteError" class="text-sm text-red-600 mb-4">{{ deleteError }}</p>
-        <div class="flex justify-end gap-3">
-          <button
-            @click="txnToDelete = null"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
-          >
-            Cancel
-          </button>
-          <button
-            @click="confirmDelete"
-            :disabled="!deleteReason.trim()"
-            class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Delete
-          </button>
+    <Transition name="dialog">
+      <div
+        v-if="txnToDelete"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="txnToDelete = null"
+      >
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+          <h2 class="text-lg font-semibold text-gray-800 mb-2">Delete Transaction?</h2>
+          <p class="text-sm text-gray-500 mb-4">
+            Are you sure you want to delete
+            <span class="font-medium text-gray-700">{{ txnToDelete.refNo }}</span>
+            ({{ txnToDelete.description }})? The entry leaves the ledger, but the removal —
+            including your reason — is kept in the activity trail.
+          </p>
+          <div class="mb-6">
+            <label class="block text-xs font-medium text-gray-500 mb-1">Reason (required)</label>
+            <textarea
+              v-model="deleteReason"
+              rows="2"
+              placeholder="Why is this entry being removed? e.g. Recorded under the wrong category"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            ></textarea>
+          </div>
+          <p v-if="deleteError" class="text-sm text-red-600 mb-4">{{ deleteError }}</p>
+          <div class="flex justify-end gap-3">
+            <button
+              @click="txnToDelete = null"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              @click="confirmDelete"
+              :disabled="!deleteReason.trim()"
+              class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Delete
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
   </AppLayout>
 </template>
 
@@ -406,8 +412,10 @@ import { persistentColumns } from '../lib/uiPrefs'
 import AppLayout from '../components/AppLayout.vue'
 import SortableTh from '../components/SortableTh.vue'
 import { useLedgerStore } from '../stores/ledger'
+import { useToastsStore } from '../stores/toasts'
 
 const ledgerStore = useLedgerStore()
+const toasts = useToastsStore()
 
 // Column visibility — Ref No., Date, Amount and Actions always show
 const columns = persistentColumns('ledger', {
@@ -507,12 +515,14 @@ async function saveTransaction() {
       ? await ledgerStore.addTransaction(data)
       : await ledgerStore.updateTransaction(editingId.value, data)
   if (!result.ok) {
-    // Keep the dialog open and show why (no toast layer in this view).
+    // Keep the dialog open and show what the database said
     formError.value = result.message || 'Could not save the transaction.'
     return
   }
 
+  const wasAdd = modalMode.value === 'add'
   closeModal()
+  toasts.success(wasAdd ? 'Entry saved.' : 'Entry updated.')
 }
 
 function openDeleteModal(txn) {
@@ -535,6 +545,7 @@ async function confirmDelete() {
     return
   }
   txnToDelete.value = null
+  toasts.success('Entry removed.')
 }
 
 function formatCurrency(amount) {

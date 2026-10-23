@@ -2,6 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------- UI motion: dialog fades + toast slide-in ------------------------
+   Keep it short and consistent: overlays fade over 150ms, a centered dialog's
+   card adds a small scale-up on enter (the leave is carried by the fade alone),
+   and toasts slide in from the lower right. Anything slower reads as sluggish
+   in a data-entry tool. prefers-reduced-motion users get none of it. */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 150ms ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* The card pop belongs to centered dialogs only (`name="dialog"`); side
+   panels use plain `fade` so they never scale like a pop-up. */
+.dialog-enter-active,
+.dialog-leave-active {
+  transition: opacity 150ms ease;
+}
+.dialog-enter-from,
+.dialog-leave-to {
+  opacity: 0;
+}
+.dialog-enter-active > div:first-child {
+  animation: dialog-pop 160ms ease-out;
+}
+@keyframes dialog-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Toast stack — slide in from the right, fade out, slide up when a
+   neighbour above leaves. Leaving items fade in place first so the
+   remaining stack animates upward instead of jumping. */
+.toast-enter-active {
+  transition: all 180ms ease-out;
+}
+.toast-leave-active {
+  transition: all 140ms ease-in;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(16px);
+}
+.toast-move {
+  transition: transform 150ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-enter-active,
+  .fade-leave-active,
+  .dialog-enter-active,
+  .dialog-leave-active,
+  .toast-enter-active,
+  .toast-leave-active,
+  .toast-move {
+    transition: none;
+  }
+  .dialog-enter-active > div:first-child {
+    animation: none;
+  }
+}
+
 /* Always-visible scrollbars for data tables */
 .table-scroll {
   scrollbar-width: thin;

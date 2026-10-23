@@ -228,823 +228,840 @@
     </div>
 
     <!-- Member Details Modal -->
-    <div
-      v-if="detailMember"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      @click.self="detailMember = null"
-    >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-4xl max-h-[95vh] flex flex-col">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h2 class="text-lg font-semibold text-gray-800">Member Details</h2>
-          <button
-            @click="detailMember = null"
-            class="text-gray-400 hover:text-gray-600 text-xl leading-none"
+    <Transition name="dialog">
+      <div
+        v-if="detailMember"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="detailMember = null"
+      >
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-4xl max-h-[95vh] flex flex-col">
+          <div
+            class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0"
           >
-            &times;
-          </button>
-        </div>
-
-        <div class="px-6 py-5 space-y-4 overflow-y-auto flex-1 min-h-0">
-          <!-- Identity — photo on record takes the avatar spot so the
-               face, not initials, is what counter staff see. -->
-          <div class="flex items-center gap-4">
-            <PhotoPreview
-              v-if="detailMember.idPhoto"
-              :path="detailMember.idPhoto"
-              variant="avatar-md"
-              class="shrink-0"
-            />
-            <div
-              v-else
-              class="w-14 h-14 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-lg font-bold shrink-0"
+            <h2 class="text-lg font-semibold text-gray-800">Member Details</h2>
+            <button
+              @click="detailMember = null"
+              class="text-gray-400 hover:text-gray-600 text-xl leading-none"
             >
-              {{ detailMember.firstName.charAt(0) }}{{ detailMember.lastName.charAt(0) }}
-            </div>
-            <div class="min-w-0">
-              <p class="text-lg font-semibold text-gray-800 truncate">
-                {{
-                  [detailMember.firstName, detailMember.middleName, detailMember.lastName]
-                    .filter(Boolean)
-                    .join(' ')
-                }}
-              </p>
-              <p class="text-sm text-gray-500">{{ detailMember.memberNo }}</p>
-            </div>
-            <span
-              :class="statusBadgeClass(detailMember.status)"
-              class="ml-auto px-2.5 py-1 rounded-full text-xs font-medium shrink-0"
-            >
-              {{ detailMember.status }}
-            </span>
+              &times;
+            </button>
           </div>
 
-          <!-- Fields — two columns so the record fits one screen -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <div class="sm:col-span-2">
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-                Profile Photo
-              </p>
-              <div class="flex items-start gap-3">
-                <PhotoPreview v-if="detailMember.idPhoto" :path="detailMember.idPhoto" />
-                <span v-else class="text-xs text-gray-400 py-2">No photo on file</span>
-                <div class="flex flex-col gap-1.5">
-                  <button
-                    @click="pickIdPhoto"
-                    class="border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-100 transition duration-200"
+          <div class="px-6 py-5 space-y-4 overflow-y-auto flex-1 min-h-0">
+            <!-- Identity — photo on record takes the avatar spot so the
+               face, not initials, is what counter staff see. -->
+            <div class="flex items-center gap-4">
+              <PhotoPreview
+                v-if="detailMember.idPhoto"
+                :path="detailMember.idPhoto"
+                variant="avatar-md"
+                class="shrink-0"
+              />
+              <div
+                v-else
+                class="w-14 h-14 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-lg font-bold shrink-0"
+              >
+                {{ detailMember.firstName.charAt(0) }}{{ detailMember.lastName.charAt(0) }}
+              </div>
+              <div class="min-w-0">
+                <p class="text-lg font-semibold text-gray-800 truncate">
+                  {{
+                    [detailMember.firstName, detailMember.middleName, detailMember.lastName]
+                      .filter(Boolean)
+                      .join(' ')
+                  }}
+                </p>
+                <p class="text-sm text-gray-500">{{ detailMember.memberNo }}</p>
+              </div>
+              <span
+                :class="statusBadgeClass(detailMember.status)"
+                class="ml-auto px-2.5 py-1 rounded-full text-xs font-medium shrink-0"
+              >
+                {{ detailMember.status }}
+              </span>
+            </div>
+
+            <!-- Fields — two columns so the record fits one screen -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div class="sm:col-span-2">
+                <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                  Profile Photo
+                </p>
+                <div class="flex items-start gap-3">
+                  <PhotoPreview v-if="detailMember.idPhoto" :path="detailMember.idPhoto" />
+                  <span v-else class="text-xs text-gray-400 py-2">No photo on file</span>
+                  <div class="flex flex-col gap-1.5">
+                    <button
+                      @click="pickIdPhoto"
+                      class="border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-100 transition duration-200"
+                    >
+                      {{ detailMember.idPhoto ? 'Replace' : 'Upload' }}
+                    </button>
+                    <button
+                      v-if="detailMember.idPhoto"
+                      @click="requestRemovePhoto"
+                      class="text-red-500 hover:text-red-700 text-xs font-medium"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+                <input
+                  ref="idPhotoInput"
+                  type="file"
+                  :accept="PHOTO_ACCEPT"
+                  class="hidden"
+                  @change="onIdPhotoPicked"
+                />
+                <p class="text-xs text-gray-400 mt-1">
+                  JPEG, PNG or WebP — large photos are resized automatically.
+                </p>
+                <p v-if="photoError" class="text-xs text-red-600 mt-1">{{ photoError }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                  Personal Email
+                </p>
+                <p class="text-gray-700 break-all">{{ detailMember.email || '—' }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                  Work Email
+                </p>
+                <p class="text-gray-700 break-all">{{ detailMember.workEmail || '—' }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Phone</p>
+                <p class="text-gray-700">{{ detailMember.phone || '—' }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                  Landline
+                </p>
+                <p class="text-gray-700">{{ detailMember.landline || '—' }}</p>
+              </div>
+              <div class="sm:col-span-2">
+                <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                  Address
+                </p>
+                <p class="text-gray-700">{{ detailMember.address || '—' }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                  Member Type
+                </p>
+                <p class="text-gray-700">{{ detailMember.memberType || '—' }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                  Civil Status
+                </p>
+                <p class="text-gray-700">
+                  {{ detailMember.civilStatus || '—'
+                  }}<span v-if="detailMember.spouseName">
+                    — spouse: {{ detailMember.spouseName }}</span
                   >
-                    {{ detailMember.idPhoto ? 'Replace' : 'Upload' }}
-                  </button>
+                </p>
+              </div>
+              <div class="sm:col-span-2">
+                <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                  Government IDs
+                </p>
+                <ul class="text-gray-700 space-y-0.5">
+                  <li v-for="line in detailGovIds" :key="line">{{ line }}</li>
+                  <li v-if="detailGovIds.length === 0">—</li>
+                </ul>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                  Date Joined
+                </p>
+                <p class="text-gray-700">{{ formatDate(detailMember.dateJoined) }}</p>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                  Capital Share
+                </p>
+                <div class="flex items-center gap-3">
+                  <p class="text-gray-700 font-semibold">
+                    {{ formatPeso(detailMember.capitalShare || 0) }}
+                  </p>
                   <button
-                    v-if="detailMember.idPhoto"
-                    @click="requestRemovePhoto"
-                    class="text-red-500 hover:text-red-700 text-xs font-medium"
+                    @click="showCapitalInput = !showCapitalInput"
+                    class="text-xs font-medium text-green-700 hover:text-green-800"
                   >
-                    Remove
+                    + Add Capital
                   </button>
                 </div>
-              </div>
-              <input
-                ref="idPhotoInput"
-                type="file"
-                :accept="PHOTO_ACCEPT"
-                class="hidden"
-                @change="onIdPhotoPicked"
-              />
-              <p class="text-xs text-gray-400 mt-1">
-                JPEG, PNG or WebP — large photos are resized automatically.
-              </p>
-              <p v-if="photoError" class="text-xs text-red-600 mt-1">{{ photoError }}</p>
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-                Personal Email
-              </p>
-              <p class="text-gray-700 break-all">{{ detailMember.email || '—' }}</p>
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-                Work Email
-              </p>
-              <p class="text-gray-700 break-all">{{ detailMember.workEmail || '—' }}</p>
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Phone</p>
-              <p class="text-gray-700">{{ detailMember.phone || '—' }}</p>
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-                Landline
-              </p>
-              <p class="text-gray-700">{{ detailMember.landline || '—' }}</p>
-            </div>
-            <div class="sm:col-span-2">
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Address</p>
-              <p class="text-gray-700">{{ detailMember.address || '—' }}</p>
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-                Member Type
-              </p>
-              <p class="text-gray-700">{{ detailMember.memberType || '—' }}</p>
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-                Civil Status
-              </p>
-              <p class="text-gray-700">
-                {{ detailMember.civilStatus || '—'
-                }}<span v-if="detailMember.spouseName">
-                  — spouse: {{ detailMember.spouseName }}</span
+                <div v-if="showCapitalInput" class="flex items-center gap-2 mt-2">
+                  <input
+                    v-model="capitalDraft"
+                    type="number"
+                    min="1"
+                    placeholder="Amount (₱)"
+                    class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <button
+                    @click="submitCapital"
+                    class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700 transition duration-200"
+                  >
+                    Save
+                  </button>
+                  <button
+                    @click="showCapitalInput = false"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-100 transition duration-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <ul
+                  v-if="detailMember.capitalEntries?.length"
+                  class="mt-2 space-y-1 max-h-32 overflow-y-auto"
                 >
-              </p>
+                  <li
+                    v-for="entry in detailMember.capitalEntries"
+                    :key="entry.shareId"
+                    class="flex items-center justify-between text-xs text-gray-500"
+                  >
+                    <span
+                      >{{ entry.date ? formatDate(entry.date) : '—' }} ·
+                      {{ formatPeso(entry.amount) }}</span
+                    >
+                    <button
+                      class="text-red-600 hover:text-red-700 font-medium"
+                      @click="requestRemoveCapital(detailMember, entry)"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                </ul>
+                <p v-if="capitalError" class="text-xs text-red-600 mt-1">{{ capitalError }}</p>
+              </div>
             </div>
-            <div class="sm:col-span-2">
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-                Government IDs
-              </p>
-              <ul class="text-gray-700 space-y-0.5">
-                <li v-for="line in detailGovIds" :key="line">{{ line }}</li>
-                <li v-if="detailGovIds.length === 0">—</li>
-              </ul>
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-                Date Joined
-              </p>
-              <p class="text-gray-700">{{ formatDate(detailMember.dateJoined) }}</p>
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
-                Capital Share
-              </p>
-              <div class="flex items-center gap-3">
-                <p class="text-gray-700 font-semibold">
-                  {{ formatPeso(detailMember.capitalShare || 0) }}
+
+            <!-- Members' Data Sheet — the coop's own form, pre-filled -->
+            <div class="border-t border-gray-100 pt-4">
+              <div class="flex items-center justify-between gap-3">
+                <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Members' Data Sheet
                 </p>
                 <button
-                  @click="showCapitalInput = !showCapitalInput"
-                  class="text-xs font-medium text-green-700 hover:text-green-800"
+                  @click="printDataSheet"
+                  :disabled="printingSheet"
+                  class="border border-green-300 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-50 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  + Add Capital
+                  {{ printingSheet ? 'Preparing…' : 'Print Data Sheet' }}
                 </button>
               </div>
-              <div v-if="showCapitalInput" class="flex items-center gap-2 mt-2">
-                <input
-                  v-model="capitalDraft"
-                  type="number"
-                  min="1"
-                  placeholder="Amount (₱)"
-                  class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
+              <p v-if="sheetError" class="text-xs text-red-600 mt-2">{{ sheetError }}</p>
+            </div>
+
+            <!-- Account Management — above the record lists so login and
+               membership controls are visible without scrolling -->
+            <div class="border-t border-gray-100 pt-4 space-y-3">
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Account</p>
+
+              <div class="flex flex-wrap items-center gap-2 text-sm">
+                <span
+                  class="px-2.5 py-1 rounded-full text-xs font-medium"
+                  :class="
+                    detailMember.account.loginEnabled
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-red-100 text-red-600'
+                  "
+                >
+                  Login {{ detailMember.account.loginEnabled ? 'Enabled' : 'Disabled' }}
+                </span>
+                <span
+                  v-if="detailMember.account.mustChangePassword"
+                  class="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700"
+                >
+                  Must change password on first login
+                </span>
+              </div>
+
+              <!-- Temporary password (memory only — shown right after issue) -->
+              <div
+                v-if="issuedPassword"
+                class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between gap-3"
+              >
+                <div class="min-w-0">
+                  <p class="text-xs text-gray-400">Temporary password</p>
+                  <p class="font-mono text-sm font-semibold text-gray-800 truncate">
+                    {{ issuedPassword }}
+                  </p>
+                  <p class="text-xs text-amber-600 mt-1">
+                    Shown once and never stored — copy it now. If it's lost, use Reset Password to
+                    email a new sign-in link.
+                  </p>
+                </div>
                 <button
-                  @click="submitCapital"
+                  @click="copyTempPassword"
+                  class="text-xs font-medium text-green-700 hover:text-green-800 shrink-0"
+                >
+                  {{ copied ? 'Copied!' : 'Copy' }}
+                </button>
+              </div>
+
+              <p v-else-if="detailMember.account.hasLogin" class="text-xs text-gray-400">
+                This member signs into the app with their own password. Use Reset Password to email
+                them a new sign-in link.
+              </p>
+
+              <p v-else class="text-xs text-gray-400">
+                No credentials issued yet — generate a temporary password to hand to the member.
+              </p>
+
+              <div class="flex flex-wrap gap-2">
+                <button
+                  @click="issueCredentials"
                   class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700 transition duration-200"
                 >
-                  Save
+                  {{ detailMember.account.hasLogin ? 'Reset Password' : 'Issue Credentials' }}
                 </button>
                 <button
-                  @click="showCapitalInput = false"
-                  class="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-100 transition duration-200"
+                  v-if="detailMember.account.loginEnabled"
+                  @click="toggleLogin(false)"
+                  class="border border-red-300 text-red-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-50 transition duration-200"
                 >
-                  Cancel
+                  Disable Login
+                </button>
+                <button
+                  v-else
+                  @click="toggleLogin(true)"
+                  :disabled="detailMember.status !== 'Active'"
+                  class="border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-100 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Enable Login
                 </button>
               </div>
-              <ul
-                v-if="detailMember.capitalEntries?.length"
-                class="mt-2 space-y-1 max-h-32 overflow-y-auto"
+
+              <!-- Issue-credentials feedback (errors, or the emailed-link note) -->
+              <p
+                v-if="accountNotice"
+                :class="accountNoticeError ? 'text-red-600' : 'text-green-700'"
+                class="text-xs"
               >
-                <li
-                  v-for="entry in detailMember.capitalEntries"
-                  :key="entry.shareId"
-                  class="flex items-center justify-between text-xs text-gray-500"
+                {{ accountNotice }}
+              </p>
+
+              <!-- Membership status actions -->
+              <div class="flex flex-wrap gap-2 pt-1">
+                <button
+                  v-if="detailMember.status === 'Active'"
+                  @click="requestStatusChange(detailMember, 'Inactive')"
+                  class="border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-amber-50 transition duration-200"
                 >
-                  <span
-                    >{{ entry.date ? formatDate(entry.date) : '—' }} ·
-                    {{ formatPeso(entry.amount) }}</span
-                  >
-                  <button
-                    class="text-red-600 hover:text-red-700 font-medium"
-                    @click="requestRemoveCapital(detailMember, entry)"
-                  >
-                    Remove
-                  </button>
+                  Deactivate
+                </button>
+                <button
+                  v-else-if="detailMember.status === 'Inactive'"
+                  @click="requestStatusChange(detailMember, 'Active')"
+                  class="border border-green-300 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-50 transition duration-200"
+                >
+                  Reactivate
+                </button>
+                <button
+                  v-if="auth.isDeveloper"
+                  @click="openDeleteTest"
+                  class="border border-red-300 text-red-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-50 transition duration-200"
+                >
+                  Delete Test Member
+                </button>
+              </div>
+            </div>
+
+            <!-- Loans — two columns so a long loan history stays compact -->
+            <div class="border-t border-gray-100 pt-4 space-y-3">
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Loans ({{ memberLoans.length }})
+              </p>
+              <p v-if="memberLoans.length === 0" class="text-sm text-gray-500">
+                No loans recorded for this member yet.
+              </p>
+              <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div
+                  v-for="loan in memberLoans"
+                  :key="loan.id"
+                  class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 space-y-1.5"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="text-sm font-medium text-gray-700">
+                      {{ loan.loanNo }} · {{ loanTypeLabel(loan.type) }}
+                    </span>
+                    <span
+                      class="px-2.5 py-1 rounded-full text-xs font-medium shrink-0"
+                      :class="loanStatusBadgeClass(loan.status)"
+                    >
+                      {{ loan.status }}
+                    </span>
+                  </div>
+                  <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                    <span>
+                      {{ formatPeso(loan.principal) }} · {{ loan.termMonths }} mo ·
+                      {{ loan.ratePercent }}/mo
+                    </span>
+                    <span>Balance {{ formatPeso(loansStore.balanceOf(loan)) }}</span>
+                    <span v-if="loan.payments.length > 0">
+                      {{ loan.payments.length }} payment{{ loan.payments.length > 1 ? 's' : '' }}
+                    </span>
+                    <span v-if="loansStore.isDelinquent(loan)" class="text-red-600 font-medium">
+                      Delinquent
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Files — scans of the member's paper records -->
+            <AttachmentPanel
+              kind="member"
+              :id="detailMember.id"
+              class="border-t border-gray-100 pt-4"
+            />
+
+            <!-- Activity History -->
+            <div class="border-t border-gray-100 pt-4 space-y-3">
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Activity</p>
+              <ul class="space-y-2 max-h-44 overflow-y-auto">
+                <li
+                  v-for="(entry, index) in detailMember.history"
+                  :key="index"
+                  class="flex gap-3 text-sm"
+                >
+                  <span class="text-gray-400 whitespace-nowrap text-xs self-center">{{
+                    formatDateTime(entry.at)
+                  }}</span>
+                  <span class="text-gray-600">{{ entry.action }}</span>
+                </li>
+                <li v-if="!detailMember.history?.length" class="text-sm text-gray-400">
+                  No activity recorded yet.
                 </li>
               </ul>
-              <p v-if="capitalError" class="text-xs text-red-600 mt-1">{{ capitalError }}</p>
             </div>
           </div>
 
-          <!-- Members' Data Sheet — the coop's own form, pre-filled -->
-          <div class="border-t border-gray-100 pt-4">
-            <div class="flex items-center justify-between gap-3">
-              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Members' Data Sheet
-              </p>
-              <button
-                @click="printDataSheet"
-                :disabled="printingSheet"
-                class="border border-green-300 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-50 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {{ printingSheet ? 'Preparing…' : 'Print Data Sheet' }}
-              </button>
-            </div>
-            <p v-if="sheetError" class="text-xs text-red-600 mt-2">{{ sheetError }}</p>
-          </div>
-
-          <!-- Account Management — above the record lists so login and
-               membership controls are visible without scrolling -->
-          <div class="border-t border-gray-100 pt-4 space-y-3">
-            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Account</p>
-
-            <div class="flex flex-wrap items-center gap-2 text-sm">
-              <span
-                class="px-2.5 py-1 rounded-full text-xs font-medium"
-                :class="
-                  detailMember.account.loginEnabled
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-red-100 text-red-600'
-                "
-              >
-                Login {{ detailMember.account.loginEnabled ? 'Enabled' : 'Disabled' }}
-              </span>
-              <span
-                v-if="detailMember.account.mustChangePassword"
-                class="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700"
-              >
-                Must change password on first login
-              </span>
-            </div>
-
-            <!-- Temporary password (memory only — shown right after issue) -->
-            <div
-              v-if="issuedPassword"
-              class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between gap-3"
+          <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
+            <button
+              @click="detailMember = null"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
             >
-              <div class="min-w-0">
-                <p class="text-xs text-gray-400">Temporary password</p>
-                <p class="font-mono text-sm font-semibold text-gray-800 truncate">
-                  {{ issuedPassword }}
-                </p>
-                <p class="text-xs text-amber-600 mt-1">
-                  Shown once and never stored — copy it now. If it's lost, use Reset Password to
-                  email a new sign-in link.
-                </p>
-              </div>
-              <button
-                @click="copyTempPassword"
-                class="text-xs font-medium text-green-700 hover:text-green-800 shrink-0"
-              >
-                {{ copied ? 'Copied!' : 'Copy' }}
-              </button>
-            </div>
-
-            <p v-else-if="detailMember.account.hasLogin" class="text-xs text-gray-400">
-              This member signs into the app with their own password. Use Reset Password to email
-              them a new sign-in link.
-            </p>
-
-            <p v-else class="text-xs text-gray-400">
-              No credentials issued yet — generate a temporary password to hand to the member.
-            </p>
-
-            <div class="flex flex-wrap gap-2">
-              <button
-                @click="issueCredentials"
-                class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700 transition duration-200"
-              >
-                {{ detailMember.account.hasLogin ? 'Reset Password' : 'Issue Credentials' }}
-              </button>
-              <button
-                v-if="detailMember.account.loginEnabled"
-                @click="toggleLogin(false)"
-                class="border border-red-300 text-red-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-50 transition duration-200"
-              >
-                Disable Login
-              </button>
-              <button
-                v-else
-                @click="toggleLogin(true)"
-                :disabled="detailMember.status !== 'Active'"
-                class="border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-100 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Enable Login
-              </button>
-            </div>
-
-            <!-- Issue-credentials feedback (errors, or the emailed-link note) -->
-            <p
-              v-if="accountNotice"
-              :class="accountNoticeError ? 'text-red-600' : 'text-green-700'"
-              class="text-xs"
+              Close
+            </button>
+            <button
+              @click="editFromDetails"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
             >
-              {{ accountNotice }}
-            </p>
-
-            <!-- Membership status actions -->
-            <div class="flex flex-wrap gap-2 pt-1">
-              <button
-                v-if="detailMember.status === 'Active'"
-                @click="requestStatusChange(detailMember, 'Inactive')"
-                class="border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-amber-50 transition duration-200"
-              >
-                Deactivate
-              </button>
-              <button
-                v-else-if="detailMember.status === 'Inactive'"
-                @click="requestStatusChange(detailMember, 'Active')"
-                class="border border-green-300 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-50 transition duration-200"
-              >
-                Reactivate
-              </button>
-              <button
-                v-if="auth.isDeveloper"
-                @click="openDeleteTest"
-                class="border border-red-300 text-red-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-50 transition duration-200"
-              >
-                Delete Test Member
-              </button>
-            </div>
+              Edit
+            </button>
           </div>
-
-          <!-- Loans — two columns so a long loan history stays compact -->
-          <div class="border-t border-gray-100 pt-4 space-y-3">
-            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">
-              Loans ({{ memberLoans.length }})
-            </p>
-            <p v-if="memberLoans.length === 0" class="text-sm text-gray-500">
-              No loans recorded for this member yet.
-            </p>
-            <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div
-                v-for="loan in memberLoans"
-                :key="loan.id"
-                class="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 space-y-1.5"
-              >
-                <div class="flex items-center justify-between gap-3">
-                  <span class="text-sm font-medium text-gray-700">
-                    {{ loan.loanNo }} · {{ loanTypeLabel(loan.type) }}
-                  </span>
-                  <span
-                    class="px-2.5 py-1 rounded-full text-xs font-medium shrink-0"
-                    :class="loanStatusBadgeClass(loan.status)"
-                  >
-                    {{ loan.status }}
-                  </span>
-                </div>
-                <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                  <span>
-                    {{ formatPeso(loan.principal) }} · {{ loan.termMonths }} mo ·
-                    {{ loan.ratePercent }}/mo
-                  </span>
-                  <span>Balance {{ formatPeso(loansStore.balanceOf(loan)) }}</span>
-                  <span v-if="loan.payments.length > 0">
-                    {{ loan.payments.length }} payment{{ loan.payments.length > 1 ? 's' : '' }}
-                  </span>
-                  <span v-if="loansStore.isDelinquent(loan)" class="text-red-600 font-medium">
-                    Delinquent
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Files — scans of the member's paper records -->
-          <AttachmentPanel
-            kind="member"
-            :id="detailMember.id"
-            class="border-t border-gray-100 pt-4"
-          />
-
-          <!-- Activity History -->
-          <div class="border-t border-gray-100 pt-4 space-y-3">
-            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Activity</p>
-            <ul class="space-y-2 max-h-44 overflow-y-auto">
-              <li
-                v-for="(entry, index) in detailMember.history"
-                :key="index"
-                class="flex gap-3 text-sm"
-              >
-                <span class="text-gray-400 whitespace-nowrap text-xs self-center">{{
-                  formatDateTime(entry.at)
-                }}</span>
-                <span class="text-gray-600">{{ entry.action }}</span>
-              </li>
-              <li v-if="!detailMember.history?.length" class="text-sm text-gray-400">
-                No activity recorded yet.
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
-          <button
-            @click="detailMember = null"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
-          >
-            Close
-          </button>
-          <button
-            @click="editFromDetails"
-            class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
-          >
-            Edit
-          </button>
         </div>
       </div>
-    </div>
+    </Transition>
 
     <!-- Add / Edit Modal -->
-    <div
-      v-if="showModal"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      @click.self="closeModal"
-    >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-xl max-h-[90vh] flex flex-col">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h2 class="text-lg font-semibold text-gray-800">
-            {{ modalMode === 'add' ? 'Add Member' : 'Edit Member' }}
-          </h2>
-          <button
-            @click="closeModal"
-            class="text-gray-400 hover:text-gray-600 text-xl leading-none"
-          >
-            &times;
-          </button>
-        </div>
-
-        <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
-          <!-- Error message -->
+    <Transition name="dialog">
+      <div
+        v-if="showModal"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="closeModal"
+      >
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-xl max-h-[90vh] flex flex-col">
           <div
-            v-if="formError"
-            class="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm"
+            class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0"
           >
-            {{ formError }}
+            <h2 class="text-lg font-semibold text-gray-800">
+              {{ modalMode === 'add' ? 'Add Member' : 'Edit Member' }}
+            </h2>
+            <button
+              @click="closeModal"
+              class="text-gray-400 hover:text-gray-600 text-xl leading-none"
+            >
+              &times;
+            </button>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-              <input
-                v-model="form.firstName"
-                type="text"
-                placeholder="e.g. Juan"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
+          <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
+            <!-- Error message -->
+            <div
+              v-if="formError"
+              class="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm"
+            >
+              {{ formError }}
             </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Middle Name</label>
-              <input
-                v-model="form.middleName"
-                type="text"
-                placeholder="e.g. Lim"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-              <input
-                v-model="form.lastName"
-                type="text"
-                placeholder="e.g. Dela Cruz"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-          </div>
 
-          <!-- Gender + birthday (printed on the Members' Data Sheet) -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-              <select
-                v-model="form.gender"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                <option value="">Not set</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option v-if="form.gender && form.gender !== 'Male' && form.gender !== 'Female'">
-                  {{ form.gender }}
-                </option>
-              </select>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                <input
+                  v-model="form.firstName"
+                  type="text"
+                  placeholder="e.g. Juan"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Middle Name</label>
+                <input
+                  v-model="form.middleName"
+                  type="text"
+                  placeholder="e.g. Lim"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                <input
+                  v-model="form.lastName"
+                  type="text"
+                  placeholder="e.g. Dela Cruz"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
             </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Birthday</label>
-              <input
-                v-model="form.dateOfBirth"
-                type="date"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-          </div>
 
-          <!-- Membership classification + civil status (Members' Data Sheet) -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Member Type</label>
-              <select
-                v-model="form.memberType"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                <option value="Regular">Regular</option>
-                <option value="Associate">Associate</option>
-                <option value="Extension">Extension</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Civil Status</label>
-              <select
-                v-model="form.civilStatus"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                <option value="Single">Single</option>
-                <option value="Married">Married</option>
-                <option value="Widowed">Widowed</option>
-                <option value="Separated">Separated</option>
-              </select>
-            </div>
-          </div>
-
-          <div v-if="form.civilStatus === 'Married'">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Spouse Name</label>
-            <input
-              v-model="form.spouseName"
-              type="text"
-              placeholder="Spouse full name"
-              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1"
-                >Personal email (app login)</label
-              >
-              <input
-                v-model="form.email"
-                type="email"
-                placeholder="member@example.com"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-              <p class="text-xs text-gray-400 mt-1">
-                The member's own address — not the DepEd one. Needed before they can sign in to the
-                app.
-              </p>
-              <p v-if="loginEmailIsDeped" class="text-xs text-amber-600 mt-1">
-                That is the DepEd address — use the member's personal email for the app login.
-              </p>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1"
-                >Work email (record only)</label
-              >
-              <input
-                v-model="form.workEmail"
-                type="email"
-                placeholder="office@example.com"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-              <p class="text-xs text-gray-400 mt-1">
-                Any address written on the sheet — not only DepEd. Leave blank if unknown; it is
-                never used to sign in.
-              </p>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Phone (11 digits)</label>
-              <input
-                v-model="form.phone"
-                type="tel"
-                maxlength="11"
-                placeholder="09XXXXXXXXX"
-                @input="sanitizePhone"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1"
-                >Landline (optional)</label
-              >
-              <input
-                v-model="form.landline"
-                type="tel"
-                maxlength="20"
-                placeholder="02XXXXXXXXX"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Address</label>
-            <textarea
-              v-model="form.address"
-              rows="2"
-              placeholder="Street, barangay, city..."
-              class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-            ></textarea>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select
-                v-model="form.status"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Date Joined</label>
-              <input
-                v-model="form.dateJoined"
-                type="date"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-
-          <!-- Government IDs — Members' Data Sheet (all optional) -->
-          <div class="border-t border-gray-100 pt-4 space-y-4">
-            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">
-              Government IDs — optional
-            </p>
-
+            <!-- Gender + birthday (printed on the Members' Data Sheet) -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">ID Type</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Gender</label>
                 <select
-                  v-model="form.govIdType"
+                  v-model="form.gender"
                   class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 >
-                  <option value="">Select ID type</option>
-                  <option value="National ID">National ID</option>
-                  <option value="Driver's License">Driver's License</option>
-                  <option value="Passport">Passport</option>
-                  <option value="UMID">UMID</option>
-                  <option value="Voter's ID">Voter's ID</option>
+                  <option value="">Not set</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option v-if="form.gender && form.gender !== 'Male' && form.gender !== 'Female'">
+                    {{ form.gender }}
+                  </option>
                 </select>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">ID Number</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Birthday</label>
                 <input
-                  v-model="form.govIdNumber"
-                  type="text"
-                  maxlength="30"
-                  placeholder="e.g. D12-34-567890"
-                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">GSIS No.</label>
-                <input
-                  v-model="form.gsisNumber"
-                  type="text"
-                  maxlength="20"
-                  placeholder="Optional"
-                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">SSS No.</label>
-                <input
-                  v-model="form.sssNumber"
-                  type="text"
-                  maxlength="20"
-                  placeholder="Optional"
-                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Pag-IBIG No.</label>
-                <input
-                  v-model="form.pagibigNumber"
-                  type="text"
-                  maxlength="20"
-                  placeholder="Optional"
-                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">PhilHealth No.</label>
-                <input
-                  v-model="form.philhealthNumber"
-                  type="text"
-                  maxlength="20"
-                  placeholder="Optional"
+                  v-model="form.dateOfBirth"
+                  type="date"
                   class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
               </div>
             </div>
+
+            <!-- Membership classification + civil status (Members' Data Sheet) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Member Type</label>
+                <select
+                  v-model="form.memberType"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option value="Regular">Regular</option>
+                  <option value="Associate">Associate</option>
+                  <option value="Extension">Extension</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Civil Status</label>
+                <select
+                  v-model="form.civilStatus"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option value="Single">Single</option>
+                  <option value="Married">Married</option>
+                  <option value="Widowed">Widowed</option>
+                  <option value="Separated">Separated</option>
+                </select>
+              </div>
+            </div>
+
+            <div v-if="form.civilStatus === 'Married'">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Spouse Name</label>
+              <input
+                v-model="form.spouseName"
+                type="text"
+                placeholder="Spouse full name"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Personal email (app login)</label
+                >
+                <input
+                  v-model="form.email"
+                  type="email"
+                  placeholder="member@example.com"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+                <p class="text-xs text-gray-400 mt-1">
+                  The member's own address — not the DepEd one. Needed before they can sign in to
+                  the app.
+                </p>
+                <p v-if="loginEmailIsDeped" class="text-xs text-amber-600 mt-1">
+                  That is the DepEd address — use the member's personal email for the app login.
+                </p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Work email (record only)</label
+                >
+                <input
+                  v-model="form.workEmail"
+                  type="email"
+                  placeholder="office@example.com"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+                <p class="text-xs text-gray-400 mt-1">
+                  Any address written on the sheet — not only DepEd. Leave blank if unknown; it is
+                  never used to sign in.
+                </p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Phone (11 digits)</label
+                >
+                <input
+                  v-model="form.phone"
+                  type="tel"
+                  maxlength="11"
+                  placeholder="09XXXXXXXXX"
+                  @input="sanitizePhone"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Landline (optional)</label
+                >
+                <input
+                  v-model="form.landline"
+                  type="tel"
+                  maxlength="20"
+                  placeholder="02XXXXXXXXX"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Address</label>
+              <textarea
+                v-model="form.address"
+                rows="2"
+                placeholder="Street, barangay, city..."
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+              ></textarea>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  v-model="form.status"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Date Joined</label>
+                <input
+                  v-model="form.dateJoined"
+                  type="date"
+                  class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <!-- Government IDs — Members' Data Sheet (all optional) -->
+            <div class="border-t border-gray-100 pt-4 space-y-4">
+              <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Government IDs — optional
+              </p>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">ID Type</label>
+                  <select
+                    v-model="form.govIdType"
+                    class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="">Select ID type</option>
+                    <option value="National ID">National ID</option>
+                    <option value="Driver's License">Driver's License</option>
+                    <option value="Passport">Passport</option>
+                    <option value="UMID">UMID</option>
+                    <option value="Voter's ID">Voter's ID</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">ID Number</label>
+                  <input
+                    v-model="form.govIdNumber"
+                    type="text"
+                    maxlength="30"
+                    placeholder="e.g. D12-34-567890"
+                    class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">GSIS No.</label>
+                  <input
+                    v-model="form.gsisNumber"
+                    type="text"
+                    maxlength="20"
+                    placeholder="Optional"
+                    class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">SSS No.</label>
+                  <input
+                    v-model="form.sssNumber"
+                    type="text"
+                    maxlength="20"
+                    placeholder="Optional"
+                    class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Pag-IBIG No.</label>
+                  <input
+                    v-model="form.pagibigNumber"
+                    type="text"
+                    maxlength="20"
+                    placeholder="Optional"
+                    class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">PhilHealth No.</label>
+                  <input
+                    v-model="form.philhealthNumber"
+                    type="text"
+                    maxlength="20"
+                    placeholder="Optional"
+                    class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
+            <button
+              @click="closeModal"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              @click="saveMember"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
+            >
+              {{ modalMode === 'add' ? 'Add Member' : 'Save Changes' }}
+            </button>
           </div>
         </div>
-
-        <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
-          <button
-            @click="closeModal"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
-          >
-            Cancel
-          </button>
-          <button
-            @click="saveMember"
-            class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
-          >
-            {{ modalMode === 'add' ? 'Add Member' : 'Save Changes' }}
-          </button>
-        </div>
       </div>
-    </div>
+    </Transition>
 
     <!-- Confirmation Modal (status changes) -->
-    <div
-      v-if="confirmAction"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      @click.self="confirmAction = null"
-    >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-2">{{ confirmAction.title }}</h2>
-        <p class="text-sm text-gray-500 mb-6" :class="confirmAction.reason ? 'mb-4' : ''">
-          {{ confirmAction.message }}
-        </p>
-        <div v-if="confirmAction.reason" class="mb-6">
-          <label class="block text-xs font-medium text-gray-500 mb-1">Reason (required)</label>
-          <textarea
-            v-model="confirmReason"
-            rows="2"
-            placeholder="Why is this being corrected? e.g. Entered twice by mistake"
-            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-          ></textarea>
-        </div>
-        <div class="flex justify-end gap-3">
-          <button
-            @click="confirmAction = null"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
-          >
-            Cancel
-          </button>
-          <button
-            @click="runConfirm"
-            :disabled="confirmAction.reason && !confirmReason.trim()"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-white transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            :class="
-              confirmAction.danger
-                ? 'bg-red-600 hover:bg-red-700'
-                : 'bg-green-600 hover:bg-green-700'
-            "
-          >
-            {{ confirmAction.confirmLabel }}
-          </button>
+    <Transition name="dialog">
+      <div
+        v-if="confirmAction"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="confirmAction = null"
+      >
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+          <h2 class="text-lg font-semibold text-gray-800 mb-2">{{ confirmAction.title }}</h2>
+          <p class="text-sm text-gray-500 mb-6" :class="confirmAction.reason ? 'mb-4' : ''">
+            {{ confirmAction.message }}
+          </p>
+          <div v-if="confirmAction.reason" class="mb-6">
+            <label class="block text-xs font-medium text-gray-500 mb-1">Reason (required)</label>
+            <textarea
+              v-model="confirmReason"
+              rows="2"
+              placeholder="Why is this being corrected? e.g. Entered twice by mistake"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            ></textarea>
+          </div>
+          <div class="flex justify-end gap-3">
+            <button
+              @click="confirmAction = null"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              @click="runConfirm"
+              :disabled="confirmAction.reason && !confirmReason.trim()"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-white transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              :class="
+                confirmAction.danger
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : 'bg-green-600 hover:bg-green-700'
+              "
+            >
+              {{ confirmAction.confirmLabel }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
     <!-- Developer-only: delete a TEST member (typed confirmation) -->
-    <div
-      v-if="deleteTestOpen && detailMember"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      @click.self="deleteTestOpen = false"
-    >
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-2">Delete test member?</h2>
-        <p class="text-sm text-gray-500 mb-4">
-          This permanently removes <strong>{{ detailMember.name }}</strong> ({{
-            detailMember.memberNo
-          }}) and everything attached: loans, payments, co-maker rows, submitted documents, share
-          capital and loan requests. The audit log keeps its trail — deletions are logged, never
-          erased. Only ever do this for test data; real member records are protected by RA 9520.
-        </p>
-        <p class="text-sm text-gray-700 mb-2">
-          Type the member number <strong>{{ detailMember.memberNo }}</strong> to confirm.
-        </p>
-        <input
-          v-model="deleteTestConfirm"
-          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-red-500"
-          :placeholder="detailMember.memberNo"
-        />
-        <p v-if="deleteTestError" class="text-sm text-red-600 mb-2">{{ deleteTestError }}</p>
-        <div class="flex justify-end gap-3 mt-4">
-          <button
-            @click="deleteTestOpen = false"
-            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
-          >
-            Cancel
-          </button>
-          <button
-            @click="runDeleteTest"
-            :disabled="
-              deleteTestBusy ||
-              deleteTestConfirm.trim().toUpperCase() !== String(detailMember.memberNo).toUpperCase()
-            "
-            class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition duration-200 disabled:opacity-50"
-          >
-            {{ deleteTestBusy ? 'Deleting…' : 'Delete permanently' }}
-          </button>
+    <Transition name="dialog">
+      <div
+        v-if="deleteTestOpen && detailMember"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="deleteTestOpen = false"
+      >
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+          <h2 class="text-lg font-semibold text-gray-800 mb-2">Delete test member?</h2>
+          <p class="text-sm text-gray-500 mb-4">
+            This permanently removes <strong>{{ detailMember.name }}</strong> ({{
+              detailMember.memberNo
+            }}) and everything attached: loans, payments, co-maker rows, submitted documents, share
+            capital and loan requests. The audit log keeps its trail — deletions are logged, never
+            erased. Only ever do this for test data; real member records are protected by RA 9520.
+          </p>
+          <p class="text-sm text-gray-700 mb-2">
+            Type the member number <strong>{{ detailMember.memberNo }}</strong> to confirm.
+          </p>
+          <input
+            v-model="deleteTestConfirm"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+            :placeholder="detailMember.memberNo"
+          />
+          <p v-if="deleteTestError" class="text-sm text-red-600 mb-2">{{ deleteTestError }}</p>
+          <div class="flex justify-end gap-3 mt-4">
+            <button
+              @click="deleteTestOpen = false"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              @click="runDeleteTest"
+              :disabled="
+                deleteTestBusy ||
+                deleteTestConfirm.trim().toUpperCase() !==
+                  String(detailMember.memberNo).toUpperCase()
+              "
+              class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition duration-200 disabled:opacity-50"
+            >
+              {{ deleteTestBusy ? 'Deleting…' : 'Delete permanently' }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
   </AppLayout>
 </template>
 
@@ -1058,11 +1075,13 @@ import PhotoPreview from '../components/PhotoPreview.vue'
 import AttachmentPanel from '../components/AttachmentPanel.vue'
 import { PHOTO_ACCEPT } from '../lib/documents'
 import { useAuthStore } from '../stores/auth'
+import { useToastsStore } from '../stores/toasts'
 import { useMembersStore } from '../stores/members'
 import { useLoansStore, LOAN_TYPES } from '../stores/loans'
 
 const membersStore = useMembersStore()
 const auth = useAuthStore()
+const toasts = useToastsStore()
 
 // Developer-only test-data cleanup (22_developer_role.sql) — the typed
 // member number mirrors GitHub-style destructive confirms and keeps
@@ -1095,6 +1114,7 @@ async function runDeleteTest() {
   }
   deleteTestOpen.value = false
   detailMember.value = null
+  toasts.success('Test member removed.')
 }
 const loansStore = useLoansStore()
 
@@ -1118,13 +1138,18 @@ const copied = ref(false)
 const confirmAction = ref(null) // { title, message, confirmLabel, danger, reason, run }
 const confirmReason = ref('')
 
-function runConfirm() {
+async function runConfirm() {
   if (!confirmAction.value) return
   // Corrections must say why — the reason goes into the audit trail.
   if (confirmAction.value.reason && !confirmReason.value.trim()) return
-  confirmAction.value.run(confirmReason.value.trim())
+  const action = confirmAction.value
+  const reason = confirmReason.value.trim()
   confirmAction.value = null
   confirmReason.value = ''
+  const result = await action.run(reason)
+  if (!result || result.ok !== false) {
+    if (action.success) toasts.success(action.success)
+  }
 }
 
 // Lifecycle actions and confirmations
@@ -1137,12 +1162,14 @@ function requestStatusChange(member, newStatus) {
       confirmLabel: 'Deactivate',
       danger: true,
       reason: true,
+      success: 'Member deactivated.',
     },
     Active: {
       title: 'Reactivate Member?',
       message: `${name} will be marked active and their login re-enabled.`,
       confirmLabel: 'Reactivate',
       danger: false,
+      success: 'Member reactivated.',
     },
   }
   confirmAction.value = {
@@ -1163,9 +1190,11 @@ function requestRemoveCapital(member, entry) {
     confirmLabel: 'Remove',
     danger: true,
     reason: true,
+    success: 'Contribution removed.',
     run: async (reason) => {
       const result = await membersStore.removeCapital(member.id, entry, reason)
       capitalError.value = result.ok ? '' : result.message
+      return result
     },
   }
 }
@@ -1196,9 +1225,11 @@ function requestRemovePhoto() {
     message: `${detailMember.value.firstName} ${detailMember.value.lastName}'s profile photo will be removed from the record. You can upload a new one anytime.`,
     confirmLabel: 'Remove',
     danger: true,
+    success: 'Profile photo removed.',
     run: async () => {
       const result = await membersStore.removeIdPhoto(detailMember.value.id)
       photoError.value = result.ok ? '' : result.message
+      return result
     },
   }
 }
@@ -1474,7 +1505,9 @@ async function saveMember() {
     return
   }
 
+  const wasAdd = modalMode.value === 'add'
   closeModal()
+  toasts.success(wasAdd ? 'Member added.' : 'Member record updated.')
 }
 
 const printingSheet = ref(false)

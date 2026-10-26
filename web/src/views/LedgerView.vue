@@ -351,9 +351,10 @@
             </button>
             <button
               @click="saveTransaction"
-              class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
+              :disabled="busy"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {{ modalMode === 'add' ? 'Add Transaction' : 'Save Changes' }}
+              {{ busy ? 'Saving…' : modalMode === 'add' ? 'Add Transaction' : 'Save Changes' }}
             </button>
           </div>
         </div>
@@ -394,10 +395,10 @@
             </button>
             <button
               @click="confirmDelete"
-              :disabled="!deleteReason.trim()"
+              :disabled="deleting || !deleteReason.trim()"
               class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Delete
+              {{ deleting ? 'Deleting…' : 'Delete' }}
             </button>
           </div>
         </div>
@@ -447,6 +448,10 @@ const formError = ref('')
 const txnToDelete = ref(null)
 const deleteError = ref('')
 const deleteReason = ref('')
+// Double-click guards — one click, one database write. Money entries
+// must never double-post because the button was tapped twice.
+const busy = ref(false)
+const deleting = ref(false)
 
 // Form model
 const emptyForm = {
@@ -486,6 +491,7 @@ function closeModal() {
 }
 
 async function saveTransaction() {
+  if (busy.value) return // already writing — ignore the second click
   // Validation
   if (!form.date) {
     formError.value = 'Date is required.'
@@ -510,19 +516,24 @@ async function saveTransaction() {
     amount: Math.round(Number(form.amount) * 100) / 100,
   }
 
-  const result =
-    modalMode.value === 'add'
-      ? await ledgerStore.addTransaction(data)
-      : await ledgerStore.updateTransaction(editingId.value, data)
-  if (!result.ok) {
-    // Keep the dialog open and show what the database said
-    formError.value = result.message || 'Could not save the transaction.'
-    return
-  }
+  busy.value = true
+  try {
+    const result =
+      modalMode.value === 'add'
+        ? await ledgerStore.addTransaction(data)
+        : await ledgerStore.updateTransaction(editingId.value, data)
+    if (!result.ok) {
+      // Keep the dialog open and show what the database said
+      formError.value = result.message || 'Could not save the transaction.'
+      return
+    }
 
-  const wasAdd = modalMode.value === 'add'
-  closeModal()
-  toasts.success(wasAdd ? 'Entry saved.' : 'Entry updated.')
+    const wasAdd = modalMode.value === 'add'
+    closeModal()
+    toasts.success(wasAdd ? 'Entry saved.' : 'Entry updated.')
+  } finally {
+    busy.value = false
+  }
 }
 
 function openDeleteModal(txn) {
@@ -534,18 +545,23 @@ function openDeleteModal(txn) {
 async function confirmDelete() {
   // The reason is required and travels with the deletion into the
   // audit trail (same rule as capital corrections in MembersView).
-  if (!deleteReason.value.trim()) return
-  const result = await ledgerStore.deleteTransaction(
-    txnToDelete.value.id,
-    deleteReason.value.trim(),
-  )
-  if (!result.ok) {
-    // Keep the confirmation open and show why.
-    deleteError.value = result.message || 'Could not delete the transaction.'
-    return
+  if (deleting.value || !deleteReason.value.trim()) return
+  deleting.value = true
+  try {
+    const result = await ledgerStore.deleteTransaction(
+      txnToDelete.value.id,
+      deleteReason.value.trim(),
+    )
+    if (!result.ok) {
+      // Keep the confirmation open and show why.
+      deleteError.value = result.message || 'Could not delete the transaction.'
+      return
+    }
+    txnToDelete.value = null
+    toasts.success('Entry removed.')
+  } finally {
+    deleting.value = false
   }
-  txnToDelete.value = null
-  toasts.success('Entry removed.')
 }
 
 function formatCurrency(amount) {

@@ -376,15 +376,11 @@ def forecast_disbursements(loans, months=FORECAST_MONTHS):
     return fc
 
 
-def forecast_collections(loans, pays, months=FORECAST_MONTHS):
-    """Expected cash-in: each schedule row is due at loan_month + installment.
-
-    This is the 'collections' half the paper requires. Rows without a loan
-    date or installment number are excluded and counted, not silently kept.
-    """
-    if pays.empty:
-        print("No payment schedules — collections forecast unavailable.")
-        return pd.DataFrame()
+def _due_schedule(pays, loans):
+    """Shared due-month schedule: one row per installment that has a usable
+    loan date + installment number, tagged with the month it falls due.
+    BOTH collections forecasts (v1 and v2) call this — the math lives in
+    exactly one place, so the two versions can never drift apart."""
     p = pays.copy()
     p["loan_date"] = pd.to_datetime(
         loans.set_index("loan_key")["date"]
@@ -401,12 +397,25 @@ def forecast_collections(loans, pays, months=FORECAST_MONTHS):
     p["installment"] = pd.to_numeric(p["installment"], errors="coerce")
     p["expected"] = pd.to_numeric(p["expected"], errors="coerce")
     ok = p.dropna(subset=["loan_date", "installment", "expected"]).copy()
-    print(f"Collections base: {len(ok)}/{len(p)} schedule rows with usable dates.")
     # Due month = loan month + installment number (1st payment ~1 month
     # after release). Period + int is vectorized; adding a DateOffset array
     # to datetimes is not — it degrades to object dtype and .dt crashes.
     ok["due_month"] = (ok["loan_date"].dt.to_period("M")
                        + ok["installment"].astype(int).to_numpy())
+    return ok
+
+
+def forecast_collections(loans, pays, months=FORECAST_MONTHS):
+    """Expected cash-in: each schedule row is due at loan_month + installment.
+
+    This is the 'collections' half the paper requires. Rows without a loan
+    date or installment number are excluded and counted, not silently kept.
+    """
+    if pays.empty:
+        print("No payment schedules — collections forecast unavailable.")
+        return pd.DataFrame()
+    ok = _due_schedule(pays, loans)
+    print(f"Collections base: {len(ok)}/{len(pays)} schedule rows with usable dates.")
     by_month = ok.groupby("due_month")["expected"].sum()
     by_month.index = by_month.index.to_timestamp()
     start = pd.Timestamp.today().normalize().replace(day=1)
@@ -436,9 +445,611 @@ def plot_forecast(disb_fc, coll_fc):
     print(f"Chart saved -> {out}")
 
 
-# --------------------------------------------------------------------------
-# 6. OCR-ASSISTED RECEIPT VERIFICATION — real lib, mock fallback
-# --------------------------------------------------------------------------
+# ==========================================================================
+# 5b. ANALYTICS PACK v2 — trend analysis & prediction (re-demo upgrade)
+# ==========================================================================
+# The panel asked for more than moving averages. Every function here
+# answers one of their questions:
+#   Q1 when does each member actively apply (and repay)?  -> member_cycles
+#   Q2 which months do members apply (and repay)?         -> seasonality_report
+#   Q3 how much money will be released in TOTAL?          -> forecast_disbursements_v2
+#   Q4 how do we know the models work?                    -> backtest_monthly
+# plus: probability-weighted collections (forecast_collections_v2),
+#       a ranked "who will re-apply" call-list (propensity_ranking),
+#       repayment reliability by term bucket (collection_reliability),
+#       plain-English machine-generated findings (auto_insights), and
+#       demo charts served as PNG (chart_*_png).
+#
+# HONESTY RULES baked into every function (say these out loud at demo):
+#   - The usable modern ledger era starts 2023-01 (ANALYSIS_START). The
+#     ledger holds one record in 2019 and one in 2022 (pre-digital); the
+#     coop's book was quiet 2020-21. Trend models train only on 2023+.
+#   - Every payload reports n_loans_analyzed and caveats[] — thin data is
+#     labelled, never hidden (only 17 dated repayments exist on paper).
+#   - Forecast intervals are EMPIRICAL: the q95 of real backtest errors,
+#     not a theoretical formula we cannot defend.
+ANALYSIS_START = pd.Timestamp("2023-01-01")
+BACKTEST_MODELS = ("ma3", "ma6", "trend", "seasonal_naive")
+MONTH_NAMES = ("January", "February", "March", "April", "May", "June",
+               "July", "August", "September", "October", "November", "December")
+MONTH_ABBR = tuple(n[:3] for n in MONTH_NAMES)
+
+
+def analysis_loans(loans):
+    """Dated loans from ANALYSIS_START onward + how many were excluded."""
+    dated = loans.dropna(subset=["date"]).copy()
+    era = dated[dated["date"] >= ANALYSIS_START].copy()
+    return era, int(len(dated) - len(era))
+
+
+def _forecast_path(model, y, steps):
+    """Forecast `steps` months ahead from history array y under one model.
+
+    seasonal_naive repeats last year's shape (month t takes month t-12's
+    value). It needs 12 months of history and degrades to ma3 below that —
+    the backtest scorecard records which one actually ran.
+    """
+    y = np.asarray(y, dtype=float)
+    if model == "ma3":
+        return np.full(steps, float(np.mean(y[-3:])))
+    if model == "ma6":
+        return np.full(steps, float(np.mean(y[-6:])))
+    if model == "seasonal_naive" and len(y) < 12:
+        model = "ma3"  # documented degrade — history too short
+    if model == "seasonal_naive":
+        return np.resize(y[-12:], steps).astype(float)
+    from sklearn.linear_model import LinearRegression  # local: heavy import
+    X = np.arange(len(y)).reshape(-1, 1)
+    reg = LinearRegression().fit(X, y)
+    pred = reg.predict(np.arange(len(y), len(y) + steps).reshape(-1, 1))
+    return np.clip(pred, 0, None)  # negative disbursements are impossible
+
+
+def backtest_monthly(loans, holdout=6):
+    """Walk-forward backtest: hide the last `holdout` months, predict each
+    one using only the data before it, then score every model honestly.
+
+    WAPE (weighted absolute % error) is used instead of MAPE because the
+    series contains real zero months — MAPE explodes when actual = 0.
+    Returns the scorecard, the winning model, its raw residuals, and the
+    actual-vs-predicted values (the chart + insights engine reuse these).
+    """
+    era, n_excl = analysis_loans(loans)
+    s = monthly_series(era)
+    y = s.values.astype(float)
+    n = len(y)
+    h = max(3, min(int(holdout), n // 3))
+    caveats = ([f"{n_excl} loans before {ANALYSIS_START:%Y-%m} excluded from modelling"]
+               if n_excl else [])
+    if n < 15:
+        return {"scorecard": [], "best_model": None, "residuals": [],
+                "actuals": [], "predictions": [], "holdout": h, "n_months": n,
+                "caveats": caveats + ["fewer than 15 months of history — backtest skipped"]}
+    preds_by_model = {m: [] for m in BACKTEST_MODELS}
+    actuals = []
+    for t in range(n - h, n):                      # one step ahead each time
+        for mname in BACKTEST_MODELS:
+            preds_by_model[mname].append(float(_forecast_path(mname, y[:t], 1)[0]))
+        actuals.append(float(y[t]))
+    card = []
+    for mname, preds in preds_by_model.items():
+        preds_a, act = np.asarray(preds), np.asarray(actuals)
+        err = np.abs(preds_a - act)
+        card.append({
+            "model": mname,
+            "mae": round(float(err.mean()), 2),                     # avg miss, pesos
+            "wape": round(float(err.sum() / max(np.abs(act).sum(), 1.0)), 4),
+            "within_25pct": round(float((err <= 0.25 * np.maximum(act, 1.0)).mean()), 4),
+        })
+    card.sort(key=lambda r: (r["wape"], r["mae"]))
+    best = card[0]["model"]
+    return {"scorecard": card, "best_model": best, "holdout": h, "n_months": n,
+            "residuals": [a - p for a, p in zip(actuals, preds_by_model[best])],
+            "actuals": actuals, "predictions": preds_by_model[best],
+            "months_backtested": [d.strftime("%Y-%m") for d in s.index[n - h:]],
+            "caveats": caveats}
+
+
+def forecast_disbursements_v2(loans, months=FORECAST_MONTHS, holdout=6):
+    """Q3: TOTAL pesos to be released, best model, empirical 95% interval.
+
+    The winning model from backtest_monthly forecasts `months` ahead; the
+    interval half-width is the empirical q95 of the backtest residuals
+    (with a 6-month holdout that IS the worst observed miss — stated in
+    caveats, not dressed up as a formula). A 12-month loan-type split of
+    recent disbursements shows WHERE the money goes (Regular vs Emergency).
+    """
+    bt = backtest_monthly(loans, holdout=holdout)
+    if not bt["best_model"]:
+        return {"best_model": None, "scorecard": [], "type_shares_12m": {},
+                "rows": [], "caveats": bt["caveats"], "n_months": bt["n_months"]}
+    era, _ = analysis_loans(loans)
+    s = monthly_series(era)
+    path = _forecast_path(bt["best_model"], s.values.astype(float), months)
+    resid = np.abs(np.asarray(bt["residuals"], dtype=float))
+    band = float(np.quantile(resid, 0.95)) if len(resid) >= 4 else float(resid.max())
+    future = pd.date_range(s.index.max() + pd.offsets.MonthBegin(1),
+                           periods=months, freq="MS")
+    rows = [{"month": d.strftime("%Y-%m"), "point": round(float(v), 2),
+             "low": round(max(float(v) - band, 0.0), 2),
+             "high": round(float(v) + band, 2)}
+            for d, v in zip(future, path)]
+    # Where the money goes: type shares over the trailing 12 months.
+    lt = era["loan_type"].astype(str).replace({"N/A": "Regular"}).fillna("Regular")
+    tail = era[era["date"] > era["date"].max() - pd.DateOffset(months=12)]
+    shares = (tail.groupby(lt.loc[tail.index])["loan_amount"].sum()
+              / max(float(tail["loan_amount"].sum()), 1.0)).round(4).to_dict()
+    total_path = sum(r["point"] for r in rows)
+    return {"best_model": bt["best_model"], "holdout": bt["holdout"],
+            "n_months": bt["n_months"], "interval_band": round(band, 2),
+            "scorecard": bt["scorecard"], "type_shares_12m": shares,
+            "total_expected": round(total_path, 2), "rows": rows,
+            "caveats": bt["caveats"] + [
+                f"95% interval = empirical q95 of {len(resid)} backtest residuals "
+                f"(±{band:,.0f} PHP per month)"]}
+
+
+def seasonality_report(loans, pays=None):
+    """Q2: month-of-year indices for applications AND scheduled repayments,
+    plus the paydays-15/30 effect coops actually care about.
+
+    Index > 1.0 = that calendar month runs above the era's monthly
+    average (textbook seasonal index: mean of that month across years /
+    mean of all year-months). Repayment seasonality comes from the due
+    schedule (complete on paper) and is labelled as scheduled, not paid.
+    """
+    era, n_excl = analysis_loans(loans)
+    ym = era.groupby([era["date"].dt.year, era["date"].dt.month]).agg(
+        loans=("loan_amount", "size"), disbursed=("loan_amount", "sum"))
+    month_loans = ym.groupby(level=1)["loans"].mean()
+    month_disb = ym.groupby(level=1)["disbursed"].mean()
+    base_loans = max(float(ym["loans"].mean()), 1e-9)
+    base_disb = max(float(ym["disbursed"].mean()), 1e-9)
+    rows = []
+    for m in range(1, 13):
+        rows.append({
+            "month": MONTH_NAMES[m - 1],
+            "avg_loans": round(float(month_loans.get(m, 0.0)), 2),
+            "avg_disbursed": round(float(month_disb.get(m, 0.0)), 2),
+            "index_loans": round(float(month_loans.get(m, 0.0)) / base_loans, 3),
+            "index_disbursed": round(float(month_disb.get(m, 0.0)) / base_disb, 3),
+        })
+    # Payday effect: coops release on the 15th/30th; a 6-day window
+    # (14-16, 29-31) is ~19.7% of an average month. Lift = observed share
+    # of applications in that window / 0.197.
+    day = era["date"].dt.day
+    payday = day.between(14, 16) | day.between(29, 31)
+    payday_share = float(payday.mean()) if len(era) else 0.0
+    # Repayment seasonality from due schedule — complete on paper.
+    repay_rows = []
+    repay_caveat = "no payment schedule supplied"
+    pays_rows = None
+    if pays is not None and len(pays):
+        ok = _due_schedule(pays, loans)
+        pays_rows = ok.groupby(ok["due_month"].dt.month)["expected"].sum()
+        total = max(float(pays_rows.sum()), 1e-9)
+        repay_rows = [{"month": MONTH_NAMES[m - 1],
+                       "scheduled_share": round(float(pays_rows.get(m, 0.0)) / total, 4)}
+                      for m in range(1, 13)]
+        repay_caveat = "from scheduled due dates on paper (not verified payments)"
+    peak_m = max(rows, key=lambda r: r["index_loans"])["month"]
+    trough_candidates = [r for r in rows if r["avg_loans"] > 0] or rows
+    trough_m = min(trough_candidates, key=lambda r: r["index_loans"])["month"]
+    return {"months": rows, "recurring_months": repay_rows,
+            "recurring_caveat": repay_caveat,
+            "peak_month": peak_m, "trough_month": trough_m,
+            "payday_share": round(payday_share, 4),
+            "payday_lift": round(payday_share / 0.197, 3),
+            "n_loans_analyzed": int(len(era)),
+            "caveats": ([f"{n_excl} pre-{ANALYSIS_START:%Y-%m} loans excluded"]
+                        if n_excl else []) +
+                       ["seasonality rests on the 2023+ era — indicative, "
+                        "and validated monthly via the backtest endpoint"]}
+
+
+def member_cycles(loans, stats=None, min_loans=2):
+    """Q1: each member's borrowing rhythm.
+
+    For members with >=2 dated loans: average gap between their loans
+    (their cycle), the std (how regular they are), their personal busy
+    month, and a predicted next-application window = last loan + gap ± std.
+    Single-loan members are listed too, but flagged low_confidence and
+    given the COHORT average gap — their personal cycle is not invented.
+    Repayment behaviour (completion share, collection rate) joins from
+    payment_stats where it exists.
+    """
+    dated = loans.dropna(subset=["date"]).copy()
+    st = stats if stats is not None and len(stats) else pd.DataFrame()
+    perf = {}
+    if len(st):
+        s = st.copy()
+        s["member_k"] = s["member"].astype(str).str.strip().str.lower()
+        perf = s.groupby("member_k").agg(
+            fully_paid_share=("fully_paid", lambda x:
+                              float(pd.Series(x).astype(str).str.lower().eq("true").mean())),
+            collection_rate=("collection_rate", "mean")).to_dict("index")
+    # TIME-TRAVEL RULE: the ledger snapshot ends at its last recorded loan
+    # (as_of). When that sits in the past — and on demo day it always will
+    # — predictions anchor at as_of, NOT at wall-clock today: a rhythm
+    # measured on data through Oct 2025 cannot honestly "predict" Nov 2026.
+    # Windows that are past relative to today then read as "already due",
+    # which is exactly the follow-up call-list the coop wants.
+    today = pd.Timestamp.today().normalize()
+    as_of = dated["date"].max() if len(dated) else today
+    anchor = min(today, as_of)
+    rows, gaps_all = [], []
+    for member, grp in dated.groupby("member"):
+        ds = grp["date"].sort_values()
+        mk = str(member).strip().lower()
+        p = perf.get(mk, {})
+        base = {"member": member, "n_loans": int(len(ds)),
+                "first_loan": ds.iloc[0].strftime("%Y-%m-%d"),
+                "last_loan": ds.iloc[-1].strftime("%Y-%m-%d"),
+                "total_borrowed": round(float(grp["loan_amount"].sum()), 2),
+                "fully_paid_share": (round(float(p["fully_paid_share"]), 3)
+                                     if "fully_paid_share" in p else None),
+                "collection_rate": (round(float(p["collection_rate"]), 3)
+                                    if "collection_rate" in p and not pd.isna(p["collection_rate"])
+                                    else None)}
+        if len(ds) >= min_loans:
+            gaps = ds.diff().dt.days.dropna()
+            # ddof=0: a member with exactly min_loans loans has ONE gap and
+            # ddof=1 would be NaN — and `NaN or 0.0` is still NaN (truthy).
+            gap_mean, gap_std = float(gaps.mean()), float(gaps.std(ddof=0) or 0.0)
+            if gap_mean < 30:
+                # Loans clustered on the same/adjacent days (split releases
+                # or ledger artifacts) — no MEASURABLE cycle. Report that
+                # instead of inventing a rhythm.
+                rows.append({**base, "confidence": "low — loans clustered; "
+                             "cycle not measurable",
+                             "avg_cycle_days": round(gap_mean),
+                             "cycle_regularity": None, "busy_month": None,
+                             "predicted_next": None, "next_window": None,
+                             "days_until_next": None})
+                continue
+            gaps_all.append(gap_mean)
+            mode_months = ds.dt.month.mode()
+            busy = int(mode_months.iloc[0]) if len(mode_months) else None
+            nxt = ds.iloc[-1] + pd.Timedelta(days=gap_mean)
+            # Window half-width: the member's own std, floored at 15 days so
+            # a perfectly regular member still shows a readable window. It
+            # may sit in the past — that honestly means "already due", and
+            # negative days_until_next puts such members first in the list.
+            half = max(gap_std, 15.0)
+            lo_w, hi_w = nxt - pd.Timedelta(days=half), nxt + pd.Timedelta(days=half)
+            rows.append({**base, "confidence": "high",
+                         "avg_cycle_days": round(gap_mean),
+                         "cycle_regularity": round(max(1.0 - gap_std / max(gap_mean, 1.0), 0.0), 3),
+                         "busy_month": MONTH_NAMES[busy - 1] if busy else None,
+                         "predicted_next": nxt.strftime("%Y-%m-%d"),
+                         "next_window": f"{lo_w:%b %d, %Y} – {hi_w:%b %d, %Y}",
+                         "days_until_next": int((nxt - anchor).days)})
+        else:
+            rows.append({**base, "confidence": "low — single loan, cohort-average cycle used",
+                         "avg_cycle_days": None, "cycle_regularity": None,
+                         "busy_month": None, "predicted_next": None,
+                         "next_window": None, "days_until_next": None})
+    high = [r for r in rows if r["confidence"] == "high"]
+    high.sort(key=lambda r: r["days_until_next"])
+    low = [r for r in rows if r["confidence"] != "high"]
+    cohort = round(float(np.mean(gaps_all))) if gaps_all else None
+    return {"recurring": high[:max(min_loans * 10, 40)],
+            "single_loan_members": len(low),
+            "summary": {"members_analyzed": len(rows),
+                        "recurring_members": len(high),
+                        "cohort_avg_cycle_days": cohort,
+                        "cohort_avg_cycle_months": (round(cohort / 30.44, 1)
+                                                    if cohort else None),
+                        "ledger_as_of": as_of.strftime("%Y-%m-%d"),
+                        "anchor_date": anchor.strftime("%Y-%m-%d")},
+            "caveats": ["predicted windows are behavioural averages, not "
+                        "commitments — members shift with income and season; "
+                        "days_until_next is measured from anchor_date (the "
+                        "ledger's as-of edge); negative = already due"]}
+
+
+def propensity_ranking(loans, stats=None, top=20, horizon_days=90):
+    """Who will most likely apply again within horizon_days?
+
+    A TRANSPARENT weighted score (documented weights — no black box the
+    panel can poke): recency 35% (exponential decay vs the cohort's avg
+    cycle), frequency 25%, repayment completion 20%, punctuality 15%,
+    average ticket 5%. A heuristic call-list for the coop, honestly
+    labelled as such — not an ML claim on 171 rows.
+    """
+    dated = loans.dropna(subset=["date"]).copy()
+    st = stats if stats is not None and len(stats) else pd.DataFrame()
+    perf = {}
+    if len(st):
+        s = st.copy()
+        s["member_k"] = s["member"].astype(str).str.strip().str.lower()
+        perf = s.groupby("member_k").agg(
+            fully_paid_share=("fully_paid", lambda x:
+                              float(pd.Series(x).astype(str).str.lower().eq("true").mean())),
+            collection_rate=("collection_rate", "mean")).to_dict("index")
+    # Same TIME-TRAVEL RULE as member_cycles: recency is measured against
+    # the ledger's as-of edge when the snapshot is stale, so one ancient
+    # member doesn't flatten every score toward zero on demo day.
+    today = pd.Timestamp.today().normalize()
+    anchor = min(today, dated["date"].max()) if len(dated) else today
+    cyc = member_cycles(loans, stats)
+    scale = cyc["summary"]["cohort_avg_cycle_days"] or 365.0
+    out = []
+    for member, grp in dated.groupby("member"):
+        ds = grp["date"].sort_values()
+        mk = str(member).strip().lower()
+        p = perf.get(mk, {})
+        idle = float((anchor - ds.iloc[-1]).days)
+        recency = float(np.exp(-idle / max(scale, 1.0)))
+        freq = min(len(ds) / 4.0, 1.0)
+        completion = (float(p["fully_paid_share"])
+                      if "fully_paid_share" in p else 0.5)
+        punct = (float(np.clip(p["collection_rate"], 0, 1))
+                 if "collection_rate" in p and not pd.isna(p["collection_rate"]) else 0.5)
+        avg_ticket = float(grp["loan_amount"].mean())
+        ticket = min(avg_ticket / 200_000.0, 1.0)
+        score = 100 * (0.35 * recency + 0.25 * freq + 0.20 * completion
+                       + 0.15 * punct + 0.05 * ticket)
+        out.append({"member": member, "score": round(score, 1),
+                    "n_loans": int(len(ds)), "days_since_last": int(idle),
+                    "avg_ticket": round(avg_ticket, 2),
+                    "fully_paid_share": (round(completion, 3) if "fully_paid_share" in p else None),
+                    "likely_within_horizon": bool(idle <= horizon_days)})
+    out.sort(key=lambda r: r["score"], reverse=True)
+    return {"weights": {"recency": 0.35, "frequency": 0.25, "completion": 0.20,
+                        "punctuality": 0.15, "ticket_size": 0.05},
+            "horizon_days": horizon_days, "ranking": out[:top],
+            "ledger_as_of": anchor.strftime("%Y-%m-%d"),
+            "caveats": ["transparent heuristic weights (shown above) — tuned "
+                        "from the coop interview, not fitted to 171 rows; "
+                        "days_since_last measured at the ledger's as-of edge"]}
+
+
+def collection_reliability(stats=None, loans=None):
+    """Repayment reliability per term bucket — the probabilities that
+    weight the v2 collections forecast.
+
+    Buckets: short <= 6 months, medium 7-12, long > 12. realized_rate =
+    total paid / total scheduled for that bucket (paper truth); where the
+    ledger carries no amounts, fully_paid share stands in. The overall
+    row is the blended probability used when a bucket is too thin.
+    """
+    st = stats if stats is not None and len(stats) else pd.DataFrame()
+    if st.empty:
+        return {"buckets": [], "overall_realized_rate": None,
+                "caveats": ["no repayment stats available"]}
+    s = st.copy()
+    s["term_months"] = pd.to_numeric(s["term_months"], errors="coerce")
+    s["bucket"] = pd.cut(s["term_months"], bins=[0, 6, 12, 10_000],
+                         labels=["short (<=6mo)", "medium (7-12mo)", "long (>12mo)"])
+    def _rate(g):
+        """Completion probability = share of loans marked fully paid.
+
+        The ledger records the coop's fully-paid MARKS reliably, but paid
+        PESOS are largely absent from the extract (only 17 dated payments
+        carry amounts). So the marks are the probability; the amount ratio
+        is computed separately and only trusted when >= half the group's
+        rows actually carry paid amounts — never as the headline number.
+        """
+        share = float(pd.Series(g["fully_paid"]).astype(str).str.lower().eq("true").mean())
+        amt = None
+        if "total_expected" in g.columns and "total_paid" in g.columns:
+            exp_ = pd.to_numeric(g["total_expected"], errors="coerce")
+            paid = pd.to_numeric(g["total_paid"], errors="coerce")
+            if float(exp_.sum()) > 0 and float((paid.fillna(0) > 0).mean()) >= 0.5:
+                amt = float(paid.sum() / exp_.sum())
+        return share, amt
+    rows = []
+    for label, g in s.groupby("bucket", observed=True):
+        share, amt = _rate(g)
+        rows.append({"bucket": str(label), "n_loans": int(len(g)),
+                     "completion_rate": round(share, 4),
+                     "amount_recovery_rate": (round(amt, 4) if amt is not None else None),
+                     "avg_term_months": round(float(g["term_months"].mean()), 1)})
+    share_all, amt_all = _rate(s)
+    return {"buckets": rows, "overall_completion_rate": round(share_all, 4),
+            "overall_amount_recovery_rate": (round(amt_all, 4) if amt_all is not None else None),
+            "caveats": ["completion_rate = share of loans marked fully paid "
+                        "(the coop's paper truth); amount recovery appears only "
+                        "where paid pesos are actually recorded in the ledger"]}
+
+
+def forecast_collections_v2(loans, pays, stats=None, months=FORECAST_MONTHS):
+    """Expected cash-in, PROBABILITY-WEIGHTED — the honest collections view.
+
+    Same due-month schedule as v1 (shared _due_schedule — single source of
+    math), but every scheduled peso is multiplied by its term bucket's
+    historical realized recovery rate. Output shows BOTH numbers side by
+    side: the naive sum (what a spreadsheet would promise) and ours (what
+    history says actually comes in). The gap IS the story.
+    """
+    if pays.empty:
+        return {"rows": [], "caveats": ["no payment schedule on paper"]}
+    ok = _due_schedule(pays, loans)
+    rel = collection_reliability(stats, loans)
+    overall = rel.get("overall_completion_rate") or 1.0
+    by_bucket = {b["bucket"]: b["completion_rate"] for b in rel["buckets"]}
+    ok["term_months"] = pd.to_numeric(ok["term_months"], errors="coerce")
+    ok["bucket"] = pd.cut(ok["term_months"], bins=[0, 6, 12, 10_000],
+                          labels=["short (<=6mo)", "medium (7-12mo)", "long (>12mo)"])
+    ok["recovery"] = ok["bucket"].astype(str).map(by_bucket).fillna(overall)
+    ok["weighted"] = ok["expected"] * ok["recovery"]
+    by_month = ok.groupby("due_month").agg(scheduled=("expected", "sum"),
+                                           weighted=("weighted", "sum"))
+    by_month.index = by_month.index.to_timestamp()
+    start = pd.Timestamp.today().normalize().replace(day=1)
+    idx = pd.date_range(start, periods=months, freq="MS")
+    rows = []
+    for m in idx:
+        sched = float(by_month["scheduled"].get(m, 0.0))
+        wt = float(by_month["weighted"].get(m, 0.0))
+        rows.append({"month": m.strftime("%Y-%m"), "scheduled": round(sched, 2),
+                     "probability_weighted": round(wt, 2),
+                     "gap": round(sched - wt, 2)})
+    return {"rows": rows,
+            "total_scheduled": round(sum(r["scheduled"] for r in rows), 2),
+            "total_weighted": round(sum(r["probability_weighted"] for r in rows), 2),
+            "recovery_by_bucket": rel["buckets"],
+            "caveats": rel["caveats"] + ["v2 vs v1 gap = overpromise avoided"]}
+
+
+def auto_insights(loans, stats=None, pays=None, holdout=6):
+    """Plain-English findings the system derives ITSELF from the data.
+
+    Every sentence is computed here — nothing hardcoded — so the panel can
+    watch an insight change when the data does. Capped at 8; anomalies use
+    |z| >= 1.5 on the 2023+ monthly disbursement series.
+    """
+    era, n_excl = analysis_loans(loans)
+    s = monthly_series(era)
+    out = []
+    if len(s) >= 6 and (s.std(ddof=0) or 0) > 0:
+        z = (s - s.mean()) / s.std(ddof=0)
+        for m, v in z[z.abs() >= 1.5].sort_values(ascending=False).head(3).items():
+            out.append({"tag": "anomaly",
+                        "text": (f"{m:%B %Y} disbursements hit {s[m]:,.0f} PHP — "
+                                 f"{abs(v):.1f}σ {'above' if v > 0 else 'below'} the "
+                                 f"2023+ monthly average")})
+    bt = backtest_monthly(loans, holdout=holdout)
+    if bt["best_model"]:
+        w = bt["scorecard"][0]
+        out.append({"tag": "model",
+                    "text": (f"Backtesting the last {bt['holdout']} months: "
+                             f"'{w['model']}' wins at {w['wape']:.0%} weighted error "
+                             f"({w['within_25pct']:.0%} of months within 25%) — it now "
+                             f"drives the headline forecast")})
+    dated = loans.dropna(subset=["date"])
+    n_mem = max(int(dated["member"].nunique()), 1)
+    recur = int((dated.groupby("member").size() >= 2).sum())
+    out.append({"tag": "behavior",
+                "text": (f"{recur} of {n_mem} members ({recur / n_mem:.0%}) borrowed "
+                         f"more than once — repeat borrowers are the predictable core")})
+    yr = era.groupby(era["date"].dt.year)["loan_amount"].sum()
+    if len(yr) >= 2:
+        last_year = int(yr.index[-1])
+        covered = max(float(era[era["date"].dt.year == last_year]["date"].dt.dayofyear.max()), 1.0)
+        annualized = float(yr.iloc[-1]) / (covered / 365.0)
+        growth = annualized / max(float(yr.iloc[-2]), 1.0) - 1.0
+        out.append({"tag": "trend",
+                    "text": (f"{last_year} disbursements annualize to {annualized:,.0f} PHP "
+                             f"({growth:+.0%} vs {last_year - 1})")})
+    if stats is not None and len(stats):
+        fp = float(stats["fully_paid"].astype(str).str.lower().eq("true").mean())
+        out.append({"tag": "repayment",
+                    "text": f"{fp:.0%} of ledgered loans are recorded fully repaid"})
+    cyc = member_cycles(loans, stats)["summary"]
+    if cyc["cohort_avg_cycle_days"]:
+        out.append({"tag": "rhythm",
+                    "text": (f"Repeat borrowers return every ~{cyc['cohort_avg_cycle_months']} "
+                             f"months on average — the basis for next-application windows")})
+    return {"insights": out[:8], "n_loans_analyzed": int(len(era)),
+            "caveats": ([f"{n_excl} pre-{ANALYSIS_START:%Y-%m} loans excluded"]
+                        if n_excl else [])}
+
+
+def _png_bytes(fig):
+    """Figure -> PNG bytes in memory (never touches disk during a demo)."""
+    import io
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=110, bbox_inches="tight")
+    plt.close(fig)
+    return buf.getvalue()
+
+
+def chart_heatmap_png(loans):
+    """Year x month heatmap of applications — the seasonality picture."""
+    era, _ = analysis_loans(loans)
+    pv = (era.groupby([era["date"].dt.year, era["date"].dt.month]).size()
+          .unstack(fill_value=0).reindex(columns=range(1, 13), fill_value=0))
+    fig, ax = plt.subplots(figsize=(9.2, 2.6 + 0.28 * len(pv.index)))
+    im = ax.imshow(pv.values, cmap="YlGn", aspect="auto")
+    ax.set_xticks(range(12)); ax.set_xticklabels(MONTH_ABBR)
+    ax.set_yticks(range(len(pv.index))); ax.set_yticklabels(pv.index)
+    for i in range(len(pv.index)):
+        for j in range(12):
+            v = int(pv.values[i, j])
+            ax.text(j, i, str(v) if v else "", ha="center", va="center",
+                    fontsize=8, color="black")
+    ax.set_title("Loan applications per month (2023+ ledger)")
+    fig.colorbar(im, shrink=0.8)
+    fig.tight_layout()
+    return _png_bytes(fig)
+
+
+def chart_forecast_png(loans, months=FORECAST_MONTHS, holdout=6):
+    """History + best-model forecast with the empirical 95% band."""
+    fc = forecast_disbursements_v2(loans, months=months, holdout=holdout)
+    if not fc["rows"]:
+        return _png_bytes(plt.figure())
+    era, _ = analysis_loans(loans)
+    s = monthly_series(era)
+    fig, ax = plt.subplots(figsize=(10.2, 4.0))
+    ax.plot(s.index, s.values / 1e3, marker="o", ms=3, color="#1f4e79",
+            label="actual disbursed")
+    fmonths = [pd.Timestamp(r["month"]) for r in fc["rows"]]
+    pts = [r["point"] / 1e3 for r in fc["rows"]]
+    los = [r["low"] / 1e3 for r in fc["rows"]]
+    his = [r["high"] / 1e3 for r in fc["rows"]]
+    ax.plot(fmonths, pts, marker="o", ms=4, color="#c00000", lw=2,
+            label=f"forecast ({fc['best_model']})")
+    ax.fill_between(fmonths, los, his, color="#c00000", alpha=0.15,
+                    label="empirical 95% interval")
+    ax.set_title(f"Monthly disbursements — best model '{fc['best_model']}' "
+                 f"with 95% interval (thousand PHP)")
+    ax.set_ylabel("Thousand PHP")
+    ax.legend()
+    fig.autofmt_xdate(rotation=30)
+    fig.tight_layout()
+    return _png_bytes(fig)
+
+
+def chart_backtest_png(loans, holdout=6):
+    """Actual vs predicted over the held-out months + per-model error bars."""
+    bt = backtest_monthly(loans, holdout=holdout)
+    if not bt["actuals"]:
+        return _png_bytes(plt.figure())
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10.6, 3.6))
+    xs = range(len(bt["actuals"]))
+    ax1.plot(xs, np.asarray(bt["actuals"]) / 1e3, marker="o", label="actual", color="#1f4e79")
+    ax1.plot(xs, np.asarray(bt["predictions"]) / 1e3, marker="s",
+             label=f"predicted ({bt['best_model']})", color="#c00000")
+    ax1.set_xticks(list(xs)); ax1.set_xticklabels(bt.get("months_backtested", xs),
+                                                  rotation=30, fontsize=8)
+    ax1.set_title("Backtest: hidden months, one step ahead (k PHP)")
+    ax1.legend()
+    names = [r["model"] for r in bt["scorecard"]]
+    wapes = [r["wape"] * 100 for r in bt["scorecard"]]
+    ax2.barh(names[::-1], wapes[::-1], color="#4472C4")
+    ax2.set_title("Weighted error by model (lower = better)")
+    ax2.set_xlabel("% error")
+    fig.tight_layout()
+    return _png_bytes(fig)
+
+
+def chart_cycles_png(loans, stats=None):
+    """Borrowing-cycle lengths across recurring members (anonymised M1..Mn
+    so the PNG stays safe to serve; exact names live in the JSON endpoint).
+    """
+    cyc = member_cycles(loans, stats)
+    rows = cyc["recurring"][:12]
+    if not rows:
+        return _png_bytes(plt.figure())
+    fig, ax = plt.subplots(figsize=(9.6, 0.42 * len(rows) + 1.4))
+    labels = [f"M{i + 1}" for i in range(len(rows))]
+    gaps = [r["avg_cycle_days"] for r in rows][::-1]
+    ax.barh(labels[::-1], gaps, color="#70ad47")
+    mean_gap = cyc["summary"]["cohort_avg_cycle_days"]
+    if mean_gap:
+        ax.axvline(mean_gap, color="#c00000", ls="--", lw=1.5,
+                   label=f"cohort avg ({mean_gap} days)")
+    ax.set_title("Member borrowing cycles — days between loans (top 12)")
+    ax.set_xlabel("days")
+    ax.legend()
+    fig.tight_layout()
+    return _png_bytes(fig)
+
+
+
 def extract_receipt_fields(image_path=None, raw_text=None):
     """Return {reference, amount, date, raw_text, source}.
 

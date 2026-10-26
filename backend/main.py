@@ -36,7 +36,7 @@ import numpy as np
 import pandas as pd
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -65,7 +65,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="UCMS Analytics API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="UCMS Analytics API", version="0.3.0", lifespan=lifespan)
 
 # Browsers block cross-origin fetch by default: the Vite dev server
 # (http://localhost:5173) may call this API only because of this middleware.
@@ -245,6 +245,131 @@ def forecast_collections(months: int = Query(default=6, ge=1, le=24),
     months = plain(months, 6)
     loans, pays, _stats, _shares = load()
     return frame_rows(ua.forecast_collections(loans, pays, months=months))
+
+
+# ---------------------------------------------------------------------------
+# ANALYTICS PACK v2 — trend analysis & prediction (re-demo upgrade)
+# ---------------------------------------------------------------------------
+# These routes read the full historical LEDGER directly (ua.load_data),
+# not the store: the pack needs every schedule row plus the paper-truth
+# flags in payment_stats, while the operational store may hold a thinner
+# cleaned registry. Both views trace to the same source extract, and every
+# response reports n_loans_analyzed / caveats so nothing is hidden.
+# ---------------------------------------------------------------------------
+
+
+def require_key_q(x_api_key: str | None = Header(default=None),
+                  key: str = Query(default="")):
+    """Same gate as require_key, plus a ?key= alternative.
+
+    <img> tags in a browser cannot send an X-API-Key header, so the chart
+    route accepts the key as a query parameter too. One check, one place —
+    no route can forget the gate.
+    """
+    token = (x_api_key or "").strip() or key.strip()
+    if not API_KEY:
+        return True
+    if token != API_KEY:
+        raise HTTPException(status_code=401, detail="missing or wrong X-API-Key")
+    return True
+
+
+def _ledger():
+    """Fresh ledger read per request — tiny CSVs (loads in <50 ms)."""
+    loans, pays, stats, _shares = ua.load_data()
+    return loans, pays, stats
+
+
+@app.get("/analytics/backtest")
+def analytics_backtest(holdout: int = Query(default=6, ge=3, le=12),
+                       _: bool = Depends(require_key)):
+    """Walk-forward scorecard: ma3 vs ma6 vs trend vs seasonal-naive."""
+    loans, _p, _s = _ledger()
+    return ua.backtest_monthly(loans, holdout=plain(holdout, 6))
+
+
+@app.get("/analytics/forecast")
+def analytics_forecast(months: int = Query(default=6, ge=1, le=24),
+                       holdout: int = Query(default=6, ge=3, le=12),
+                       _: bool = Depends(require_key)):
+    """Best-model disbursement forecast: TOTAL PHP + empirical 95% band."""
+    loans, _p, _s = _ledger()
+    return ua.forecast_disbursements_v2(loans, months=plain(months, 6),
+                                        holdout=plain(holdout, 6))
+
+
+@app.get("/analytics/seasonality")
+def analytics_seasonality(_: bool = Depends(require_key)):
+    """Month-of-year indices (applications + scheduled repayments) and
+    the paydays-15/30 effect."""
+    loans, pays, _s = _ledger()
+    return ua.seasonality_report(loans, pays)
+
+
+@app.get("/analytics/members/cycles")
+def analytics_member_cycles(min_loans: int = Query(default=2, ge=2, le=6),
+                            _: bool = Depends(require_key)):
+    """Per-member borrowing rhythm + predicted next-application window."""
+    loans, _p, stats = _ledger()
+    return ua.member_cycles(loans, stats, min_loans=plain(min_loans, 2))
+
+
+@app.get("/analytics/members/propensity")
+def analytics_propensity(top: int = Query(default=20, ge=1, le=93),
+                         horizon_days: int = Query(default=90, ge=30, le=365),
+                         _: bool = Depends(require_key)):
+    """Transparent weighted score: who will most likely re-apply soon."""
+    loans, _p, stats = _ledger()
+    return ua.propensity_ranking(loans, stats, top=plain(top, 20),
+                                 horizon_days=plain(horizon_days, 90))
+
+
+@app.get("/analytics/reliability")
+def analytics_reliability(_: bool = Depends(require_key)):
+    """Repayment completion per term bucket — the probabilities that
+    weight the v2 collections forecast."""
+    loans, _p, stats = _ledger()
+    return ua.collection_reliability(stats, loans)
+
+
+@app.get("/analytics/collections")
+def analytics_collections(months: int = Query(default=6, ge=1, le=24),
+                          _: bool = Depends(require_key)):
+    """Probability-weighted collections (v2); the naive scheduled sum is
+    shown beside it so the gap is visible."""
+    loans, pays, stats = _ledger()
+    return ua.forecast_collections_v2(loans, pays, stats, months=plain(months, 6))
+
+
+@app.get("/analytics/insights")
+def analytics_insights(holdout: int = Query(default=6, ge=3, le=12),
+                       _: bool = Depends(require_key)):
+    """Machine-generated plain-English findings (anomalies, model winner,
+    member behaviour, trend, repayment)."""
+    loans, pays, stats = _ledger()
+    return ua.auto_insights(loans, stats, pays, holdout=plain(holdout, 6))
+
+
+@app.get("/charts/{kind}.png")
+def chart_image(kind: str, key: str = Query(default=""),
+                _: bool = Depends(require_key_q)):
+    """Demo charts as PNGs: heatmap / forecast / backtest / cycles.
+
+    Aggregate or anonymised (cycles shows M1..Mn, never member names), so
+    serving them behind the same key — header OR ?key= for <img> tags —
+    stays safe.
+    """
+    loans, _p, stats = _ledger()
+    makers = {
+        "heatmap": lambda: ua.chart_heatmap_png(loans),
+        "forecast": lambda: ua.chart_forecast_png(loans),
+        "backtest": lambda: ua.chart_backtest_png(loans),
+        "cycles": lambda: ua.chart_cycles_png(loans, stats),
+    }
+    if kind not in makers:
+        raise HTTPException(status_code=404,
+                            detail=f"unknown chart '{kind}' — try {sorted(makers)}")
+    return Response(content=makers[kind](), media_type="image/png")
 
 
 # NOTE: static sub-paths must be registered BEFORE /risk/{member} —

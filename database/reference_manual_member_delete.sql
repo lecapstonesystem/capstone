@@ -10,9 +10,11 @@
 -- The portal has no delete button on purpose. This is the
 -- deliberate backend path.
 --
--- Updated for the current schema: the attachment table (19) and the
+-- Updated for the current schema: the attachment table (19), the
 -- audit_log rebuild (17 — rows are keyed by entity_type/entity_id,
--- the old member_id column no longer exists).
+-- the old member_id column no longer exists), and the notification
+-- content-freeze trigger (26 — notifications must be cleared before
+-- the loan they point at).
 -- =============================================================
 
 
@@ -95,6 +97,8 @@ SELECT count(*) AS still_there FROM member WHERE member_id = 92;
 
 -- ---------- 4. TEST LOANS ONLY (the member stays) ----------
 -- A test loan filed under a real member: remove just the loan.
+-- (The portal's delete buttons for test data were removed with the
+-- Developer module — this section IS the sanctioned cleanup path.)
 -- Look the loan_id up first (the Loan No in the portal is display
 -- text, not necessarily the id):
 
@@ -103,12 +107,24 @@ SELECT loan_id, member_id, amount, status, created_at
  WHERE member_id IN (SELECT member_id FROM member WHERE name ILIKE '%test%')
  ORDER BY loan_id;
 
--- Then edit target_loan and run:
+-- Storage files outlive their rows — copy the paths now, then remove
+-- them by hand later (or leave them, they are inert). Replace 152
+-- with the loan_id from the lookup:
+
+SELECT a.file_path FROM attachment a WHERE a.loan_id = 152;
+SELECT p.receipt_image_url FROM payment p WHERE p.loan_id = 152;
+
+-- Then edit target_loan and run. Atomic: if anything fails, nothing
+-- is removed.
 
 DO $$
 DECLARE
   target_loan integer := 152;        -- <<< EDIT: loan_id from the lookup
 BEGIN
+  -- notification points at the loan with ON DELETE SET NULL, and the
+  -- content-freeze trigger (26) rejects that system nulling — clear
+  -- them first or the loan delete is refused.
+  DELETE FROM notification WHERE loan_id = target_loan;
   DELETE FROM attachment WHERE loan_id = target_loan;
   DELETE FROM co_maker   WHERE loan_id = target_loan;
   DELETE FROM payment    WHERE loan_id = target_loan;

@@ -180,12 +180,6 @@
           <span class="hidden sm:inline text-sm text-gray-600 font-medium">
             {{ auth.displayName }}
           </span>
-          <span
-            v-if="auth.isDeveloper"
-            class="hidden sm:inline text-[10px] font-semibold uppercase tracking-wide bg-green-100 text-green-800 px-2 py-0.5 rounded-full"
-          >
-            Developer
-          </span>
         </div>
       </header>
 

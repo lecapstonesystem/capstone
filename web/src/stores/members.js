@@ -268,6 +268,44 @@ export const useMembersStore = defineStore('members', () => {
     member.history.unshift(useAuditStore().record('member', member.id, action))
   }
 
+  // Panel revision "transactions should not be altered easily": every
+  // profile edit leaves an old → new trail, field by field, the same
+  // way the ledger's edits do. Labels stay human-readable in the
+  // activity log.
+  const AUDIT_FIELDS = [
+    ['firstName', 'First name'],
+    ['middleName', 'Middle name'],
+    ['lastName', 'Last name'],
+    ['gender', 'Gender'],
+    ['dateOfBirth', 'Birthdate'],
+    ['memberType', 'Member type'],
+    ['civilStatus', 'Civil status'],
+    ['spouseName', 'Spouse name'],
+    ['email', 'Email'],
+    ['workEmail', 'Work email'],
+    ['phone', 'Mobile number'],
+    ['landline', 'Landline'],
+    ['address', 'Address'],
+    ['govIdType', 'ID type'],
+    ['govIdNumber', 'Government ID'],
+    ['gsisNumber', 'GSIS number'],
+    ['sssNumber', 'SSS number'],
+    ['pagibigNumber', 'Pag-IBIG number'],
+    ['philhealthNumber', 'PhilHealth number'],
+    ['status', 'Status'],
+    ['dateJoined', 'Date joined'],
+  ]
+
+  function auditChanges(before, data) {
+    const parts = []
+    for (const [key, label] of AUDIT_FIELDS) {
+      const from = String(before[key] ?? '')
+      const to = String(data[key] ?? '')
+      if (from !== to) parts.push(`${label} "${from || '—'}" → "${to || '—'}"`)
+    }
+    return parts.join('; ')
+  }
+
   // detailMember holds a direct reference to the row object, so
   // update in place — replacing the object would freeze the drawer.
   function replaceLocal(updated) {
@@ -373,10 +411,56 @@ export const useMembersStore = defineStore('members', () => {
     )
   }
 
+  // Panel revision "VALIDATION (DUPLICATE)": one person = one record.
+  // The coop merged a batch of duplicate members before (migration 12)
+  // because a second row silently splits a member's capital and loan
+  // history. Two hard blocks: same government ID, or same full name
+  // plus the same birthdate. Returns the existing member, or null.
+  function duplicateMember(data, exceptId) {
+    const govId = String(data.govIdNumber || '').trim()
+    const first = String(data.firstName || '')
+      .trim()
+      .toLowerCase()
+    const last = String(data.lastName || '')
+      .trim()
+      .toLowerCase()
+    const dob = String(data.dateOfBirth || '').trim()
+    return (
+      members.value.find((item) => {
+        if (item.id === exceptId) return false
+        const itemGovId = String(item.govIdNumber || '').trim()
+        if (govId && itemGovId && itemGovId === govId) return true
+        return (
+          !!first &&
+          !!last &&
+          !!dob &&
+          String(item.firstName || '')
+            .trim()
+            .toLowerCase() === first &&
+          String(item.lastName || '')
+            .trim()
+            .toLowerCase() === last &&
+          String(item.dateOfBirth || '').trim() === dob
+        )
+      }) || null
+    )
+  }
+
+  // Plain-language block message pointing at the existing record.
+  function duplicateBlock(existing, data) {
+    const govId = String(data.govIdNumber || '').trim()
+    const sameId = govId !== '' && String(existing.govIdNumber || '').trim() === govId
+    return sameId
+      ? `${existing.memberNo} (${existing.name}) already uses that government ID — one ID belongs to one member. Open that record instead of making a second one.`
+      : `${existing.memberNo} (${existing.name}) has the same name and birthdate. A person must have one record only — a second one splits their capital and loan history. If they are truly two different people, have the coop office confirm it before adding.`
+  }
+
   async function addMember(data) {
     if (emailClash(data.email)) {
       return 'Another member already uses this email address. Each member needs their own — the app login uses it as the username.'
     }
+    const duplicate = duplicateMember(data)
+    if (duplicate) return duplicateBlock(duplicate, data)
     const { data: row, error } = await supabase
       .from('member')
       .insert({
@@ -402,6 +486,10 @@ export const useMembersStore = defineStore('members', () => {
     if (emailClash(data.email, id)) {
       return 'Another member already uses this email address. Each member needs their own — the app login uses it as the username.'
     }
+    // An edit must not turn this record into a duplicate of another
+    // member either — same blocks as the add path.
+    const duplicate = duplicateMember(data, id)
+    if (duplicate) return duplicateBlock(duplicate, data)
     // The login credential lives in Supabase Auth, where a browser
     // cannot touch it. Moving only member.email would leave the portal
     // and the login out of sync: the app would still accept the old
@@ -426,7 +514,13 @@ export const useMembersStore = defineStore('members', () => {
       lastError.value = errorMessage(error)
       return lastError.value
     }
-    replaceLocal(rowToMember(row, keepCapital(current)))
+    // Snapshot the old values BEFORE replaceLocal mutates the same
+    // object in place — the audit must compare old vs new, not new vs new.
+    const changes = auditChanges(current, data)
+    const updated = replaceLocal(rowToMember(row, keepCapital(current)))
+    // Every edit leaves its trail — only fields that really changed are
+    // listed, so the log stays readable.
+    if (updated && changes) logAction(updated, `Member record edited — ${changes}`)
     return null
   }
 

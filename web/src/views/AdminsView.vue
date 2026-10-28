@@ -26,7 +26,7 @@
       >
         New admins receive a <strong>temporary password</strong> to hand over face-to-face and must
         change it on first login. A forgotten password is reset by <strong>email link</strong>. Only
-        a <strong>Super Admin</strong> or the <strong>Developer</strong> can manage accounts.
+        a <strong>Super Admin</strong> can manage accounts.
         <span v-if="!adminsStore.canManageAccounts" class="block mt-1 text-green-700">
           You are signed in as {{ auth.role || 'Admin' }}, so this page is view-only.
         </span>
@@ -55,9 +55,8 @@
           </ul>
         </div>
         <p class="text-xs text-gray-400 border-t border-gray-100 pt-3">
-          Role boundaries are enforced in the database itself, not only in the interface: test-data
-          deletion is allowed for Developer sessions alone (row-level security), and the audit log
-          has no delete path for any role — deletions are logged, never erased.
+          Role boundaries are enforced in the database itself, not only in the interface, and the
+          audit log has no delete path for any role — deletions are logged, never erased.
         </p>
       </div>
 
@@ -78,7 +77,6 @@
           <option value="All">All Roles</option>
           <option value="Super Admin">Super Admin</option>
           <option value="Admin">Admin</option>
-          <option value="Developer">Developer</option>
         </select>
 
         <!-- Column visibility -->
@@ -194,9 +192,7 @@
                     :class="
                       admin.role === 'Super Admin'
                         ? 'bg-green-100 text-green-700'
-                        : admin.role === 'Developer'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-gray-100 text-gray-600'
+                        : 'bg-gray-100 text-gray-600'
                     "
                     class="px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap"
                   >
@@ -318,9 +314,7 @@
                 :class="
                   detailAdmin.role === 'Super Admin'
                     ? 'bg-green-100 text-green-700'
-                    : detailAdmin.role === 'Developer'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-gray-100 text-gray-600'
+                    : 'bg-gray-100 text-gray-600'
                 "
               >
                 {{ detailAdmin.role }}
@@ -434,7 +428,9 @@
                 >
                   <option value="Super Admin">Super Admin</option>
                   <option value="Admin">Admin</option>
-                  <option value="Developer">Developer</option>
+                  <!-- Kept only so a pre-existing account still shows its
+                       role — the Developer role can no longer be chosen. -->
+                  <option value="Developer" hidden>Developer</option>
                 </select>
                 <p class="text-xs text-gray-400 mt-1">
                   {{
@@ -560,7 +556,10 @@
               >
                 <option value="Admin">Admin</option>
                 <option value="Super Admin">Super Admin</option>
-                <option value="Developer">Developer</option>
+                <!-- Hidden leftover so editing an old account keeps its
+                     role visible; new accounts can only be Admin or
+                     Super Admin. -->
+                <option value="Developer" hidden>Developer</option>
               </select>
             </div>
 
@@ -582,9 +581,10 @@
             </button>
             <button
               @click="saveAdmin"
-              class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
+              :disabled="saveBusy"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {{ modalMode === 'add' ? 'Add Admin' : 'Save Changes' }}
+              {{ saveBusy ? 'Saving…' : modalMode === 'add' ? 'Add Admin' : 'Save Changes' }}
             </button>
           </div>
         </div>
@@ -666,18 +666,7 @@ const ROLE_GUIDE = [
       'Members: register, edit, activate or deactivate; issue app credentials',
       'Loans: create, review and release; verify payments; print Loan Notes',
       'Ledger, Reports, Notifications and the Activity Log',
-      'View this account list — management stays with Super Admins and the Developer',
-    ],
-  },
-  {
-    name: 'Developer',
-    summary:
-      'Everything an Admin can do, plus account management and cleanup of TEST data during development and testing.',
-    can: [
-      'Manage admin accounts together with Super Admins — add, change roles, enable or disable logins, reset passwords',
-      'Delete test members and test loans — requires typing the record number and is written to the audit log',
-      'Deletion is blocked for every other role inside the database itself (row-level security)',
-      'Not a coop duty: real member records are never deleted through the portal (RA 9520)',
+      'View this account list — management stays with Super Admins',
     ],
   },
 ]
@@ -837,7 +826,11 @@ function closeModal() {
   formError.value = ''
 }
 
+// Guards Add/Save against a double-tap creating a duplicate account.
+const saveBusy = ref(false)
+
 async function saveAdmin() {
+  if (saveBusy.value) return
   // Validation
   if (!form.firstName.trim() || !form.lastName.trim()) {
     formError.value = 'First name and last name are required.'
@@ -860,10 +853,16 @@ async function saveAdmin() {
     role: form.role,
   }
 
-  const result =
-    modalMode.value === 'add'
-      ? await adminsStore.addAdmin({ ...data, email: form.email.trim() })
-      : await adminsStore.updateAdmin(editingId.value, data)
+  saveBusy.value = true
+  let result
+  try {
+    result =
+      modalMode.value === 'add'
+        ? await adminsStore.addAdmin({ ...data, email: form.email.trim() })
+        : await adminsStore.updateAdmin(editingId.value, data)
+  } finally {
+    saveBusy.value = false
+  }
 
   if (!result.ok) {
     formError.value = result.message

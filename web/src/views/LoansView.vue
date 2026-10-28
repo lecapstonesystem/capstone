@@ -229,12 +229,12 @@
                 <SortableTh class="px-6 py-3 w-[11%]" :store="loansStore" sort-key="loanNo">
                   Loan No
                 </SortableTh>
-                <SortableTh class="px-6 py-3 w-[22%]" :store="loansStore" sort-key="memberName">
+                <SortableTh class="px-6 py-3 w-[19%]" :store="loansStore" sort-key="memberName">
                   Member
                 </SortableTh>
                 <SortableTh
                   v-if="columns.type"
-                  class="px-6 py-3 w-[15%]"
+                  class="px-6 py-3 w-[14%]"
                   :store="loansStore"
                   sort-key="type"
                 >
@@ -258,7 +258,7 @@
                 </SortableTh>
                 <SortableTh
                   v-if="columns.status"
-                  class="px-6 py-3 w-[11%]"
+                  class="px-6 py-3 w-[18%]"
                   :store="loansStore"
                   sort-key="status"
                 >
@@ -318,25 +318,30 @@
                 >
                   {{ formatPeso(balanceOf(loan)) }}
                 </td>
-                <td v-if="columns.status" class="px-6 py-4">
-                  <span
-                    class="px-2.5 py-1 rounded-full text-xs font-medium"
-                    :class="statusClass(loan.status)"
-                  >
-                    {{ loan.status }}
-                  </span>
-                  <span
-                    v-if="loan.archivedAt"
-                    class="ml-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-600"
-                  >
-                    Archived
-                  </span>
-                  <span
-                    v-if="isDelinquent(loan)"
-                    class="ml-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-600"
-                  >
-                    Delinquent
-                  </span>
+                <!-- Badges sit inline; if the row is ever squeezed the
+                     group wraps onto its own line instead of clipping
+                     (Paid + Archived / Delinquent share this cell). -->
+                <td v-if="columns.status" class="px-6 py-4 whitespace-nowrap">
+                  <div class="flex flex-wrap items-center gap-1">
+                    <span
+                      class="px-2.5 py-1 rounded-full text-xs font-medium"
+                      :class="statusClass(loan.status)"
+                    >
+                      {{ loan.status }}
+                    </span>
+                    <span
+                      v-if="loan.archivedAt"
+                      class="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-600"
+                    >
+                      Archived
+                    </span>
+                    <span
+                      v-if="isDelinquent(loan)"
+                      class="px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-600"
+                    >
+                      Delinquent
+                    </span>
+                  </div>
                 </td>
                 <td v-if="columns.date" class="px-6 py-4 text-gray-500">
                   {{ formatDate(loan.createdAt) }}

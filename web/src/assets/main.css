@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Always-visible scrollbars for data tables */
+.table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af #f3f4f6;
+}
+
+.table-scroll::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 8px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 8px;
+  border: 2px solid #f3f4f6;
+}
+
+.table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* ---------- Print layout (Reports — clean output for board meetings) ---------- */
+@media print {
+  /* Keep chart/badge colors when printing */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Hide app chrome */
+  aside,
+  .no-print {
+    display: none !important;
+  }
+
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  /* The app uses a full-height scroll shell — switch to normal document flow */
+  .h-screen {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .ml-64 {
+    margin-left: 0 !important;
+  }
+
+  header {
+    position: static !important;
+    box-shadow: none !important;
+  }
+
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  * {
+    box-shadow: none !important;
+  }
+
+  /* Let tables and histories expand fully on paper */
+  .table-scroll,
+  .overflow-x-auto,
+  .overflow-y-auto {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  /* Keep each report card on one page when possible */
+  section {
+    break-inside: avoid;
+  }
+}

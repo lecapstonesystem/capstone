@@ -78,6 +78,14 @@ export const DELINQUENT_MONTHS = 6
 
 const round2 = (value) => Math.round(value * 100) / 100
 
+// Plain-text peso for messages (the view has its own display copy).
+function formatPesoText(value) {
+  return `₱${(Number(value) || 0).toLocaleString('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`
+}
+
 const pad2 = (value) => String(value).padStart(2, '0')
 
 // Local-date formatting — toISOString() would shift across timezones
@@ -157,6 +165,10 @@ function rowToLoan(row) {
     payments,
     remarks: row.remarks || '',
     history: [],
+    // Archive (29_loan_archive.sql) — a visibility flag, NOT a status:
+    // the loan stays 'Paid', keeps its payments and stays in reports.
+    // NULL = active in the working list.
+    archivedAt: row.archived_at || null,
   }
 }
 
@@ -167,6 +179,9 @@ export const useLoansStore = defineStore('loans', () => {
   const search = ref('')
   const statusFilter = ref('All')
   const typeFilter = ref('All')
+  // Archived loans are hidden from the working list until asked for.
+  // Reports and the member app are unaffected — they read the tables.
+  const showArchived = ref(false)
 
   // Column sorting — header click toggles ascending/descending (SortableTh).
   // Default keeps the old order: newest applied first (the Date column's
@@ -187,6 +202,7 @@ export const useLoansStore = defineStore('loans', () => {
   const filteredLoans = computed(() => {
     const query = search.value.trim().toLowerCase()
     const filtered = loans.value.filter((loan) => {
+      if (loan.archivedAt && !showArchived.value) return false
       const matchesStatus = statusFilter.value === 'All' || loan.status === statusFilter.value
       const matchesType = typeFilter.value === 'All' || loan.type === typeFilter.value
       const haystack = `${loan.loanNo} ${loan.memberName} ${loan.memberNo}`.toLowerCase()
@@ -332,7 +348,7 @@ export const useLoansStore = defineStore('loans', () => {
   }
 
   // New search/filter results always start from page 1
-  watch([search, statusFilter], () => {
+  watch([search, statusFilter, showArchived], () => {
     page.value = 1
   })
 
@@ -857,6 +873,411 @@ export const useLoansStore = defineStore('loans', () => {
     return { ok: true, storageFailed }
   }
 
+  // ---------- archival — hide, never delete (panel revision request) ----------
+  // Cooperatives must keep financial records (RA 9520 / AMLA), so
+  // archive only takes a fully-paid loan out of the working list:
+  // the row, its payments, its audit trail and its share of every
+  // report all stay. Restore brings it back. Same reversible shape
+  // as everything else that touches a member's record.
+  async function archiveLoan(id) {
+    const loan = loans.value.find((item) => item.id === id)
+    if (!loan) return { ok: false, message: 'Loan not found.' }
+    if (loan.archivedAt) return { ok: false, message: 'This loan is already archived.' }
+    if (loan.status !== 'Paid') {
+      return { ok: false, message: 'Only fully paid loans can be archived.' }
+    }
+    const at = new Date().toISOString()
+    const adminId = useAuthStore().profile?.admin_id ?? null
+    const { error } = await supabase
+      .from('loan')
+      .update({ archived_at: at, archived_by: adminId })
+      .eq('loan_id', id)
+    if (error) return { ok: false, message: errorMessage(error) }
+    loan.archivedAt = at
+    logAction(loan, 'Loan archived (kept in the database and in reports, hidden from the list)')
+    return { ok: true }
+  }
+
+  async function restoreLoan(id) {
+    const loan = loans.value.find((item) => item.id === id)
+    if (!loan) return { ok: false, message: 'Loan not found.' }
+    if (!loan.archivedAt) return { ok: false, message: 'This loan is not archived.' }
+    const { error } = await supabase
+      .from('loan')
+      .update({ archived_at: null, archived_by: null })
+      .eq('loan_id', id)
+    if (error) return { ok: false, message: errorMessage(error) }
+    loan.archivedAt = null
+    logAction(loan, 'Loan restored to the working list')
+    return { ok: true }
+  }
+
+  // ---------- historical loans — paper records brought into UCMS ----------
+  // These loans were approved and released BEFORE the system, so they
+  // skip the application row, the eligibility rules and the approval
+  // queue (the committee already decided, on paper). They insert
+  // straight into `loan` with the real issue date and go to Released,
+  // or Paid once their past payments cover the diminishing total.
+  // Every entry writes to the audit trail like any other loan.
+  const HISTORICAL_MAX_TERM = 360 // sanity cap — 30 years, no real loan is longer
+
+  function isDateInput(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))
+  }
+
+  // Shared validation for one historical loan spec:
+  // { memberId, type, ratePercent, principal, termMonths, dateIssued, payments }
+  function validateHistoricalSpec(spec) {
+    if (!spec.memberId) return 'Select a member first.'
+    const member = useMembersStore().members.find((item) => item.id === spec.memberId)
+    if (!member) return 'Selected member not found.'
+
+    const typeInfo = LOAN_TYPES.find((item) => item.value === spec.type)
+    if (!typeInfo) return 'Choose a loan type.'
+
+    const amount = Number(spec.principal)
+    if (!(amount > 0)) return 'Enter the loan amount.'
+
+    const rate = Number(spec.ratePercent)
+    if (!(rate >= 0 && rate <= 100)) {
+      return 'Enter the interest rate as a percent (for example 1.5).'
+    }
+
+    const term = Number(spec.termMonths)
+    if (!(term >= 1 && term <= HISTORICAL_MAX_TERM)) {
+      return `Term must be 1–${HISTORICAL_MAX_TERM} months.`
+    }
+
+    if (!isDateInput(spec.dateIssued) || spec.dateIssued > todayLocal()) {
+      return 'Enter the date the loan was issued — not in the future.'
+    }
+
+    const payments = Array.isArray(spec.payments) ? spec.payments : []
+    const seen = []
+    for (const payment of payments) {
+      const value = Number(payment.amount)
+      if (!isDateInput(payment.date)) return 'Each past payment needs a date.'
+      if (payment.date < spec.dateIssued) {
+        return `A past payment is dated before the loan was issued (${spec.dateIssued}).`
+      }
+      if (payment.date > todayLocal()) return 'Past payment dates cannot be in the future.'
+      if (!(value > 0)) return 'Each past payment needs an amount greater than zero.'
+      if (payment.channel && !PAYMENT_CHANNELS.includes(payment.channel)) {
+        return `Payment channel must be one of: ${PAYMENT_CHANNELS.join(', ')}.`
+      }
+      seen.push(payment)
+    }
+    if (seen.length > 240) return 'A single loan cannot carry more than 240 past payments.'
+    return ''
+  }
+
+  // A loan with the same member, issue date and amount already in the
+  // system is almost always the same paper record imported twice —
+  // blocking it protects the money history from double entries.
+  function findDuplicateHistorical(memberId, dateIssued, principal) {
+    return loans.value.find(
+      (loan) =>
+        loan.memberId === memberId &&
+        String(loan.createdAt || '').slice(0, 10) === dateIssued &&
+        Math.abs(loan.principal - Number(principal)) < 0.01,
+    )
+  }
+
+  async function insertHistoricalLoan(spec) {
+    const problem = validateHistoricalSpec(spec)
+    if (problem) return { ok: false, message: problem }
+
+    const duplicate = findDuplicateHistorical(spec.memberId, spec.dateIssued, spec.principal)
+    if (duplicate) {
+      return {
+        ok: false,
+        message: `This looks like a double entry — ${duplicate.loanNo} already records a ${formatPesoText(spec.principal)} loan for this member issued on ${spec.dateIssued}.`,
+      }
+    }
+
+    const member = useMembersStore().members.find((item) => item.id === spec.memberId)
+    const typeInfo = LOAN_TYPES.find((item) => item.value === spec.type)
+    const payments = [...spec.payments].sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    const paidSum = round2(payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0))
+    const totals = loanTotals(Number(spec.principal), Number(spec.ratePercent), spec.termMonths)
+
+    // Insert as Released first, then flip to Paid only after its past
+    // payments are safely in — a failed payment insert can never leave
+    // a Paid loan with an empty history behind.
+    const { data: row, error } = await supabase
+      .from('loan')
+      .insert({
+        member_id: spec.memberId,
+        application_id: null, // no app ever filed it — paper record
+        approved_by: null, // committee approved it before UCMS existed
+        amount: round2(Number(spec.principal)),
+        interest_rate: Number(spec.ratePercent) / 100, // fraction — seed/CSV convention
+        date_issued: spec.dateIssued,
+        due_date: plusMonths(spec.dateIssued, Number(spec.termMonths)),
+        status: 'Released',
+        created_at: spec.dateIssued, // the real loan date (seed convention: dates drive the list)
+        term_months: Number(spec.termMonths),
+        loan_type: spec.type,
+      })
+      .select()
+      .single()
+    if (error) return { ok: false, message: errorMessage(error) }
+
+    if (payments.length) {
+      const { error: payError } = await supabase.from('payment').insert(
+        payments.map((payment) => ({
+          loan_id: row.loan_id,
+          member_id: spec.memberId,
+          amount: round2(Number(payment.amount)),
+          date: payment.date,
+          channel: payment.channel || 'Cash',
+          note: payment.note || '',
+          status: 'Recorded',
+        })),
+      )
+      if (payError) {
+        // The loan exists but its past payments do not — say so
+        // plainly so the admin can finish by hand (or retry).
+        return {
+          ok: false,
+          partial: true,
+          message: `${loanNoOf(row.loan_id)} was created, but its ${payments.length} past payment(s) could not be saved (${errorMessage(payError)}). The loan shows the full balance — record the payments from its Record Payment screen.`,
+        }
+      }
+
+      if (paidSum >= totals.totalDue - 0.01) {
+        const { error: statusError } = await supabase
+          .from('loan')
+          .update({ status: 'Paid' })
+          .eq('loan_id', row.loan_id)
+        if (statusError) {
+          lastError.value = errorMessage(statusError)
+          return { ok: false, message: errorMessage(statusError) }
+        }
+      }
+    }
+
+    // Everything is in the database now — mirror the row locally.
+    const status = paidSum >= totals.totalDue - 0.01 ? 'Paid' : 'Released'
+    const loan = {
+      id: row.loan_id,
+      loanNo: loanNoOf(row.loan_id),
+      memberId: member.id,
+      memberNo: member.memberNo,
+      memberName: `${member.firstName} ${member.lastName}`,
+      memberPhoto: member.idPhoto || '',
+      type: spec.type,
+      principal: round2(Number(spec.principal)),
+      ratePercent: round2(Number(spec.ratePercent)),
+      termMonths: Number(spec.termMonths),
+      totalDue: totals.totalDue, // frozen here — diminishing total
+      coMakers: [],
+      requirements: [],
+      status,
+      createdAt: spec.dateIssued,
+      releasedAt: spec.dateIssued,
+      releaseChannel: null,
+      payments: payments.map((payment, index) => ({
+        id: (row.loan_id + 1) * 100000 + index, // session-only placeholder id — real ids come from the DB on reload
+        at: payment.date,
+        amount: round2(Number(payment.amount)),
+        channel: payment.channel || 'Cash',
+        note: payment.note || '',
+        status: 'Recorded',
+        receiptPath: '',
+      })),
+      remarks: '',
+      history: [],
+      archivedAt: null,
+    }
+    loans.value.push(loan)
+    logAction(
+      loan,
+      `Historical loan recorded from paper records — ${typeInfo.label} ${formatPesoText(spec.principal)}, issued ${spec.dateIssued}${payments.length ? `, ${payments.length} past payment(s) entered` : ''}`,
+    )
+    return { ok: true, loan }
+  }
+
+  // One-at-a-time form path (LoansView's "Add historical loan").
+  async function addHistoricalLoan(spec) {
+    return insertHistoricalLoan(spec)
+  }
+
+  // Bulk CSV path — rows are grouped into loans first (one loan key:
+  // member + issue date + amount; each row may carry one past
+  // payment), then inserted in order. Progress is reported through
+  // onProgress so the dialog can show "Importing 12 of 80".
+  async function importHistoricalLoans(specs, onProgress) {
+    if (!specs.length) return { ok: false, message: 'There is nothing to import.' }
+    let imported = 0
+    for (let index = 0; index < specs.length; index += 1) {
+      if (onProgress) onProgress(index + 1, specs.length)
+      const result = await insertHistoricalLoan(specs[index])
+      if (!result.ok) {
+        return {
+          ok: false,
+          imported,
+          message: `Stopped at loan ${index + 1} of ${specs.length} — ${result.message} Loans already imported are kept; fix the file and import again (entries already in the system are skipped).`,
+        }
+      }
+      imported += 1
+    }
+    return { ok: true, imported, message: '' }
+  }
+
+  // Preview for the CSV import: group raw rows into loan specs and
+  // collect every problem with its line number, without writing.
+  function previewHistoricalImport(rows) {
+    const membersStore = useMembersStore()
+    const errors = []
+    const warnings = []
+    const groups = new Map()
+
+    const keyOf = (memberId, dateIssued, principal) =>
+      `${memberId}|${dateIssued}|${Math.round(Number(principal) * 100)}`
+
+    rows.forEach((row) => {
+      const line = row._line || '?'
+      const memberNo = String(row.member_no || '').trim()
+      if (!memberNo) {
+        errors.push(`Line ${line}: member number is missing.`)
+        return
+      }
+      const member = membersStore.members.find(
+        (item) =>
+          String(item.memberNo || '')
+            .trim()
+            .toLowerCase() === memberNo.toLowerCase(),
+      )
+      if (!member) {
+        errors.push(`Line ${line}: no member has the number ${memberNo}.`)
+        return
+      }
+
+      const typeRaw = String(row.loan_type || '').trim()
+      let typeInfo = LOAN_TYPES.find(
+        (item) =>
+          item.value.toLowerCase() === typeRaw.toLowerCase() ||
+          item.label.toLowerCase() === typeRaw.toLowerCase(),
+      )
+      if (!typeRaw) typeInfo = LOAN_TYPES[0]
+      if (!typeInfo) {
+        errors.push(`Line ${line}: unknown loan type "${typeRaw}".`)
+        return
+      }
+
+      const moneyText = (raw) => String(raw ?? '').replace(/[₱,\s]/g, '')
+      const principal = Number(moneyText(row.principal))
+      if (!(principal > 0)) {
+        errors.push(`Line ${line}: principal must be a number greater than zero.`)
+        return
+      }
+
+      const rateRaw = moneyText(row.interest_rate).replace(/%$/, '')
+      const ratePercent = rateRaw === '' ? typeInfo.rate : Number(rateRaw)
+      if (!(ratePercent >= 0 && ratePercent <= 100)) {
+        errors.push(`Line ${line}: interest rate must be a percent like 1.5.`)
+        return
+      }
+
+      const term = Number(row.term_months)
+      if (!(term >= 1 && term <= HISTORICAL_MAX_TERM)) {
+        errors.push(`Line ${line}: term must be 1–${HISTORICAL_MAX_TERM} months.`)
+        return
+      }
+
+      const dateIssued = String(row.date_issued || '').trim()
+      if (!isDateInput(dateIssued) || dateIssued > todayLocal()) {
+        errors.push(`Line ${line}: issue date must be written as YYYY-MM-DD and not in the future.`)
+        return
+      }
+
+      const payAmountRaw = String(row.payment_amount ?? '').replace(/[₱,\s]/g, '')
+      const payDate = String(row.payment_date || '').trim()
+      if (payAmountRaw === '' && payDate === '') {
+        // A loan row with no payment columns — still a valid loan.
+      } else {
+        const payAmount = Number(payAmountRaw)
+        if (!(payAmount > 0)) {
+          errors.push(`Line ${line}: payment amount must be a number greater than zero.`)
+          return
+        }
+        if (!isDateInput(payDate)) {
+          errors.push(`Line ${line}: payment date must be written as YYYY-MM-DD.`)
+          return
+        }
+        if (payDate < dateIssued) {
+          errors.push(`Line ${line}: payment date is before the loan was issued (${dateIssued}).`)
+          return
+        }
+        if (payDate > todayLocal()) {
+          errors.push(`Line ${line}: payment date cannot be in the future.`)
+          return
+        }
+      }
+
+      const key = keyOf(member.id, dateIssued, principal)
+      if (!groups.has(key)) {
+        groups.set(key, {
+          memberId: member.id,
+          memberNo: member.memberNo,
+          memberName: `${member.firstName} ${member.lastName}`,
+          type: typeInfo.value,
+          ratePercent,
+          principal,
+          termMonths: term,
+          dateIssued,
+          payments: [],
+          lines: [line],
+        })
+      } else {
+        const existing = groups.get(key)
+        existing.lines.push(line)
+        // Same loan key but different terms — refuse to guess which is right.
+        if (
+          existing.type !== typeInfo.value ||
+          existing.termMonths !== term ||
+          Math.abs(existing.ratePercent - ratePercent) > 0.001
+        ) {
+          errors.push(
+            `Line ${line}: repeats loan of ${memberNo} issued ${dateIssued} with different type, rate or term — make them match.`,
+          )
+        }
+      }
+
+      if (payAmountRaw !== '') {
+        const group = groups.get(key)
+        group.payments.push({
+          date: payDate,
+          amount: round2(Number(payAmountRaw)),
+          channel: String(row.payment_channel || 'Cash').trim() || 'Cash',
+          note: String(row.payment_note || '').trim(),
+        })
+        if (!PAYMENT_CHANNELS.includes(group.payments[group.payments.length - 1].channel)) {
+          errors.push(
+            `Line ${line}: payment channel must be one of: ${PAYMENT_CHANNELS.join(', ')}.`,
+          )
+        }
+      }
+    })
+
+    // Rows whose loan already exists in the system are skipped with a
+    // note — re-importing the same file cannot double the money.
+    const specs = []
+    for (const group of groups.values()) {
+      const duplicate = findDuplicateHistorical(group.memberId, group.dateIssued, group.principal)
+      if (duplicate) {
+        warnings.push(
+          `${group.memberNo} — ${formatPesoText(group.principal)} issued ${group.dateIssued}: already in the system as ${duplicate.loanNo}, skipped.`,
+        )
+        continue
+      }
+      specs.push(group)
+    }
+
+    return { errors, warnings, specs }
+  }
+
   // ---------- app-filed loan requests (loan_application) ----------
   // Requests come in from the mobile app (Flow 2 of the app contract)
   // with status 'Pending'; this queue is the portal's review side.
@@ -1245,6 +1666,7 @@ export const useLoansStore = defineStore('loans', () => {
     search,
     statusFilter,
     typeFilter,
+    showArchived,
     filteredLoans,
     paginatedLoans,
     page,
@@ -1274,6 +1696,11 @@ export const useLoansStore = defineStore('loans', () => {
     removeReceipt,
     sendReminder,
     deleteTestLoan,
+    archiveLoan,
+    restoreLoan,
+    addHistoricalLoan,
+    importHistoricalLoans,
+    previewHistoricalImport,
     requests,
     requestsLoading,
     requestsError,

@@ -103,6 +103,10 @@ function rowToMember(row, capitals = new Map(), entries = new Map()) {
     address: row.address || '',
     status: membershipStatus(row.status),
     dateJoined: (row.date_joined || '').slice(0, 10),
+    // Who added this record (30_added_by_attribution.sql) — NULL for
+    // rows entered before the column existed.
+    addedByName: row.added_by_name || '',
+    addedByRole: row.added_by_role || '',
     capitalShare: capitals.get(row.member_id) || 0,
     capitalEntries: entries.get(row.member_id) || [],
     // Storage path of the member's profile photo (member-documents
@@ -467,6 +471,10 @@ export const useMembersStore = defineStore('members', () => {
         ...toRow({ ...data, memberNo: generateMemberNo() }),
         login_enabled: true,
         must_change_password: false,
+        // Attribution (30): snapshot of who registered this member —
+        // staff-entered vs developer-entered test records stay apart.
+        added_by_name: useAuthStore().displayName,
+        added_by_role: useAuthStore().role,
       })
       .select()
       .single()

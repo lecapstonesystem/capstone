@@ -169,6 +169,10 @@ function rowToLoan(row) {
     // the loan stays 'Paid', keeps its payments and stays in reports.
     // NULL = active in the working list.
     archivedAt: row.archived_at || null,
+    // Who added this loan (30_added_by_attribution.sql) — NULL for
+    // rows entered before the column existed.
+    addedByName: row.added_by_name || '',
+    addedByRole: row.added_by_role || '',
   }
 }
 
@@ -526,6 +530,9 @@ export const useLoansStore = defineStore('loans', () => {
         created_at: now,
         term_months: Number(termMonths),
         loan_type: type,
+        // Attribution (30): snapshot of who filed the application.
+        added_by_name: useAuthStore().displayName,
+        added_by_role: useAuthStore().role,
       })
       .select()
       .single()
@@ -553,6 +560,8 @@ export const useLoansStore = defineStore('loans', () => {
       payments: [],
       remarks: '',
       history: [],
+      addedByName: useAuthStore().displayName,
+      addedByRole: useAuthStore().role,
     }
     loans.value.push(loan)
     logAction(
@@ -1018,6 +1027,10 @@ export const useLoansStore = defineStore('loans', () => {
         created_at: spec.dateIssued, // the real loan date (seed convention: dates drive the list)
         term_months: Number(spec.termMonths),
         loan_type: spec.type,
+        // Attribution (30): snapshot of who transcribed the paper
+        // record — historical entries are developer/staff work.
+        added_by_name: useAuthStore().displayName,
+        added_by_role: useAuthStore().role,
       })
       .select()
       .single()
@@ -1089,6 +1102,8 @@ export const useLoansStore = defineStore('loans', () => {
       remarks: '',
       history: [],
       archivedAt: null,
+      addedByName: useAuthStore().displayName,
+      addedByRole: useAuthStore().role,
     }
     loans.value.push(loan)
     logAction(

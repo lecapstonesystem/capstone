@@ -272,6 +272,13 @@
                   }}
                 </p>
                 <p class="text-sm text-gray-500">{{ detailMember.memberNo }}</p>
+                <p
+                  v-if="detailMember.addedByName"
+                  class="text-xs text-gray-400"
+                  title="Who registered this member"
+                >
+                  Added by {{ detailMember.addedByName }} ({{ detailMember.addedByRole }})
+                </p>
               </div>
               <span
                 :class="statusBadgeClass(detailMember.status)"
@@ -560,6 +567,16 @@
                   class="border border-green-300 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-50 transition duration-200"
                 >
                   Reactivate
+                </button>
+                <!-- Developer-only: the button never renders for staff,
+                     and the database refuses the delete for any other
+                     role (22_developer_role.sql). -->
+                <button
+                  v-if="auth.isDeveloper"
+                  @click="openDeleteTest"
+                  class="border border-red-300 text-red-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-50 transition duration-200"
+                >
+                  Delete Test Member
                 </button>
               </div>
             </div>
@@ -1009,6 +1026,53 @@
         </div>
       </div>
     </Transition>
+    <!-- Developer-only: delete a TEST member (typed confirmation) -->
+    <Transition name="dialog">
+      <div
+        v-if="deleteTestOpen && detailMember"
+        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        @click.self="deleteTestOpen = false"
+      >
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+          <h2 class="text-lg font-semibold text-gray-800 mb-2">Delete test member?</h2>
+          <p class="text-sm text-gray-500 mb-4">
+            This permanently removes <strong>{{ detailMember.name }}</strong> ({{
+              detailMember.memberNo
+            }}) and everything attached: loans, payments, co-maker rows, submitted documents, share
+            capital and loan requests. The audit log keeps its trail — deletions are logged, never
+            erased. Only ever do this for test data; real member records are protected by RA 9520.
+          </p>
+          <p class="text-sm text-gray-700 mb-2">
+            Type the member number <strong>{{ detailMember.memberNo }}</strong> to confirm.
+          </p>
+          <input
+            v-model="deleteTestConfirm"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+            :placeholder="detailMember.memberNo"
+          />
+          <p v-if="deleteTestError" class="text-sm text-red-600 mb-2">{{ deleteTestError }}</p>
+          <div class="flex justify-end gap-3 mt-4">
+            <button
+              @click="deleteTestOpen = false"
+              class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              @click="runDeleteTest"
+              :disabled="
+                deleteTestBusy ||
+                deleteTestConfirm.trim().toUpperCase() !==
+                  String(detailMember.memberNo).toUpperCase()
+              "
+              class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition duration-200 disabled:opacity-50"
+            >
+              {{ deleteTestBusy ? 'Deleting…' : 'Delete permanently' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </AppLayout>
 </template>
 
@@ -1021,12 +1085,49 @@ import SortableTh from '../components/SortableTh.vue'
 import PhotoPreview from '../components/PhotoPreview.vue'
 import AttachmentPanel from '../components/AttachmentPanel.vue'
 import { PHOTO_ACCEPT } from '../lib/documents'
+import { useAuthStore } from '../stores/auth'
 import { useToastsStore } from '../stores/toasts'
 import { useMembersStore } from '../stores/members'
 import { useLoansStore, LOAN_TYPES } from '../stores/loans'
 
 const membersStore = useMembersStore()
+const auth = useAuthStore()
 const toasts = useToastsStore()
+
+// Developer-only test-data cleanup (22_developer_role.sql) — the typed
+// member number mirrors GitHub-style destructive confirms and keeps
+// the RA 9520 "no casual deletes" spirit visible in the UI. Invisible
+// to staff AND refused by the database for any other role.
+const deleteTestOpen = ref(false)
+const deleteTestConfirm = ref('')
+const deleteTestBusy = ref(false)
+const deleteTestError = ref('')
+
+function openDeleteTest() {
+  deleteTestConfirm.value = ''
+  deleteTestError.value = ''
+  deleteTestOpen.value = true
+}
+
+async function runDeleteTest() {
+  const member = detailMember.value
+  if (
+    !member ||
+    deleteTestConfirm.value.trim().toUpperCase() !== String(member.memberNo).toUpperCase()
+  ) {
+    return
+  }
+  deleteTestBusy.value = true
+  const result = await membersStore.deleteTestMember(member)
+  deleteTestBusy.value = false
+  if (!result.ok) {
+    deleteTestError.value = result.message
+    return
+  }
+  deleteTestOpen.value = false
+  detailMember.value = null
+  toasts.success('Test member removed.')
+}
 
 const loansStore = useLoansStore()
 

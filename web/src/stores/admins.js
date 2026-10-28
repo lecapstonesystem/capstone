@@ -84,7 +84,7 @@ export const useAdminsStore = defineStore('admins', () => {
   const canManageAccounts = computed(() => auth.role === 'Super Admin' || auth.role === 'Developer')
   const MANAGE_DENIED = {
     ok: false,
-    message: 'Only a Super Admin or the Developer can manage admin accounts.',
+    message: 'Only a Super Admin can manage admin accounts.',
   }
 
   function emailTaken(email, exceptId = null) {
@@ -102,6 +102,10 @@ export const useAdminsStore = defineStore('admins', () => {
     const query = search.value.toLowerCase().trim()
 
     let rows = admins.value.filter((admin) => {
+      // Developer accounts stay invisible in the portal: the role
+      // exists only for test-data cleanup (RLS in 22) and must not
+      // appear on the Admin Accounts page at all.
+      if (admin.role === 'Developer') return false
       const matchesSearch =
         !query ||
         `${admin.firstName} ${admin.lastName}`.toLowerCase().includes(query) ||

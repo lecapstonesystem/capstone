@@ -97,8 +97,9 @@ SELECT count(*) AS still_there FROM member WHERE member_id = 92;
 
 -- ---------- 4. TEST LOANS ONLY (the member stays) ----------
 -- A test loan filed under a real member: remove just the loan.
--- (The portal's delete buttons for test data were removed with the
--- Developer module — this section IS the sanctioned cleanup path.)
+-- The portal's Delete Test Loan button is Developer-role only and
+-- invisible to staff; this section is the same cleanup for when the
+-- portal cannot be used (or a non-Developer session must not touch it).
 -- Look the loan_id up first (the Loan No in the portal is display
 -- text, not necessarily the id):
 

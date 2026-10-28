@@ -470,6 +470,14 @@ def plot_forecast(disb_fc, coll_fc):
 #     not a theoretical formula we cannot defend.
 ANALYSIS_START = pd.Timestamp("2023-01-01")
 BACKTEST_MODELS = ("ma3", "ma6", "trend", "seasonal_naive")
+# Machine keys stay in the API payloads, but sentences and charts on screen
+# speak plain language (client admins read these, not data scientists).
+MODEL_LABELS = {"ma3": "average of the last 3 months",
+                "ma6": "average of the last 6 months",
+                "trend": "steady up/down trend line",
+                "seasonal_naive": "same month as last year"}
+SHORT_LABELS = {"ma3": "3-month avg", "ma6": "6-month avg",
+                "trend": "trend line", "seasonal_naive": "same month last year"}
 MONTH_NAMES = ("January", "February", "March", "April", "May", "June",
                "July", "August", "September", "October", "November", "December")
 MONTH_ABBR = tuple(n[:3] for n in MONTH_NAMES)
@@ -906,18 +914,17 @@ def auto_insights(loans, stats=None, pays=None, holdout=6):
     if len(s) >= 6 and (s.std(ddof=0) or 0) > 0:
         z = (s - s.mean()) / s.std(ddof=0)
         for m, v in z[z.abs() >= 1.5].sort_values(ascending=False).head(3).items():
-            out.append({"tag": "anomaly",
-                        "text": (f"{m:%B %Y} disbursements hit {s[m]:,.0f} PHP — "
-                                 f"{abs(v):.1f}σ {'above' if v > 0 else 'below'} the "
-                                 f"2023+ monthly average")})
+            out.append({"tag": "unusual",
+                        "text": (f"{m:%B %Y} disbursements hit {s[m]:,.0f} PHP — far "
+                                 f"{'above' if v > 0 else 'below'} the usual month "
+                                 f"(about {abs(v):.1f}× the normal ups and downs)")})
     bt = backtest_monthly(loans, holdout=holdout)
     if bt["best_model"]:
         w = bt["scorecard"][0]
         out.append({"tag": "model",
-                    "text": (f"Backtesting the last {bt['holdout']} months: "
-                             f"'{w['model']}' wins at {w['wape']:.0%} weighted error "
-                             f"({w['within_25pct']:.0%} of months within 25%) — it now "
-                             f"drives the headline forecast")})
+                    "text": (f"Accuracy test on the last {bt['holdout']} months we hid: "
+                             f"the {MODEL_LABELS.get(w['model'], w['model'])} was closest "
+                             f"(overall error {w['wape']:.0%}) — it now powers the forecast")})
     dated = loans.dropna(subset=["date"])
     n_mem = max(int(dated["member"].nunique()), 1)
     recur = int((dated.groupby("member").size() >= 2).sum())
@@ -931,17 +938,18 @@ def auto_insights(loans, stats=None, pays=None, holdout=6):
         annualized = float(yr.iloc[-1]) / (covered / 365.0)
         growth = annualized / max(float(yr.iloc[-2]), 1.0) - 1.0
         out.append({"tag": "trend",
-                    "text": (f"{last_year} disbursements annualize to {annualized:,.0f} PHP "
+                    "text": (f"{last_year} disbursements are on pace for {annualized:,.0f} PHP "
                              f"({growth:+.0%} vs {last_year - 1})")})
     if stats is not None and len(stats):
         fp = float(stats["fully_paid"].astype(str).str.lower().eq("true").mean())
         out.append({"tag": "repayment",
-                    "text": f"{fp:.0%} of ledgered loans are recorded fully repaid"})
+                    "text": f"{fp:.0%} of the loans in our records are marked fully repaid"})
     cyc = member_cycles(loans, stats)["summary"]
     if cyc["cohort_avg_cycle_days"]:
         out.append({"tag": "rhythm",
-                    "text": (f"Repeat borrowers return every ~{cyc['cohort_avg_cycle_months']} "
-                             f"months on average — the basis for next-application windows")})
+                    "text": (f"Members who borrow again come back every "
+                             f"~{cyc['cohort_avg_cycle_months']} months on average — that is how "
+                             f"we estimate each member's next application")})
     return {"insights": out[:8], "n_loans_analyzed": int(len(era)),
             "caveats": ([f"{n_excl} pre-{ANALYSIS_START:%Y-%m} loans excluded"]
                         if n_excl else [])}
@@ -991,11 +999,12 @@ def chart_forecast_png(loans, months=FORECAST_MONTHS, holdout=6):
     los = [r["low"] / 1e3 for r in fc["rows"]]
     his = [r["high"] / 1e3 for r in fc["rows"]]
     ax.plot(fmonths, pts, marker="o", ms=4, color="#c00000", lw=2,
-            label=f"forecast ({fc['best_model']})")
+            label=f"forecast ({SHORT_LABELS.get(fc['best_model'], fc['best_model'])})")
     ax.fill_between(fmonths, los, his, color="#c00000", alpha=0.15,
-                    label="empirical 95% interval")
-    ax.set_title(f"Monthly disbursements — best model '{fc['best_model']}' "
-                 f"with 95% interval (thousand PHP)")
+                    label="realistic range (95%)")
+    ax.set_title(f"Monthly disbursements — forecast using the "
+                 f"{MODEL_LABELS.get(fc['best_model'], fc['best_model'])} "
+                 f"(thousand PHP)")
     ax.set_ylabel("Thousand PHP")
     ax.legend()
     fig.autofmt_xdate(rotation=30)
@@ -1010,17 +1019,18 @@ def chart_backtest_png(loans, holdout=6):
         return _png_bytes(plt.figure())
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10.6, 3.6))
     xs = range(len(bt["actuals"]))
-    ax1.plot(xs, np.asarray(bt["actuals"]) / 1e3, marker="o", label="actual", color="#1f4e79")
+    ax1.plot(xs, np.asarray(bt["actuals"]) / 1e3, marker="o", label="what actually happened", color="#1f4e79")
     ax1.plot(xs, np.asarray(bt["predictions"]) / 1e3, marker="s",
-             label=f"predicted ({bt['best_model']})", color="#c00000")
+             label=f"predicted ({SHORT_LABELS.get(bt['best_model'], bt['best_model'])})",
+             color="#c00000")
     ax1.set_xticks(list(xs)); ax1.set_xticklabels(bt.get("months_backtested", xs),
                                                   rotation=30, fontsize=8)
-    ax1.set_title("Backtest: hidden months, one step ahead (k PHP)")
+    ax1.set_title("Accuracy check: months we hid, one guess ahead (k PHP)")
     ax1.legend()
-    names = [r["model"] for r in bt["scorecard"]]
+    names = [SHORT_LABELS.get(r["model"], r["model"]) for r in bt["scorecard"]]
     wapes = [r["wape"] * 100 for r in bt["scorecard"]]
     ax2.barh(names[::-1], wapes[::-1], color="#4472C4")
-    ax2.set_title("Weighted error by model (lower = better)")
+    ax2.set_title("Overall error by method (lower = better)")
     ax2.set_xlabel("% error")
     fig.tight_layout()
     return _png_bytes(fig)

@@ -52,13 +52,15 @@ from loan_simulator import loan_totals, round2, simulate_loan  # noqa: E402  (si
 
 API_KEY = os.environ.get("UCMS_API_KEY", "")  # empty = dev-open, warns at startup
 # Comma-separated frontend origin(s) allowed to call this API in browsers.
-# Default covers local dev AND the deployed Pages origin — a manually
-# created Render service doesn't ingest render.yaml's envVars, and a
-# missing CORS var silently 400s every browser call (curl never shows it).
+# Default covers local dev, OUR deployed site, and the teammate's admin
+# portal (ucms-admin.pages.dev) — a manually created Render service doesn't
+# ingest render.yaml's envVars, and a missing CORS var silently 400s every
+# browser call (curl never shows it). Env var still overrides this default.
 CORS_ORIGINS = [o.strip() for o in
                 os.environ.get("UCMS_CORS_ORIGINS",
                                "http://localhost:5173,"
-                               "https://ucms-defense.pages.dev").split(",")
+                               "https://ucms-defense.pages.dev,"
+                               "https://ucms-admin.pages.dev").split(",")
                 if o.strip()]
 
 

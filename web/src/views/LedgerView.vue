@@ -17,6 +17,11 @@
         </button>
       </div>
 
+      <div class="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg mb-6 text-sm">
+        Ledger entries are permanent. Correct an entry with a linked reversal and a required
+        reason; the original is preserved and the net balance is offset.
+      </div>
+
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
@@ -24,7 +29,7 @@
           <p class="text-3xl font-bold text-green-600 mt-1">
             {{ formatCurrency(ledgerStore.totalIncome) }}
           </p>
-          <p class="text-xs text-green-500 mt-2">All income entries</p>
+          <p class="text-xs text-green-500 mt-2">Includes reversal entries</p>
         </div>
 
         <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
@@ -32,7 +37,7 @@
           <p class="text-3xl font-bold text-red-600 mt-1">
             {{ formatCurrency(ledgerStore.totalExpense) }}
           </p>
-          <p class="text-xs text-red-400 mt-2">All expense entries</p>
+          <p class="text-xs text-red-400 mt-2">Includes reversal entries</p>
         </div>
 
         <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
@@ -154,7 +159,17 @@
                 :key="txn.id"
                 class="hover:bg-gray-50 transition duration-150"
               >
-                <td class="px-6 py-4 font-medium text-gray-800">{{ txn.refNo }}</td>
+                <td class="px-6 py-4 font-medium text-gray-800">
+                  <div>{{ txn.refNo }}</div>
+                  <div v-if="txn.reversalOf" class="mt-1 text-xs text-amber-700">
+                    Reversal of {{ refNoOf(txn.reversalOf) }}
+                  </div>
+                  <div v-else-if="txn.reversedBy" class="mt-1 text-xs text-gray-500">
+                    Reversed by {{ txn.reversedBy.refNo }} on
+                    {{ formatDate(txn.reversedBy.recordedAt.slice(0, 10)) }} · admin
+                    #{{ txn.reversedBy.adminId }}
+                  </div>
+                </td>
                 <td class="px-6 py-4 text-gray-500">{{ formatDate(txn.date) }}</td>
                 <td v-if="columns.type" class="px-6 py-4">
                   <span
@@ -171,8 +186,17 @@
                 <td v-if="columns.category" class="px-6 py-4 text-gray-600">
                   {{ txn.category }}
                 </td>
-                <td v-if="columns.description" class="px-6 py-4 text-gray-500 max-w-56 truncate">
-                  {{ txn.description }}
+                <td v-if="columns.description" class="px-6 py-4 text-gray-500 max-w-56">
+                  <div class="truncate">{{ txn.description }}</div>
+                  <div
+                    v-if="txn.correctionReason || txn.reversedBy"
+                    class="mt-1 text-xs text-gray-400 whitespace-normal"
+                  >
+                    Reason: {{ txn.correctionReason || txn.reversedBy.correctionReason }}
+                  </div>
+                  <div v-if="txn.reversalOf" class="text-xs text-gray-400">
+                    Recorded by admin #{{ txn.adminId }}
+                  </div>
                 </td>
                 <td
                   class="px-6 py-4 text-right font-semibold whitespace-nowrap"
@@ -182,17 +206,15 @@
                 </td>
                 <td class="px-6 py-4 text-right whitespace-nowrap">
                   <button
-                    @click="openEditModal(txn)"
-                    class="text-green-600 hover:text-green-800 text-sm font-medium mr-3"
+                    v-if="!txn.reversalOf && !txn.reversedBy"
+                    @click="openReverseModal(txn)"
+                    class="text-amber-700 hover:text-amber-900 text-sm font-medium"
                   >
-                    Edit
+                    Reverse
                   </button>
-                  <button
-                    @click="openDeleteModal(txn)"
-                    class="text-red-500 hover:text-red-700 text-sm font-medium"
-                  >
-                    Delete
-                  </button>
+                  <span v-else class="text-xs text-gray-400">
+                    {{ txn.reversalOf ? 'Correction entry' : 'Corrected' }}
+                  </span>
                 </td>
               </tr>
 
@@ -247,7 +269,7 @@
       </div>
     </div>
 
-    <!-- Add / Edit Modal -->
+    <!-- Add Transaction Modal -->
     <Transition name="dialog">
       <div
         v-if="showModal"
@@ -258,9 +280,7 @@
           <div
             class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0"
           >
-            <h2 class="text-lg font-semibold text-gray-800">
-              {{ modalMode === 'add' ? 'Add Transaction' : 'Edit Transaction' }}
-            </h2>
+            <h2 class="text-lg font-semibold text-gray-800">Add Transaction</h2>
             <button
               @click="closeModal"
               class="text-gray-400 hover:text-gray-600 text-xl leading-none"
@@ -354,51 +374,62 @@
               :disabled="busy"
               class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {{ busy ? 'Saving…' : modalMode === 'add' ? 'Add Transaction' : 'Save Changes' }}
+              {{ busy ? 'Saving…' : 'Add Transaction' }}
             </button>
           </div>
         </div>
       </div>
     </Transition>
 
-    <!-- Delete Confirmation Modal -->
+    <!-- Reversal confirmation -->
     <Transition name="dialog">
       <div
-        v-if="txnToDelete"
+        v-if="txnToReverse"
         class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-        @click.self="txnToDelete = null"
+        @click.self="txnToReverse = null"
       >
         <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
-          <h2 class="text-lg font-semibold text-gray-800 mb-2">Delete Transaction?</h2>
+          <h2 class="text-lg font-semibold text-gray-800 mb-2">Reverse Transaction?</h2>
           <p class="text-sm text-gray-500 mb-4">
-            Are you sure you want to delete
-            <span class="font-medium text-gray-700">{{ txnToDelete.refNo }}</span>
-            ({{ txnToDelete.description }})? The entry leaves the ledger, but the removal —
-            including your reason — is kept in the activity trail.
+            The original entry will stay in the ledger. A new
+            <strong>{{ txnToReverse.type === 'Income' ? 'Expense' : 'Income' }}</strong>
+            entry for
+            <strong>{{ formatCurrency(txnToReverse.amount) }}</strong>
+            will be linked to it; both entries remain part of the record.
           </p>
-          <div class="mb-6">
-            <label class="block text-xs font-medium text-gray-500 mb-1">Reason (required)</label>
-            <textarea
-              v-model="deleteReason"
-              rows="2"
-              placeholder="Why is this entry being removed? e.g. Recorded under the wrong category"
-              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            ></textarea>
+          <div class="space-y-4 mb-6">
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Correction date</label>
+              <input
+                v-model="reverseDate"
+                type="date"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1">Reason (required)</label>
+              <textarea
+                v-model="reverseReason"
+                rows="2"
+                placeholder="Why is this entry being corrected?"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              ></textarea>
+            </div>
           </div>
-          <p v-if="deleteError" class="text-sm text-red-600 mb-4">{{ deleteError }}</p>
+          <p v-if="reverseError" class="text-sm text-red-600 mb-4">{{ reverseError }}</p>
           <div class="flex justify-end gap-3">
             <button
-              @click="txnToDelete = null"
+              @click="txnToReverse = null"
               class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition duration-200"
             >
               Cancel
             </button>
             <button
-              @click="confirmDelete"
-              :disabled="deleting || !deleteReason.trim()"
-              class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              @click="confirmReverse"
+              :disabled="reversing || !reverseDate || !reverseReason.trim()"
+              class="bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-700 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {{ deleting ? 'Deleting…' : 'Delete' }}
+              {{ reversing ? 'Recording…' : 'Record Reversal' }}
             </button>
           </div>
         </div>
@@ -442,16 +473,15 @@ const paginationLabel = computed(() => {
 })
 
 const showModal = ref(false)
-const modalMode = ref('add') // 'add' | 'edit'
-const editingId = ref(null)
 const formError = ref('')
-const txnToDelete = ref(null)
-const deleteError = ref('')
-const deleteReason = ref('')
+const txnToReverse = ref(null)
+const reverseError = ref('')
+const reverseReason = ref('')
+const reverseDate = ref('')
 // Double-click guards — one click, one database write. Money entries
 // must never double-post because the button was tapped twice.
 const busy = ref(false)
-const deleting = ref(false)
+const reversing = ref(false)
 
 // Form model
 const emptyForm = {
@@ -464,24 +494,8 @@ const emptyForm = {
 const form = reactive({ ...emptyForm })
 
 function openAddModal() {
-  modalMode.value = 'add'
-  editingId.value = null
   formError.value = ''
   Object.assign(form, emptyForm, { date: new Date().toISOString().split('T')[0] })
-  showModal.value = true
-}
-
-function openEditModal(txn) {
-  modalMode.value = 'edit'
-  editingId.value = txn.id
-  formError.value = ''
-  Object.assign(form, {
-    date: txn.date,
-    type: txn.type,
-    category: txn.category,
-    description: txn.description,
-    amount: txn.amount,
-  })
   showModal.value = true
 }
 
@@ -518,50 +532,51 @@ async function saveTransaction() {
 
   busy.value = true
   try {
-    const result =
-      modalMode.value === 'add'
-        ? await ledgerStore.addTransaction(data)
-        : await ledgerStore.updateTransaction(editingId.value, data)
+    const result = await ledgerStore.addTransaction(data)
     if (!result.ok) {
       // Keep the dialog open and show what the database said
       formError.value = result.message || 'Could not save the transaction.'
       return
     }
 
-    const wasAdd = modalMode.value === 'add'
     closeModal()
-    toasts.success(wasAdd ? 'Entry saved.' : 'Entry updated.')
+    toasts.success('Entry saved.')
   } finally {
     busy.value = false
   }
 }
 
-function openDeleteModal(txn) {
-  txnToDelete.value = txn
-  deleteError.value = ''
-  deleteReason.value = ''
+function openReverseModal(txn) {
+  txnToReverse.value = txn
+  reverseError.value = ''
+  reverseReason.value = ''
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  reverseDate.value = `${now.getFullYear()}-${month}-${day}`
 }
 
-async function confirmDelete() {
-  // The reason is required and travels with the deletion into the
-  // audit trail (same rule as capital corrections in MembersView).
-  if (deleting.value || !deleteReason.value.trim()) return
-  deleting.value = true
+async function confirmReverse() {
+  if (reversing.value || !reverseReason.value.trim() || !reverseDate.value) return
+  reversing.value = true
   try {
-    const result = await ledgerStore.deleteTransaction(
-      txnToDelete.value.id,
-      deleteReason.value.trim(),
-    )
+    const result = await ledgerStore.reverseTransaction(txnToReverse.value.id, {
+      date: reverseDate.value,
+      reason: reverseReason.value.trim(),
+    })
     if (!result.ok) {
-      // Keep the confirmation open and show why.
-      deleteError.value = result.message || 'Could not delete the transaction.'
+      reverseError.value = result.message || 'Could not record the reversal.'
       return
     }
-    txnToDelete.value = null
-    toasts.success('Entry removed.')
+    txnToReverse.value = null
+    toasts.success('Reversal recorded. The original entry remains in the ledger.')
   } finally {
-    deleting.value = false
+    reversing.value = false
   }
+}
+
+function refNoOf(id) {
+  return `LDG-${String(id).padStart(4, '0')}`
 }
 
 function formatCurrency(amount) {

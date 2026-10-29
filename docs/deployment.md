@@ -53,8 +53,9 @@ reset end-to-end (Admins → Reset → check the email → open the link).
 
 ## 3. Nothing else to configure
 
-- Database schema, RLS policies, audit log: migrations 01–26 in
-  `database/` (run in order; 23–25 are the newest).
+- Database schema, RLS policies, audit log: migrations in
+  `database/` (run in numeric order). Apply migration 32 before
+  deploying the immutable-ledger reversal UI.
 - Storage bucket `member-documents`: already private, policies in 13.
 - The Android app talks to Supabase directly — the web deploy does
   not affect it (contract: `docs/app_contract.md`).
@@ -68,7 +69,8 @@ Run once on the live URL with a real login:
    Applications, Reports, Admins, audit trail.
 3. Photo upload (member drawer + payment receipt) + preview.
 4. Password reset email link arrives with the **production** URL.
-5. Ledger correction (edit + delete-with-reason) leaves audit lines.
+5. Ledger correction appends an opposite-type reversal with a reason;
+   verify the original remains visible and the net balance is unchanged.
 
 ## 5. Tag v1.0
 

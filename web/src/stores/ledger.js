@@ -7,15 +7,16 @@ import { toggleSort, sortRows } from '../utils/tableSort'
 import { useAuditStore } from './audit'
 
 /**
- * Ledger store — live Supabase data (swapped from mocks).
+ * Ledger store — immutable financial entries in live Supabase data.
  *
  * How the store maps to public.ledger (14_add_ledger_category.sql):
  *   - refNo has no column: derived from ledger_id (LDG-0001 style,
  *     the same convention as LOAN-0001 / KHS-0001).
  *   - type holds the Income/Expense flag; category (14's column)
  *     holds the coop's breakdown (Canteen Sales, Utilities, ...).
- *   - admin_id is NOT NULL on the table, so every write stamps the
- *     logged-in admin's profile.admin_id (06 "admin full access").
+ *   - admin_id records the logged-in admin for every entry.
+ *   - Corrections append one opposite-type reversal linked to the
+ *     original; portal users cannot edit or delete ledger entries.
  *   - amount arrives numeric, dates as 'YYYY-MM-DD' strings — the
  *     exact shapes the form and Intl.NumberFormat expect.
  *
@@ -31,7 +32,7 @@ function refNoOf(ledgerId) {
   return `LDG-${String(ledgerId).padStart(4, '0')}`
 }
 
-function rowToTransaction(row) {
+function rowToTransaction(row, reversedBy = null) {
   return {
     id: row.ledger_id,
     refNo: refNoOf(row.ledger_id),
@@ -40,6 +41,18 @@ function rowToTransaction(row) {
     category: row.category || '',
     description: row.description || '',
     amount: Number(row.amount || 0),
+    adminId: row.admin_id,
+    reversalOf: row.reversal_of || null,
+    correctionReason: row.correction_reason || '',
+    recordedAt: row.recorded_at || '',
+    reversedBy: reversedBy
+      ? {
+          refNo: refNoOf(reversedBy.ledger_id),
+          adminId: reversedBy.admin_id,
+          recordedAt: reversedBy.recorded_at || '',
+          correctionReason: reversedBy.correction_reason || '',
+        }
+      : null,
   }
 }
 
@@ -72,7 +85,9 @@ export const useLedgerStore = defineStore('ledger', () => {
         !query ||
         txn.refNo.toLowerCase().includes(query) ||
         txn.description.toLowerCase().includes(query) ||
-        txn.category.toLowerCase().includes(query)
+            txn.category.toLowerCase().includes(query) ||
+            txn.correctionReason.toLowerCase().includes(query) ||
+            (txn.reversedBy?.correctionReason || '').toLowerCase().includes(query)
       return matchesType && matchesSearch
     })
     return sortRows(filtered, sortKey.value, sortDir.value, accessors)
@@ -105,7 +120,7 @@ export const useLedgerStore = defineStore('ledger', () => {
     page.value = 1
   })
 
-  // If the current page no longer exists (e.g. after a delete), step back
+  // If the current page no longer exists, step back
   watch(totalPages, (count) => {
     if (page.value > count) page.value = count
   })
@@ -148,7 +163,14 @@ export const useLedgerStore = defineStore('ledger', () => {
         .order('date', { ascending: false })
         .order('ledger_id', { ascending: false })
       if (error) throw error
-      transactions.value = (data || []).map(rowToTransaction)
+      const reversals = new Map(
+        (data || [])
+          .filter((row) => row.reversal_of !== null)
+          .map((row) => [row.reversal_of, row]),
+      )
+      transactions.value = (data || []).map((row) =>
+        rowToTransaction(row, reversals.get(row.ledger_id)),
+      )
     } catch (error) {
       lastError.value = errorMessage(error)
       transactions.value = []
@@ -192,61 +214,53 @@ export const useLedgerStore = defineStore('ledger', () => {
     return { ok: true }
   }
 
-  async function updateTransaction(id, data) {
-    const before = transactions.value.find((txn) => txn.id === id)
+  async function reverseTransaction(id, { date, reason }) {
+    const original = transactions.value.find((txn) => txn.id === id)
+    if (!original) return { ok: false, message: 'Transaction not found.' }
+    if (original.reversalOf || original.reversedBy) {
+      return { ok: false, message: 'This transaction has already been corrected.' }
+    }
+
+    const auth = useAuthStore()
+    const adminId = auth.profile?.admin_id ?? null
+    if (!adminId) {
+      return {
+        ok: false,
+        message: 'This session is not linked to an admin record — sign out and back in.',
+      }
+    }
+
+    const correctionReason = String(reason || '').trim()
+    if (!correctionReason) return { ok: false, message: 'A correction reason is required.' }
+
     const { data: row, error } = await supabase
       .from('ledger')
-      .update({
-        date: data.date,
-        type: data.type,
-        category: data.category,
-        description: data.description,
-        amount: data.amount,
+      .insert({
+        date,
+        type: original.type === 'Income' ? 'Expense' : 'Income',
+        category: original.category,
+        description: `Reversal of ${original.refNo}`,
+        amount: original.amount,
+        admin_id: adminId,
+        reversal_of: original.id,
+        correction_reason: correctionReason,
       })
-      .eq('ledger_id', id)
       .select()
       .single()
     if (error) return { ok: false, message: errorMessage(error) }
-    const after = rowToTransaction(row)
-    const index = transactions.value.findIndex((txn) => txn.id === id)
-    if (index !== -1) transactions.value[index] = after
-    // The trail spells out exactly what changed (old → new values).
-    if (before) {
-      const peso = (value) => `₱${Number(value).toLocaleString('en-PH')}`
-      const changes = []
-      if (before.date !== after.date) changes.push(`Date ${before.date} → ${after.date}`)
-      if (before.type !== after.type) changes.push(`Type ${before.type} → ${after.type}`)
-      if (before.category !== after.category) {
-        changes.push(`Category "${before.category}" → "${after.category}"`)
-      }
-      if (before.description !== after.description) {
-        changes.push(`Description "${before.description}" → "${after.description}"`)
-      }
-      if (before.amount !== after.amount) {
-        changes.push(`Amount ${peso(before.amount)} → ${peso(after.amount)}`)
-      }
-      if (changes.length) {
-        useAuditStore().record('ledger', id, `Edited ${after.refNo} — ${changes.join('; ')}`)
-      }
-    }
-    return { ok: true }
-  }
 
-  // Ledger deletions are bookkeeping corrections: the row goes, but
-  // the trail keeps who removed it, what it was, and why (the dialog
-  // requires the reason before the button unlocks).
-  async function deleteTransaction(id, reason) {
-    const before = transactions.value.find((txn) => txn.id === id)
-    const { error } = await supabase.from('ledger').delete().eq('ledger_id', id)
-    if (error) return { ok: false, message: errorMessage(error) }
-    transactions.value = transactions.value.filter((txn) => txn.id !== id)
-    if (before) {
-      useAuditStore().record(
-        'ledger',
-        id,
-        `Deleted ${before.refNo} — ${before.type} ₱${before.amount.toLocaleString('en-PH')} (${before.category}: ${before.description}) (reason: ${reason})`,
-      )
+    const reversal = rowToTransaction(row)
+    original.reversedBy = {
+      refNo: reversal.refNo,
+      recordedAt: reversal.recordedAt,
+      correctionReason,
     }
+    transactions.value.push(reversal)
+    useAuditStore().record(
+      'ledger',
+      reversal.id,
+      `Reversed ${original.refNo} with ${reversal.refNo} — ${correctionReason}`,
+    )
     return { ok: true }
   }
 
@@ -275,7 +289,6 @@ export const useLedgerStore = defineStore('ledger', () => {
     totalCount,
     fetchLedger,
     addTransaction,
-    updateTransaction,
-    deleteTransaction,
+    reverseTransaction,
   }
 })

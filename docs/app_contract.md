@@ -7,8 +7,9 @@ project**. No FastAPI in between — the phase-2 service_role backend is
 out of scope (admin portal writes directly under `06_admin_access.sql`,
 the app writes directly under RLS from `02` + `13`).
 
-All 26 migrations (`database/01…26`) are **already applied on
-production** — you code against the live schema, you run no SQL.
+Migrations `database/01…32` are applied on production. The portal's
+immutable-ledger correction flow uses `database/32_immutable_ledger_reversals.sql`;
+the mobile app does not issue direct ledger writes.
 
 ---
 

@@ -89,6 +89,7 @@
         </RouterLink>
 
         <RouterLink
+          v-if="showAnalyticsLab"
           to="/analytics-lab"
           class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition duration-200"
           :class="
@@ -241,6 +242,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useToastsStore } from '../stores/toasts'
 
+const showAnalyticsLab = import.meta.env.DEV
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()

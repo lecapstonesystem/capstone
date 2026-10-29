@@ -9,7 +9,6 @@ import LoansView from '../views/LoansView.vue'
 // import ApplicationsView from '../views/ApplicationsView.vue'
 import NotificationsView from '../views/NotificationsView.vue'
 import ReportsView from '../views/ReportsView.vue'
-import AnalyticsLabView from '../views/AnalyticsLabView.vue'
 import ActivityView from '../views/ActivityView.vue'
 import AdminsView from '../views/AdminsView.vue'
 import ChangePasswordView from '../views/ChangePasswordView.vue'
@@ -85,12 +84,16 @@ const router = createRouter({
       component: ReportsView,
       meta: { requiresAuth: true },
     },
-    {
-      path: '/analytics-lab',
-      name: 'analytics-lab',
-      component: AnalyticsLabView,
-      meta: { requiresAuth: true },
-    },
+    ...(import.meta.env.DEV
+      ? [
+          {
+            path: '/analytics-lab',
+            name: 'analytics-lab',
+            component: () => import('../views/AnalyticsLabView.vue'),
+            meta: { requiresAuth: true },
+          },
+        ]
+      : []),
     {
       path: '/notifications',
       name: 'notifications',
@@ -132,6 +135,7 @@ const router = createRouter({
 // ensureInit() resolves getSession() once, so the first navigation
 // never races the auth state; stale localStorage flags are ignored.
 router.beforeEach(async (to) => {
+  if (import.meta.env.PROD && to.path === '/analytics-lab') return '/dashboard'
   const auth = useAuthStore()
   await auth.ensureInit()
   if (to.meta.requiresAuth && !auth.isAuthenticated) return '/login'

@@ -14,6 +14,21 @@ Render free tier **sleeps after ~15 min idle** — the first call after idle tak
 ~50 s to wake it, then it's fast. Frontends must treat a failed/slow call as
 "backend not ready" and fall back to their own numbers (see pattern below).
 
+## Where the numbers come from (updated Oct 29)
+
+**Analytics read the LIVE register** (Supabase) — loans entered on the
+website flow into `/analytics/*` (trends, forecasts, seasonality, member
+cycles) automatically. No re-upload, no CSV swap. Each analytics payload
+carries `n_loans_analyzed` + `caveats[]` so consumers always know what
+was measured.
+
+The repayment **schedule and completion marks** come from the paper-record
+ledger (the coop's full amortization history) — the database stores only
+payments actually received, so collections/reliability analytics weight
+the paper schedule with real collection behaviour. Numbers therefore match
+what the admin portal shows for the register, and the ledger's history for
+repayments.
+
 ## Authentication
 
 Every route except `/health`, `/docs`, `/openapi.json` needs the key:

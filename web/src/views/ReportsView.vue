@@ -536,13 +536,9 @@
           </div>
         </div>
 
-        <!-- Charts served by the backend -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <div v-for="c in LAB_CHARTS" :key="c.kind">
-            <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">{{ c.title }}</p>
-            <img :src="analyticsApi.chartUrl(c.kind)" :alt="c.title" class="w-full rounded-lg border border-gray-100" />
-          </div>
-        </div>
+        <!-- Interactive charts (hover for exact numbers). Server-rendered
+             PNG copies stay at /charts/*.png for printing. -->
+        <LabCharts :fc="lab.fc" :bt="lab.bt" :se="lab.se" :cy="lab.cy" />
 
         <!-- Collections: what paper says vs what we expect -->
         <div class="mb-8">
@@ -795,6 +791,7 @@ import { useLoansStore, LOAN_TYPES } from '../stores/loans'
 import { useLedgerStore } from '../stores/ledger'
 import { buildSchedule } from '../utils/amortization'
 import { analyticsApi } from '../lib/api.js'
+import LabCharts from '../components/LabCharts.vue'
 
 const membersStore = useMembersStore()
 const appsStore = useApplicationsStore()
@@ -836,12 +833,6 @@ const LAB_MODEL_NAMES = {
   trend: 'Steady up/down trend line',
   seasonal_naive: 'Same month as last year',
 }
-const LAB_CHARTS = [
-  { kind: 'forecast', title: 'How much we release each month (with the range we can trust)' },
-  { kind: 'heatmap', title: 'Loan applications per month (busy vs slow months)' },
-  { kind: 'backtest', title: 'Accuracy check — guessed months vs what actually happened' },
-  { kind: 'cycles', title: 'Days between loans for members who borrow again (names hidden: M1, M2…)' },
-]
 const labTagClass = (tag) => ({
   unusual: 'bg-red-100 text-red-700',
   model: 'bg-blue-100 text-blue-700',
@@ -902,7 +893,8 @@ onMounted(async () => {
     rel: val(rel),
     cv: val(cv) || { rows: [], total_scheduled: null, total_weighted: null,
                      recovery_by_bucket: [] },
-    se: val(se) || { peak_month: '—', trough_month: '—', payday_lift: 0 },
+    se: val(se) || { peak_month: '—', trough_month: '—', payday_lift: 0,
+                     matrix: [], months: [] },
   }
 })
 

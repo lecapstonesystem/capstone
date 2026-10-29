@@ -34,10 +34,11 @@
       <div
         class="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg mb-6 text-sm"
       >
-        Coop rules: <strong>committee approval</strong> · ceiling is
-        <strong>2× capital share</strong> · <strong>diminishing</strong> interest (1.5%, business
-        2%) · max <strong>2 loans</strong> · delinquent after <strong>6 months</strong> without
-        payment.
+        Loan decisions require a <strong>Super Admin</strong>. Limits use the loan-type range and
+        capital share (2× share less outstanding balances; under ₱20,000 share is limited to 80%).
+        Interest is diminishing: <strong>1.5%</strong> generally, <strong>2%</strong> Business,
+        and <strong>1.5% / 2% / 3%</strong> for 12 / 24 / 36-month Vehicle loans. Reloan requires
+        <strong>50% paid</strong>.
       </div>
 
       <!-- Summary cards -->
@@ -849,6 +850,7 @@
                 Cancel
               </button>
               <button
+                v-if="auth.isSuperAdmin"
                 @click="requestReject"
                 :disabled="!remarksDraft.trim()"
                 class="border border-red-300 text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -857,11 +859,15 @@
                 Reject
               </button>
               <button
+                v-if="auth.isSuperAdmin"
                 @click="requestApprove"
                 class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
               >
-                Approve (Committee)
+                Approve (Super Admin)
               </button>
+              <p v-if="!auth.isSuperAdmin" class="text-xs text-gray-500">
+                Only a Super Admin can approve or reject a loan.
+              </p>
             </template>
 
             <template v-else-if="detailLoan.status === 'Released'">
@@ -946,17 +952,8 @@
             >
               <p class="font-semibold">Eligible to loan</p>
               <p>
-                Ceiling: <strong>{{ formatPeso(eligibility.ceiling) }}</strong> (2× capital share{{
-                  eligibility.ceiling >= CEILING_CAP
-                    ? `, capped at ${formatPeso(CEILING_CAP)}`
-                    : ''
-                }})
-              </p>
-              <p v-if="eligibility.firstLoan">
-                First loan — capped at <strong>80% = {{ formatPeso(eligibility.limit) }}</strong>
-              </p>
-              <p v-else>
-                Maximum this member can borrow: <strong>{{ formatPeso(eligibility.limit) }}</strong>
+                Available maximum after share-cap and outstanding balances:
+                <strong>{{ formatPeso(eligibility.limit) }}</strong>
               </p>
               <p>
                 Concurrent loans: {{ eligibility.activeCount }}/2
@@ -982,7 +979,7 @@
                   class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 >
                   <option v-for="type in LOAN_TYPES" :key="type.value" :value="type.value">
-                    {{ type.label }} ({{ type.rate }}%)
+                    {{ type.label }}
                   </option>
                 </select>
               </div>
@@ -991,18 +988,15 @@
                 <input
                   v-model="newForm.principal"
                   type="number"
-                  min="1"
+                  :min="amountMin"
                   :max="amountMax"
                   placeholder="e.g. 50000"
                   class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
                 <p class="text-xs text-gray-400 mt-1">
                   {{
-                    newForm.type === 'Emergency'
-                      ? `Emergency loans: max ${formatPeso(EMERGENCY_MAX)} (2–6 months)`
-                      : eligibility.ok
-                        ? `Maximum: ${formatPeso(eligibility.limit)}`
-                        : ''
+                    `Policy range: ${formatPeso(LOAN_AMOUNT_RULES[newForm.type].min)}–${formatPeso(LOAN_AMOUNT_RULES[newForm.type].max)}. ` +
+                    (eligibility.ok ? `Available maximum: ${formatPeso(eligibility.limit)}.` : '')
                   }}
                 </p>
               </div>
@@ -1051,7 +1045,7 @@
               </div>
               <p class="text-xs text-gray-500 mt-1.5">
                 Only active members can be co-makers. The same member cannot fill both slots, and
-                the borrower cannot co-make their own loan.
+                the borrower cannot co-make their own loan. Board members are not eligible.
               </p>
             </div>
 
@@ -1864,8 +1858,7 @@ KHS-0088,Business,80000,2,18,2020-01-10,,,,</pre>
               "
             >
               <p v-if="reviewEligibility.ok" class="font-medium">
-                Eligible — ceiling {{ formatPeso(reviewEligibility.limit)
-                }}<span v-if="reviewEligibility.firstLoan"> (first loan: 80%)</span>
+                Eligible — available maximum {{ formatPeso(reviewEligibility.limit) }}
               </p>
               <ul v-else class="space-y-1">
                 <li v-for="(reason, index) in reviewEligibility.reasons" :key="index">
@@ -1913,7 +1906,8 @@ KHS-0088,Business,80000,2,18,2020-01-10,,,,</pre>
               </div>
               <p class="text-xs text-gray-500 mt-1.5">
                 Only active members can be co-makers. A name typed in the app that matches an active
-                member is already filled in — verify it, then pick any missing co-maker.
+                member is already filled in — verify it, then pick any missing co-maker. Board
+                members are not eligible.
               </p>
             </div>
 
@@ -1950,23 +1944,29 @@ KHS-0088,Business,80000,2,18,2020-01-10,,,,</pre>
               Close
             </button>
             <button
+              v-if="auth.isSuperAdmin"
               @click="submitRequestDecision('Returned')"
               class="border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-50 transition duration-200"
             >
               Return
             </button>
             <button
+              v-if="auth.isSuperAdmin"
               @click="submitRequestDecision('Rejected')"
               class="border border-red-300 text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 transition duration-200"
             >
               Reject
             </button>
             <button
+              v-if="auth.isSuperAdmin"
               @click="approveRequest"
               class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition duration-200"
             >
               Approve
             </button>
+            <p v-if="!auth.isSuperAdmin" class="self-center text-xs text-gray-500">
+              Only a Super Admin can review loan requests.
+            </p>
           </div>
         </div>
       </div>
@@ -2056,7 +2056,21 @@ KHS-0088,Business,80000,2,18,2020-01-10,,,,</pre>
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Term (months)</label>
+                <select
+                  v-if="simForm.type === 'Transportation'"
+                  v-model.number="simForm.termMonths"
+                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option
+                    v-for="months in loanTermsForType(simForm.type)"
+                    :key="months"
+                    :value="months"
+                  >
+                    {{ months }} months
+                  </option>
+                </select>
                 <input
+                  v-else
                   v-model.number="simForm.termMonths"
                   type="number"
                   min="1"
@@ -2123,7 +2137,7 @@ KHS-0088,Business,80000,2,18,2020-01-10,,,,</pre>
               v-else
               class="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm"
             >
-              Enter an amount above zero and a term between 1 and 36 months.
+              Enter an amount above zero and a valid term for the selected loan type.
             </div>
 
             <!-- Coop rule reminders — the caps the real application enforces -->
@@ -2138,8 +2152,8 @@ KHS-0088,Business,80000,2,18,2020-01-10,,,,</pre>
             </div>
 
             <p class="text-xs text-gray-400">
-              Actual ceiling: 2× the member's capital share (max ₱200,000). Emergency loans max at
-              ₱20,000. Amounts of ₱100,000 and above need 2 co-makers.
+              Actual loan limits also depend on capital share and unpaid loan balances. Amounts of
+              ₱100,000 and above need 2 co-makers.
             </p>
 
             <!-- Schedule -->
@@ -2257,8 +2271,9 @@ import {
   PAYMENT_CHANNELS,
   RELEASE_CHANNELS,
   COMAKER_THRESHOLD,
-  EMERGENCY_MAX,
-  CEILING_CAP,
+  LOAN_AMOUNT_RULES,
+  loanRateForTerm,
+  loanTermsForType,
 } from '../stores/loans'
 import { useMembersStore } from '../stores/members'
 import { useAuthStore } from '../stores/auth'
@@ -2460,7 +2475,7 @@ function requestApprove() {
   const loan = detailLoan.value
   confirmAction.value = {
     title: 'Approve Loan?',
-    message: `${loan.loanNo} (${loan.memberName}) — ${formatPeso(loan.principal)} will be approved by the committee and prepared for release.`,
+    message: `${loan.loanNo} (${loan.memberName}) — ${formatPeso(loan.principal)} will be approved by a Super Admin and prepared for release.`,
     confirmLabel: 'Approve',
     danger: false,
     success: 'Loan approved — ready for release.',
@@ -2676,7 +2691,7 @@ const reviewCoMakers = computed(() =>
     })),
 )
 
-// Live rules check — capital share, 2-month wait, ceilings, limits.
+// Live rules check — capital share, wait period, active loans, and type eligibility.
 const reviewEligibility = computed(() =>
   reviewRequest.value
     ? loansStore.eligibility(reviewRequest.value.memberId, reviewRequest.value.type)
@@ -2905,8 +2920,6 @@ const newForm = reactive({
 const reqs = reactive({
   id: false,
   financialLiteracy: false,
-  salaryProof: false,
-  checkingAccount: false,
 })
 
 const memberOptions = computed(() =>
@@ -2918,6 +2931,7 @@ const memberOptions = computed(() =>
       firstName: member.firstName,
       middleName: member.middleName,
       lastName: member.lastName,
+      isBoardMember: member.isBoardMember,
     })),
 )
 
@@ -2927,7 +2941,8 @@ const memberOptions = computed(() =>
 function coMakerOptions(slotIndex) {
   const otherPick = newForm.coMakers[slotIndex === 0 ? 1 : 0]
   return memberOptions.value.filter(
-    (option) => option.id !== newForm.memberId && option.id !== otherPick,
+    (option) =>
+      !option.isBoardMember && option.id !== newForm.memberId && option.id !== otherPick,
   )
 }
 
@@ -2937,19 +2952,24 @@ function reviewCoMakerOptions(slotIndex) {
   return memberOptions.value.filter(
     (option) =>
       option.id !== reviewRequest.value?.memberId &&
+      !option.isBoardMember &&
       (otherPick === undefined || otherPick === null || option.id !== otherPick),
   )
 }
 
 const eligibility = computed(() => loansStore.eligibility(newForm.memberId, newForm.type))
 
-const typeInfo = computed(() => typeMeta(newForm.type))
+const typeInfo = computed(() => ({
+  ...typeMeta(newForm.type),
+  rate: loanRateForTerm(newForm.type, newForm.termMonths),
+}))
 
 const termOptions = computed(() =>
-  newForm.type === 'Emergency' ? [2, 3, 4, 5, 6] : [6, 12, 18, 24, 36],
+  loanTermsForType(newForm.type) ||
+  (newForm.type === 'Emergency' ? [2, 3, 4, 5, 6] : [6, 12, 18, 24, 36]),
 )
 
-// Emergency loans default to a short term; others to 12 months
+// Emergency loans default to a short term; vehicle rates use 12/24/36 months.
 watch(
   () => newForm.type,
   (type) => {
@@ -2962,12 +2982,9 @@ const amountNumber = computed(() => Number(newForm.principal) || 0)
 const requiredCoMakers = computed(() => (amountNumber.value >= COMAKER_THRESHOLD ? 2 : 1))
 
 const amountMax = computed(() =>
-  newForm.type === 'Emergency'
-    ? EMERGENCY_MAX
-    : eligibility.value.ok
-      ? eligibility.value.limit
-      : null,
+  eligibility.value.ok ? eligibility.value.limit : LOAN_AMOUNT_RULES[newForm.type]?.max,
 )
+const amountMin = computed(() => LOAN_AMOUNT_RULES[newForm.type]?.min || 1)
 
 // Requirements vary by loan type and amount (client interview)
 const visibleReqs = computed(() => {
@@ -2977,12 +2994,6 @@ const visibleReqs = computed(() => {
       key: 'financialLiteracy',
       label: 'Financial literacy seminar completed (onsite)',
     })
-  }
-  if (newForm.type === 'Business' || amountNumber.value >= COMAKER_THRESHOLD) {
-    items.push({ key: 'salaryProof', label: 'Proof of salary submitted' })
-  }
-  if (newForm.type === 'Business') {
-    items.push({ key: 'checkingAccount', label: 'Checking account submitted' })
   }
   return items
 })
@@ -3000,8 +3011,6 @@ function openNewLoan() {
   newForm.coMakers = [null, null]
   reqs.id = false
   reqs.financialLiteracy = false
-  reqs.salaryProof = false
-  reqs.checkingAccount = false
   showNew.value = true
 }
 
@@ -3323,12 +3332,14 @@ const simForm = reactive({
   start: todayInput(),
 })
 
-const simRate = computed(() => typeMeta(simForm.type).rate)
+const simRate = computed(() => loanRateForTerm(simForm.type, simForm.termMonths))
 const simValid = computed(
   () =>
     Number(simForm.amount) > 0 &&
     Number(simForm.termMonths) >= 1 &&
-    Number(simForm.termMonths) <= 36,
+    Number(simForm.termMonths) <= 36 &&
+    (!loanTermsForType(simForm.type) ||
+      loanTermsForType(simForm.type).includes(Number(simForm.termMonths))),
 )
 const simTotals = computed(() =>
   loanTotals(Number(simForm.amount), simRate.value, Number(simForm.termMonths)),
@@ -3345,19 +3356,19 @@ const simSchedule = computed(() =>
 // The caps addLoan enforces — shown before staff promise a figure.
 const simNotes = computed(() => {
   const amount = Number(simForm.amount) || 0
+  const amountRule = LOAN_AMOUNT_RULES[simForm.type]
   const notes = []
-  if (simForm.type === 'Emergency' && amount > EMERGENCY_MAX) {
-    notes.push(
-      `Emergency loans are capped at ${formatPeso(EMERGENCY_MAX)} — pick another loan type for larger amounts.`,
-    )
+  if (amountRule && amount < amountRule.min) {
+    notes.push(`${typeLabel(simForm.type)} loans start at ${formatPeso(amountRule.min)}.`)
   }
-  if (amount > CEILING_CAP) {
-    notes.push(
-      `Above the coop maximum of ${formatPeso(CEILING_CAP)} — the ceiling is also 2× the member's capital share.`,
-    )
+  if (amountRule && amount > amountRule.max) {
+    notes.push(`${typeLabel(simForm.type)} loans are capped at ${formatPeso(amountRule.max)}.`)
   }
-  if (amount >= COMAKER_THRESHOLD && amount <= CEILING_CAP) {
+  if (amount >= COMAKER_THRESHOLD) {
     notes.push(`${formatPeso(COMAKER_THRESHOLD)} and above need 2 co-makers.`)
+  }
+  if (simForm.type === 'Transportation' && ![12, 24, 36].includes(Number(simForm.termMonths))) {
+    notes.push('Vehicle loans are available for 12, 24, or 36 months only.')
   }
   return notes
 })

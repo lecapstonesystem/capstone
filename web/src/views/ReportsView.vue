@@ -4,7 +4,7 @@
       <!-- Print-only report header -->
       <div class="hidden print:block mb-4 text-sm">
         <p class="font-bold text-gray-900">
-          UCMS Reports — KHS Mentor's Multi-Purpose Cooperative, Inc.
+          UCMS {{ reportModeLabel }} — KHS Mentor's Multi-Purpose Cooperative, Inc.
         </p>
         <p class="text-gray-600">{{ rangeLabel }} · generated {{ todayLabel }}</p>
       </div>
@@ -43,6 +43,38 @@
               class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
           </template>
+          <div
+            class="flex rounded-lg border border-gray-300 p-0.5"
+            role="group"
+            aria-label="Report mode"
+          >
+            <button
+              type="button"
+              :aria-pressed="reportMode === 'visualizations'"
+              class="px-3 py-1.5 rounded-md text-sm font-medium transition"
+              :class="
+                reportMode === 'visualizations'
+                  ? 'bg-green-700 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
+              "
+              @click="reportMode = 'visualizations'"
+            >
+              Visualizations
+            </button>
+            <button
+              type="button"
+              :aria-pressed="reportMode === 'statistics'"
+              class="px-3 py-1.5 rounded-md text-sm font-medium transition"
+              :class="
+                reportMode === 'statistics'
+                  ? 'bg-green-700 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
+              "
+              @click="reportMode = 'statistics'"
+            >
+              Statistics only
+            </button>
+          </div>
           <button
             @click="printReports"
             class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition duration-200"
@@ -53,7 +85,10 @@
       </div>
 
       <!-- 1. Membership Growth -->
-      <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+      <section
+        v-if="reportMode === 'visualizations'"
+        class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6"
+      >
         <div class="flex items-center justify-between mb-4">
           <h2 class="font-semibold text-gray-800">Membership Growth</h2>
           <button
@@ -144,7 +179,7 @@
            ships without the Registrations module. Flip
            SHOW_REGISTRATIONS to true to bring this section back. -->
       <section
-        v-if="SHOW_REGISTRATIONS"
+        v-if="reportMode === 'visualizations' && SHOW_REGISTRATIONS"
         class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6"
       >
         <div class="flex items-center justify-between mb-4">
@@ -236,7 +271,10 @@
       </section>
 
       <!-- 3. Loan Portfolio -->
-      <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+      <section
+        v-if="reportMode === 'visualizations'"
+        class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6"
+      >
         <div class="flex items-center justify-between mb-4">
           <div>
             <h2 class="font-semibold text-gray-800">Loan Portfolio</h2>
@@ -340,7 +378,10 @@
       </section>
 
       <!-- 4. Forecasting -->
-      <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+      <section
+        v-if="reportMode === 'visualizations'"
+        class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6"
+      >
         <div class="flex items-center justify-between mb-4">
           <div>
             <h2 class="font-semibold text-gray-800">Forecasting</h2>
@@ -428,7 +469,10 @@
       </section>
 
       <!-- 5. Cash Flow -->
-      <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+      <section
+        v-if="reportMode === 'visualizations'"
+        class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6"
+      >
         <div class="flex items-center justify-between mb-4">
           <h2 class="font-semibold text-gray-800">Cash Flow</h2>
           <button
@@ -544,7 +588,10 @@
       </section>
 
       <!-- 6. Financial Summary -->
-      <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+      <section
+        v-if="reportMode === 'visualizations'"
+        class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6"
+      >
         <div class="flex items-center justify-between mb-4">
           <div>
             <h2 class="font-semibold text-gray-800">Financial Summary</h2>
@@ -569,6 +616,238 @@
           </tbody>
         </table>
       </section>
+      <section v-if="reportMode === 'statistics'" class="space-y-6">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          <h2 class="font-semibold text-gray-800">Statistics-only report</h2>
+          <p class="text-sm text-gray-600 mt-2">
+            For {{ rangeLabel.toLowerCase() }}, {{ rangeMembers.length }} new
+            {{ rangeMembers.length === 1 ? 'member joined' : 'members joined' }},
+            {{ releasedInRange.length }}
+            {{ releasedInRange.length === 1 ? 'loan was' : 'loans were' }} released, and
+            {{ formatPeso(collectedInRange) }} in verified loan payments was recorded. Cash flow was
+            {{ flow.net >= 0 ? 'positive' : 'negative' }} by {{ formatPeso(Math.abs(flow.net)) }}.
+          </p>
+          <p class="text-xs text-gray-500 mt-2">
+            Member and loan balances are current snapshots. Joining, payment, and cash-flow totals
+            follow the selected date range. Forecast amounts are projections from active loan
+            schedules, not guaranteed receipts.
+          </p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          <h2 class="font-semibold text-gray-800 mb-3">Financial summary</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <tbody class="divide-y divide-gray-100">
+                <tr v-for="row in summaryRows" :key="row[0]">
+                  <th scope="row" class="py-2.5 text-left font-normal text-gray-600">
+                    {{ row[0] }}
+                  </th>
+                  <td class="py-2.5 text-right font-semibold" :class="row[2] || 'text-gray-800'">
+                    {{ row[1] }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          <h2 class="font-semibold text-gray-800">Membership</h2>
+          <p class="text-sm text-gray-600 mt-1">
+            {{ memberTotal }} members are recorded: {{ statusCounts.Active }} active and
+            {{ statusCounts.Inactive }} inactive. {{ rangeMembers.length }} joined during
+            {{ rangeLabel.toLowerCase() }}.
+          </p>
+          <div class="overflow-x-auto mt-3">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs uppercase text-gray-500 border-b">
+                  <th class="py-2 pr-4">Month joined</th>
+                  <th class="py-2 text-right">New members</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-for="point in growthSeries" :key="point.label">
+                  <td class="py-2 pr-4 text-gray-700">{{ point.label }}</td>
+                  <td class="py-2 text-right text-gray-700">{{ point.count }}</td>
+                </tr>
+                <tr v-if="!growthSeries.length">
+                  <td colspan="2" class="py-2 text-gray-500">No members joined in this period.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          <h2 class="font-semibold text-gray-800">Loan portfolio</h2>
+          <p class="text-sm text-gray-600 mt-1">
+            There are {{ loansStore.activeCount }} active loans with
+            {{ formatPeso(loansStore.outstandingBalance) }} outstanding. The portfolio has
+            {{ delinquentLoans.length }} delinquent
+            {{ delinquentLoans.length === 1 ? 'account' : 'accounts' }} totaling
+            {{ formatPeso(delinquentAmount) }}.
+          </p>
+          <div class="overflow-x-auto mt-3">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs uppercase text-gray-500 border-b">
+                  <th class="py-2 pr-4">Loan type (all time)</th>
+                  <th class="py-2 pr-4 text-right">Loans issued</th>
+                  <th class="py-2 text-right">Principal released</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-for="row in loansByType" :key="row.value">
+                  <td class="py-2 pr-4 text-gray-700">{{ row.label }}</td>
+                  <td class="py-2 pr-4 text-right text-gray-700">{{ row.count }}</td>
+                  <td class="py-2 text-right text-gray-700">{{ formatPeso(row.total) }}</td>
+                </tr>
+                <tr v-if="!loansByType.length">
+                  <td colspan="3" class="py-2 text-gray-500">No issued loans are recorded.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="overflow-x-auto mt-5">
+            <h3 class="text-sm font-medium text-gray-700 mb-2">Delinquent accounts</h3>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs uppercase text-gray-500 border-b">
+                  <th class="py-2 pr-4">Loan number</th>
+                  <th class="py-2 pr-4">Member</th>
+                  <th class="py-2 pr-4 text-right">Balance</th>
+                  <th class="py-2 text-right">Last activity</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-for="loan in delinquentLoans" :key="loan.id">
+                  <td class="py-2 pr-4 font-mono text-xs text-gray-600">{{ loan.loanNo }}</td>
+                  <td class="py-2 pr-4 text-gray-700">{{ loan.memberName }}</td>
+                  <td class="py-2 pr-4 text-right text-gray-700">
+                    {{ formatPeso(loansStore.balanceOf(loan)) }}
+                  </td>
+                  <td class="py-2 text-right text-gray-600">
+                    {{ formatDate(lastActivity(loan)) }}
+                  </td>
+                </tr>
+                <tr v-if="!delinquentLoans.length">
+                  <td colspan="4" class="py-2 text-gray-500">No delinquent accounts.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          <h2 class="font-semibold text-gray-800">Expected collections from active loans</h2>
+          <p class="text-sm text-gray-600 mt-1">
+            {{ activeLoanCount }} active {{ activeLoanCount === 1 ? 'loan has' : 'loans have' }}
+            {{ formatPeso(forecastTwelve) }} in scheduled instalments over the next 12 months.
+          </p>
+          <dl class="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-4 text-sm">
+            <div>
+              <dt class="text-gray-500">Overdue</dt>
+              <dd class="font-semibold">{{ formatPeso(forecastTotals.overdue) }}</dd>
+            </div>
+            <div>
+              <dt class="text-gray-500">Due in 30 days</dt>
+              <dd class="font-semibold">{{ formatPeso(forecastTotals.due30) }}</dd>
+            </div>
+            <div>
+              <dt class="text-gray-500">Due in 60 days</dt>
+              <dd class="font-semibold">{{ formatPeso(forecastTotals.due60) }}</dd>
+            </div>
+            <div>
+              <dt class="text-gray-500">Due in 90 days</dt>
+              <dd class="font-semibold">{{ formatPeso(forecastTotals.due90) }}</dd>
+            </div>
+            <div>
+              <dt class="text-gray-500">Beyond 12 months</dt>
+              <dd class="font-semibold">{{ formatPeso(forecastTotals.beyond) }}</dd>
+            </div>
+          </dl>
+          <div class="overflow-x-auto mt-4">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs uppercase text-gray-500 border-b">
+                  <th class="py-2 pr-4">Month due</th>
+                  <th class="py-2 text-right">Expected instalments</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-for="point in forecastMonths" :key="point.key">
+                  <td class="py-2 pr-4 text-gray-700">{{ point.label }}</td>
+                  <td class="py-2 text-right text-gray-700">{{ formatPeso(point.amount) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          <h2 class="font-semibold text-gray-800">Cash flow</h2>
+          <p class="text-sm text-gray-600 mt-1">
+            During {{ rangeLabel.toLowerCase() }}, recorded income was
+            {{ formatPeso(flow.income) }}, expenses were {{ formatPeso(flow.expense) }}, and net
+            cash flow was {{ formatPeso(flow.net) }}.
+          </p>
+          <div class="overflow-x-auto mt-3">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs uppercase text-gray-500 border-b">
+                  <th class="py-2 pr-4">Month</th>
+                  <th class="py-2 pr-4 text-right">Income</th>
+                  <th class="py-2 pr-4 text-right">Expenses</th>
+                  <th class="py-2 text-right">Net</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-for="point in flowSeries" :key="point.label">
+                  <td class="py-2 pr-4 text-gray-700">{{ point.label }}</td>
+                  <td class="py-2 pr-4 text-right text-gray-700">{{ formatPeso(point.income) }}</td>
+                  <td class="py-2 pr-4 text-right text-gray-700">
+                    {{ formatPeso(point.expense) }}
+                  </td>
+                  <td class="py-2 text-right text-gray-700">
+                    {{ formatPeso(point.income - point.expense) }}
+                  </td>
+                </tr>
+                <tr v-if="!flowSeries.length">
+                  <td colspan="4" class="py-2 text-gray-500">
+                    No ledger transactions were recorded in this period.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="overflow-x-auto mt-5">
+            <h3 class="text-sm font-medium text-gray-700 mb-2">Top categories in this period</h3>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs uppercase text-gray-500 border-b">
+                  <th class="py-2 pr-4">Type</th>
+                  <th class="py-2 pr-4">Category</th>
+                  <th class="py-2 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-for="row in topCategories" :key="row.key">
+                  <td class="py-2 pr-4 text-gray-700">{{ row.type }}</td>
+                  <td class="py-2 pr-4 text-gray-700">{{ row.category }}</td>
+                  <td class="py-2 text-right text-gray-700">{{ formatPeso(row.total) }}</td>
+                </tr>
+                <tr v-if="!topCategories.length">
+                  <td colspan="3" class="py-2 text-gray-500">
+                    No category totals for this period.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </div>
   </AppLayout>
 </template>
@@ -582,6 +861,7 @@ import { useLoansStore, LOAN_TYPES } from '../stores/loans'
 import { useLedgerStore } from '../stores/ledger'
 import { buildSchedule } from '../utils/amortization'
 
+const reportMode = ref('visualizations')
 const membersStore = useMembersStore()
 const appsStore = useApplicationsStore()
 const loansStore = useLoansStore()
@@ -598,6 +878,9 @@ const todayLabel = new Date().toLocaleDateString('en-PH', {
   month: 'long',
   day: 'numeric',
 })
+const reportModeLabel = computed(() =>
+  reportMode.value === 'statistics' ? 'Statistics-only report' : 'Reports',
+)
 
 // ---------- date range ----------
 // Grouped short-to-long in the dropdown (days, months, years, then

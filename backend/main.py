@@ -34,34 +34,45 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
+from dotenv import load_dotenv
+from supabase_auth.errors import AuthApiError, AuthInvalidJwtError, AuthRetryableError
+
+# Load backend/.env BEFORE ucms_analytics/store read env vars at import time.
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import ucms_analytics as ua  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from store import load_all  # noqa: E402  (Supabase-first, CSV fallback)
+from store import get_client, load_all, supabase_configured  # noqa: E402
 from loan_simulator import loan_totals, round2, simulate_loan  # noqa: E402  (single impl, shared with web)
 
-API_KEY = os.environ.get("UCMS_API_KEY", "")  # empty = dev-open, warns at startup
 # Comma-separated frontend origin(s) allowed to call this API in browsers.
+# Default covers local dev, OUR deployed site, and the teammate's admin
+# portal (ucms-admin.pages.dev) — a manually created Render service doesn't
+# ingest render.yaml's envVars, and a missing CORS var silently 400s every
+# browser call (curl never shows it). Env var still overrides this default.
 CORS_ORIGINS = [o.strip() for o in
-                os.environ.get("UCMS_CORS_ORIGINS", "http://localhost:5173").split(",")
+                os.environ.get("UCMS_CORS_ORIGINS",
+                               "http://localhost:5173,"
+                               "https://ucms-defense.pages.dev,"
+                               "https://ucms-admin.pages.dev").split(",")
                 if o.strip()]
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    if not API_KEY:
-        print("WARNING: UCMS_API_KEY unset — API is open. "
-              "Set it in backend/.env before any demo.")
+    if not supabase_configured():
+        print("WARNING: Supabase admin authentication is unavailable. "
+              "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in backend/.env.")
     yield
 
 
-app = FastAPI(title="UCMS Analytics API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="UCMS Analytics API", version="0.3.0", lifespan=lifespan)
 
 # Browsers block cross-origin fetch by default: the Vite dev server
 # (http://localhost:5173) may call this API only because of this middleware.
@@ -75,11 +86,45 @@ app.add_middleware(
 )
 
 
-def require_key(x_api_key: str | None = Header(default=None)):
-    """Shared-secret gate for the admin portal. Empty env = dev-open (warns)."""
-    if API_KEY and x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="bad or missing X-API-Key")
-    return True
+_AUTH_CLIENT = None
+
+
+def require_admin(authorization: str | None = Header(default=None)):
+    """Require a valid Supabase session for a linked, enabled admin."""
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(status_code=401, detail="Supabase admin session required")
+    if not supabase_configured():
+        raise HTTPException(status_code=503, detail="Supabase admin authentication is unavailable")
+
+    global _AUTH_CLIENT
+    if _AUTH_CLIENT is None:
+        _AUTH_CLIENT = get_client()
+    if _AUTH_CLIENT is None:
+        raise HTTPException(status_code=503, detail="Supabase admin authentication is unavailable")
+
+    try:
+        user_response = _AUTH_CLIENT.auth.get_user(token.strip())
+    except (AuthApiError, AuthInvalidJwtError):
+        raise HTTPException(status_code=401, detail="Invalid or expired Supabase session") from None
+    except AuthRetryableError:
+        raise HTTPException(status_code=503, detail="Supabase authentication is temporarily unavailable") from None
+
+    user = getattr(user_response, "user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired Supabase session")
+
+    result = (
+        _AUTH_CLIENT.table("admin")
+        .select("admin_id, login_enabled, role")
+        .eq("auth_uid", str(user.id))
+        .maybe_single()
+        .execute()
+    )
+    admin = result.data
+    if not admin or admin.get("login_enabled") is not True:
+        raise HTTPException(status_code=403, detail="Enabled admin account required")
+    return admin
 
 
 def frame_rows(df: pd.DataFrame):
@@ -171,19 +216,18 @@ class LoanSimulateIn(BaseModel):
 
 @app.get("/health")
 def health():
-    require_key()
     return {"ok": True, "service": "ucms-analytics"}
 
 
 @app.get("/dashboard")
-def dashboard(_: bool = require_key()):
+def dashboard(_: bool = Depends(require_admin)):
     loans, _pays, stats, shares = load()
     m = ua.dashboard_metrics(loans, stats, shares)
     return {k: jsonable(v) for k, v in m.items()}
 
 
 @app.post("/eligibility")
-def eligibility(body: EligibilityIn, _: bool = require_key()):
+def eligibility(body: EligibilityIn, _: bool = Depends(require_admin)):
     loans, _pays, _stats, shares = load()
     ok, reasons = ua.check_eligibility(body.member, body.amount,
                                        body.term_months, loans, shares,
@@ -192,7 +236,7 @@ def eligibility(body: EligibilityIn, _: bool = require_key()):
 
 
 @app.post("/loan/simulate")
-def loan_simulate(body: LoanSimulateIn, _: bool = require_key()):
+def loan_simulate(body: LoanSimulateIn, _: bool = Depends(require_admin)):
     """Diminishing-balance schedule and totals for a prospective loan.
 
     The single source of truth for loan math - the portal's pre-application
@@ -212,7 +256,7 @@ def loan_simulate(body: LoanSimulateIn, _: bool = require_key()):
 
 
 @app.post("/applications")
-def create_application(body: ApplicationIn, _: bool = require_key()):
+def create_application(body: ApplicationIn, _: bool = Depends(require_admin)):
     app_id = ua.submit_application(body.member, body.amount,
                                    body.term_months, body.loan_type,
                                    body.purpose)
@@ -220,7 +264,9 @@ def create_application(body: ApplicationIn, _: bool = require_key()):
 
 
 @app.post("/applications/{app_id}/review")
-def review_application(app_id: str, body: ReviewIn, _: bool = require_key()):
+def review_application(app_id: str, body: ReviewIn, reviewer: dict = Depends(require_admin)):
+    if reviewer.get("role") != "Super Admin":
+        raise HTTPException(status_code=403, detail="Only a Super Admin may review loan applications")
     try:
         return ua.review_application(app_id, body.decision,
                                      body.reviewer, body.reason)
@@ -230,7 +276,7 @@ def review_application(app_id: str, body: ReviewIn, _: bool = require_key()):
 
 @app.get("/forecast/disbursements")
 def forecast_disbursements(months: int = Query(default=6, ge=1, le=24),
-                           _: bool = require_key()):
+                           _: bool = Depends(require_admin)):
     months = plain(months, 6)
     loans, _pays, _stats, _shares = load()
     return frame_rows(ua.forecast_disbursements(loans, months=months))
@@ -238,17 +284,124 @@ def forecast_disbursements(months: int = Query(default=6, ge=1, le=24),
 
 @app.get("/forecast/collections")
 def forecast_collections(months: int = Query(default=6, ge=1, le=24),
-                         _: bool = require_key()):
+                         _: bool = Depends(require_admin)):
     months = plain(months, 6)
     loans, pays, _stats, _shares = load()
     return frame_rows(ua.forecast_collections(loans, pays, months=months))
+
+
+# ---------------------------------------------------------------------------
+# ANALYTICS PACK v2 — trend analysis & prediction (re-demo upgrade)
+# ---------------------------------------------------------------------------
+# These routes read the full historical LEDGER directly (ua.load_data),
+# not the store: the pack needs every schedule row plus the paper-truth
+# flags in payment_stats, while the operational store may hold a thinner
+# cleaned registry. Both views trace to the same source extract, and every
+# response reports n_loans_analyzed / caveats so nothing is hidden.
+# ---------------------------------------------------------------------------
+
+
+def _ledger():
+    """Fresh ledger read per request — tiny CSVs (loads in <50 ms)."""
+    loans, pays, stats, _shares = ua.load_data()
+    return loans, pays, stats
+
+
+@app.get("/analytics/backtest")
+def analytics_backtest(holdout: int = Query(default=6, ge=3, le=12),
+                       _: bool = Depends(require_admin)):
+    """Walk-forward scorecard: ma3 vs ma6 vs trend vs seasonal-naive."""
+    loans, _p, _s = _ledger()
+    return ua.backtest_monthly(loans, holdout=plain(holdout, 6))
+
+
+@app.get("/analytics/forecast")
+def analytics_forecast(months: int = Query(default=6, ge=1, le=24),
+                       holdout: int = Query(default=6, ge=3, le=12),
+                       _: bool = Depends(require_admin)):
+    """Best-model disbursement forecast: TOTAL PHP + empirical 95% band."""
+    loans, _p, _s = _ledger()
+    return ua.forecast_disbursements_v2(loans, months=plain(months, 6),
+                                        holdout=plain(holdout, 6))
+
+
+@app.get("/analytics/seasonality")
+def analytics_seasonality(_: bool = Depends(require_admin)):
+    """Month-of-year indices (applications + scheduled repayments) and
+    the paydays-15/30 effect."""
+    loans, pays, _s = _ledger()
+    return ua.seasonality_report(loans, pays)
+
+
+@app.get("/analytics/members/cycles")
+def analytics_member_cycles(min_loans: int = Query(default=2, ge=2, le=6),
+                            _: bool = Depends(require_admin)):
+    """Per-member borrowing rhythm + predicted next-application window."""
+    loans, _p, stats = _ledger()
+    return ua.member_cycles(loans, stats, min_loans=plain(min_loans, 2))
+
+
+@app.get("/analytics/members/propensity")
+def analytics_propensity(top: int = Query(default=20, ge=1, le=93),
+                         horizon_days: int = Query(default=90, ge=30, le=365),
+                         _: bool = Depends(require_admin)):
+    """Transparent weighted score: who will most likely re-apply soon."""
+    loans, _p, stats = _ledger()
+    return ua.propensity_ranking(loans, stats, top=plain(top, 20),
+                                 horizon_days=plain(horizon_days, 90))
+
+
+@app.get("/analytics/reliability")
+def analytics_reliability(_: bool = Depends(require_admin)):
+    """Repayment completion per term bucket — the probabilities that
+    weight the v2 collections forecast."""
+    loans, _p, stats = _ledger()
+    return ua.collection_reliability(stats, loans)
+
+
+@app.get("/analytics/collections")
+def analytics_collections(months: int = Query(default=6, ge=1, le=24),
+                          _: bool = Depends(require_admin)):
+    """Probability-weighted collections (v2); the naive scheduled sum is
+    shown beside it so the gap is visible."""
+    loans, pays, stats = _ledger()
+    return ua.forecast_collections_v2(loans, pays, stats, months=plain(months, 6))
+
+
+@app.get("/analytics/insights")
+def analytics_insights(holdout: int = Query(default=6, ge=3, le=12),
+                       _: bool = Depends(require_admin)):
+    """Machine-generated plain-English findings (anomalies, model winner,
+    member behaviour, trend, repayment)."""
+    loans, pays, stats = _ledger()
+    return ua.auto_insights(loans, stats, pays, holdout=plain(holdout, 6))
+
+
+@app.get("/charts/{kind}.png")
+def chart_image(kind: str, _: bool = Depends(require_admin)):
+    """Return a chart image after validating the caller's admin session."""
+    loans, _p, stats = _ledger()
+    makers = {
+        "heatmap": lambda: ua.chart_heatmap_png(loans),
+        "forecast": lambda: ua.chart_forecast_png(loans),
+        "backtest": lambda: ua.chart_backtest_png(loans),
+        "cycles": lambda: ua.chart_cycles_png(loans, stats),
+    }
+    if kind not in makers:
+        raise HTTPException(status_code=404,
+                            detail=f"unknown chart '{kind}' — try {sorted(makers)}")
+    return Response(
+        content=makers[kind](),
+        media_type="image/png",
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 # NOTE: static sub-paths must be registered BEFORE /risk/{member} —
 # FastAPI matches in order, otherwise "delinquent" is read as a name.
 @app.get("/risk/delinquent")
 def delinquent_list(limit: int = Query(default=20, ge=1, le=100),
-                    _: bool = require_key()):
+                    _: bool = Depends(require_admin)):
     """Riskiest members first — feeds Dashboard's Delinquent card and the
     Reports delinquent-accounts table (replaces client-side mock math)."""
     limit = plain(limit, 20)
@@ -273,7 +426,7 @@ def delinquent_list(limit: int = Query(default=20, ge=1, le=100),
 
 
 @app.get("/risk/{member}")
-def risk(member: str, _: bool = require_key()):
+def risk(member: str, _: bool = Depends(require_admin)):
     loans, pays, stats, _shares = load()
     feat = ua.member_features(member, loans, stats, pays)
     score = ua.risk_score(feat)
@@ -287,7 +440,7 @@ def risk(member: str, _: bool = require_key()):
 
 
 @app.get("/reports/summary")
-def reports_summary(_: bool = require_key()):
+def reports_summary(_: bool = Depends(require_admin)):
     """One-pager JSON for the Reports Financial Summary section + BOD export."""
     loans, pays, stats, _shares = load()
     by_type = (
@@ -315,7 +468,7 @@ def reports_summary(_: bool = require_key()):
 
 
 @app.get("/analytics/by-term")
-def by_term(_: bool = require_key()):
+def by_term(_: bool = Depends(require_admin)):
     """Loans + pesos per term selection — feeds forecast/term charts."""
     loans, _pays, _stats, _shares = load()
     if len(loans) == 0:
@@ -331,8 +484,8 @@ def by_term(_: bool = require_key()):
 # PORTAL API — frontend-shaped resources (mirror web/src/stores/*.js).
 # A store swap = change the data source, never the views.
 # --------------------------------------------------------------------------
-# Frontend loan types (stores/loans.js LOAN_TYPES) carry rates:
-#   Regular/Education/Transportation/Gadget/Emergency 1.5%, Business 2.0%.
+# Frontend loan types (stores/loans.js LOAN_TYPES) carry monthly rates:
+#   Vehicle is 1.5% at 12 months, 2% at 24, and 3% at 36.
 # The CSVs only ever say "Emergency Loan" or nothing ("N/A"), so N/A maps
 # to Regular and is flagged type_source="inferred" — the honest fallback
 # until Supabase rows carry real types.
@@ -347,7 +500,12 @@ def portal_loan_type(raw) -> tuple:
     return "Regular", "inferred"
 
 
-def portal_rate(loan_type: str) -> float:
+def portal_rate(loan_type: str, term_months=None) -> float:
+    if loan_type == "Transportation":
+        try:
+            return {12: 1.5, 24: 2.0, 36: 3.0}.get(int(term_months), 1.5)
+        except (TypeError, ValueError):
+            return 1.5
     return TYPE_RATES.get(loan_type, 1.5)
 
 
@@ -434,7 +592,7 @@ def portal_loan_rows(loans: pd.DataFrame, pays: pd.DataFrame,
         member = str(loan.get("member") or "Unknown")
         first, last = split_name(member)
         ltype, tsource = portal_loan_type(loan.get("loan_type"))
-        rate = portal_rate(ltype)
+        rate = portal_rate(ltype, r.get("term_months"))
         principal = round2(loan.get("loan_amount"))
         term = loan.get("term_months")
         try:
@@ -541,7 +699,7 @@ def portal_member_rows(loans: pd.DataFrame):
 
 
 @app.get("/portal/members")
-def portal_members(_: bool = require_key()):
+def portal_members(_: bool = Depends(require_admin)):
     """MembersView shape: memberNo, names, status, dates. Unknown fields
     are "" / 0 / None (see source_notes) — never invented."""
     loans, _pays, _stats, _shares = load()
@@ -551,7 +709,7 @@ def portal_members(_: bool = require_key()):
 @app.get("/portal/loans")
 def portal_loans(status: str = Query(default="All"),
                  loan_type: str = Query(default="All"),
-                 _: bool = require_key()):
+                 _: bool = Depends(require_admin)):
     """LoansView shape incl. payments[], balance, delinquent flag."""
     status, loan_type = plain(status, "All"), plain(loan_type, "All")
     loans, pays, stats, _shares = load()
@@ -564,7 +722,7 @@ def portal_loans(status: str = Query(default="All"),
 
 
 @app.get("/portal/dashboard")
-def portal_dashboard(_: bool = require_key()):
+def portal_dashboard(_: bool = Depends(require_admin)):
     """The four Dashboard cards + attention items + recent activity,
     computed with the same rules as the Vue computed props."""
     loans, pays, stats, _shares = load()
@@ -607,7 +765,7 @@ def portal_dashboard(_: bool = require_key()):
 
 
 @app.get("/portal/applications")
-def portal_applications(_: bool = require_key()):
+def portal_applications(_: bool = Depends(require_admin)):
     """ApplicationsView shape. The sample tree has no filed applications
     yet (loan_applications.csv absent) — returns [] honestly, mapped when
     present. Statuses map PENDING->Pending, APPROVED->Approved,
@@ -639,7 +797,7 @@ def portal_applications(_: bool = require_key()):
 
 
 @app.post("/report")
-def report(_: bool = require_key()):
+def report(_: bool = Depends(require_admin)):
     loans, pays, stats, _shares = load()
     out = ua.generate_report(loans, stats, pays)
     return FileResponse(path=out, filename=Path(out).name,
@@ -648,7 +806,7 @@ def report(_: bool = require_key()):
 
 
 @app.post("/receipt/verify")
-def receipt_verify(body: ReceiptIn, _: bool = require_key()):
+def receipt_verify(body: ReceiptIn, _: bool = Depends(require_admin)):
     fields = ua.extract_receipt_fields(raw_text=body.raw_text)
     verdict = ua.verify_receipt(fields, body.expected_amount, body.tol)
     fields["date"] = jsonable(fields.get("date"))

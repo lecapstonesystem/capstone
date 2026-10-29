@@ -358,6 +358,9 @@
                   Member Type
                 </p>
                 <p class="text-gray-700">{{ detailMember.memberType || '—' }}</p>
+                <p v-if="detailMember.isBoardMember" class="text-xs text-amber-700 mt-1">
+                  Board of Directors member
+                </p>
               </div>
               <div>
                 <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
@@ -765,10 +768,15 @@
                   class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 >
                   <option value="Regular">Regular</option>
+                  <option value="New">New Member</option>
                   <option value="Associate">Associate</option>
                   <option value="Extension">Extension</option>
                 </select>
               </div>
+              <label class="flex items-center gap-2 text-sm text-gray-700 self-end pb-2">
+                <input v-model="form.isBoardMember" type="checkbox" class="accent-green-600 w-4 h-4" />
+                Board of Directors member
+              </label>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Civil Status</label>
                 <select
@@ -1375,7 +1383,8 @@ const emptyForm = {
   lastName: '',
   gender: '',
   dateOfBirth: '',
-  memberType: 'Regular',
+  memberType: 'New',
+  isBoardMember: false,
   civilStatus: 'Single',
   spouseName: '',
   email: '',
@@ -1418,6 +1427,7 @@ function openEditModal(member) {
     gender: member.gender || '',
     dateOfBirth: member.dateOfBirth || '',
     memberType: member.memberType || 'Regular',
+    isBoardMember: member.isBoardMember === true,
     civilStatus: member.civilStatus || 'Single',
     spouseName: member.spouseName || '',
     email: member.email,
@@ -1485,6 +1495,7 @@ async function saveMember() {
     gender: form.gender || null,
     dateOfBirth: form.dateOfBirth || null,
     memberType: form.memberType,
+    isBoardMember: form.isBoardMember,
     civilStatus: form.civilStatus,
     spouseName: form.civilStatus === 'Married' ? form.spouseName.trim() : '',
     email: form.email.trim(),

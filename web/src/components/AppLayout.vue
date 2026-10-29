@@ -89,6 +89,18 @@
         </RouterLink>
 
         <RouterLink
+          to="/analytics-lab"
+          class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition duration-200"
+          :class="
+            $route.path === '/analytics-lab'
+              ? 'bg-green-600 text-white'
+              : 'text-green-200 hover:bg-green-700 hover:text-white'
+          "
+        >
+          Analytics Lab
+        </RouterLink>
+
+        <RouterLink
           to="/notifications"
           class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition duration-200"
           :class="
@@ -253,6 +265,7 @@ const currentPageTitle = computed(() => {
     // '/registrations' title entry — HIDDEN with the module for v1.0.
     // '/registrations': 'Registrations',
     '/reports': 'Reports',
+    '/analytics-lab': 'Analytics Lab',
     '/notifications': 'Notifications',
     '/admins': 'Admin Accounts',
   }

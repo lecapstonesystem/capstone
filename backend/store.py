@@ -142,18 +142,31 @@ def frames_from_supabase(client):
         for (_, r), key in zip(loans_raw.iterrows(), loans["loan_key"]):
             loan_status[key] = str(r.get("status") or "")
     stat_rows = []
-    for key, grp in (pays.groupby("loan_key") if not pays.empty else []):
-        exp = pd.to_numeric(grp["expected"], errors="coerce").fillna(0).sum()
-        got = pd.to_numeric(grp["paid"], errors="coerce").fillna(0).sum()
-        n_paid = int(grp["paid"].notna().sum())
-        n_dates = int(grp["date_paid"].notna().sum())
-        n_inst = int(pd.to_numeric(grp["installment"],
-                                   errors="coerce").max()) if n_paid or len(grp) else 0
+    groups = {}
+    if not pays.empty:
+        for _k, _g in pays.groupby("loan_key"):
+            groups[_k] = _g
+    for key in loans.get("loan_key", []):
+        grp = groups.get(key)
+        if grp is not None and len(grp):
+            exp = pd.to_numeric(grp["expected"], errors="coerce").fillna(0).sum()
+            got = pd.to_numeric(grp["paid"], errors="coerce").fillna(0).sum()
+            n_paid = int(grp["paid"].notna().sum())
+            n_dates = int(grp["date_paid"].notna().sum())
+            n_inst = int(pd.to_numeric(grp["installment"],
+                                       errors="coerce").max()) if n_paid or len(grp) else 0
+            member = grp["member"].iloc[0] if len(grp) else "Unknown"
+        else:
+            # No payment rows recorded: the DB loan.status column (seeded from
+            # the coop's paper records) is the evidence of record; totals are 0.
+            exp = got = 0.0
+            n_paid = n_dates = n_inst = 0
+            member = loan_member.get(key, "Unknown")
         done = (loan_status.get(key, "").lower() in _PAID_STATUSES
                 or (exp > 0 and got >= exp - 0.01))
         stat_rows.append({
             "loan_key": key,
-            "member": grp["member"].iloc[0] if len(grp) else "Unknown",
+            "member": member,
             "n_installments": n_inst,
             "total_expected": float(exp),
             "total_paid": float(got),

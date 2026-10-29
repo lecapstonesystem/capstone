@@ -9,6 +9,7 @@ import LoansView from '../views/LoansView.vue'
 // import ApplicationsView from '../views/ApplicationsView.vue'
 import NotificationsView from '../views/NotificationsView.vue'
 import ReportsView from '../views/ReportsView.vue'
+import AnalyticsLabView from '../views/AnalyticsLabView.vue'
 import ActivityView from '../views/ActivityView.vue'
 import AdminsView from '../views/AdminsView.vue'
 import ChangePasswordView from '../views/ChangePasswordView.vue'
@@ -82,6 +83,12 @@ const router = createRouter({
       path: '/reports',
       name: 'reports',
       component: ReportsView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/analytics-lab',
+      name: 'analytics-lab',
+      component: AnalyticsLabView,
       meta: { requiresAuth: true },
     },
     {

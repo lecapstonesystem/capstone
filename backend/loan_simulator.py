@@ -2,8 +2,8 @@
 
 Diminishing balance, which is how the cooperative builds its manual schedule:
 the principal part is level every month and interest is charged on whatever is
-still owed. rate_percent is the monthly rate - 1.5% for most loans, 2% for
-business - not an annual one.
+still owed. rate_percent is monthly: 1.5% for most loans, 2% for Business, and
+1.5%/2%/3% for 12/24/36-month Vehicle loans.
 
 Mirrors web/src/utils/amortization.js so both sides show the same figures.
 """
@@ -41,8 +41,11 @@ def number(value) -> float:
         return 0.0
 
 
-def rate_for_type(loan_type) -> float:
-    return TYPE_RATES.get((loan_type or "").strip().title(), DEFAULT_RATE)
+def rate_for_type(loan_type, term_months=None) -> float:
+    loan_type = (loan_type or "").strip().title()
+    if loan_type == "Transportation":
+        return {12: 1.5, 24: 2.0, 36: 3.0}.get(int(number(term_months)), 1.5)
+    return TYPE_RATES.get(loan_type, DEFAULT_RATE)
 
 
 def loan_totals(principal, rate_percent, term_months) -> dict:
@@ -143,10 +146,14 @@ def simulate_loan(
 ) -> dict:
     """Everything the portal needs about one loan, ready to return as JSON.
 
-    Give rate_percent directly, or pass loan_type and let TYPE_RATES pick it.
+    Give rate_percent directly, or pass loan_type and term to select its rate.
     payments are the amounts received so far, oldest first.
     """
-    rate = number(rate_percent) if rate_percent is not None else rate_for_type(loan_type)
+    rate = (
+        number(rate_percent)
+        if rate_percent is not None
+        else rate_for_type(loan_type, term_months)
+    )
     totals = loan_totals(principal, rate, term_months)
     rows = build_schedule(principal, rate, term_months, start)
 

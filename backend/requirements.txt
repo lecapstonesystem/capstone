@@ -1,7 +1,9 @@
 fastapi
-uvicorn  # plain, not [standard]: the [standard] extras (websockets/httptools/uvloop) have no wheels for cp315 yet
+uvicorn  # plain, not [standard]: the [standard] extras are unnecessary for a single free-tier worker
 supabase  # Supabase read layer (store.py) + seed script; backend still boots without it (CSV mode)
 pandas
+numpy  # imported directly by main.py — explicit so a clean cloud build can't miss it
+python-dotenv  # main.py loads .env at import — without this the Render build crashes at boot
 scikit-learn
 matplotlib
 openpyxl

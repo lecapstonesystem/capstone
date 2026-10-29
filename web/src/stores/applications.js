@@ -338,7 +338,7 @@ export const useApplicationsStore = defineStore('applications', () => {
         email: data.email || null,
         contact_number: data.phone,
         address: data.address,
-        member_type: 'Regular',
+        member_type: 'New',
         status: 'Pending',
         date_joined: now.slice(0, 10),
         created_at: now,
@@ -399,6 +399,7 @@ export const useApplicationsStore = defineStore('applications', () => {
         // has one from app registration, or an admin creates it later
         // with Members → Issue Credentials.
         status: 'Active',
+        member_type: 'New',
         member_no: memberNo,
         date_joined: now.slice(0, 10),
         login_enabled: true,

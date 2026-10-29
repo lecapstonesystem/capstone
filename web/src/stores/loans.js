@@ -12,20 +12,14 @@ import { uploadDocumentPhoto, removeDocumentPhoto } from '../lib/documents'
 /**
  * Loans store — live Supabase data (swapped from mocks).
  *
- * Rules implemented (client interview docs/client-interview-1.md):
- *   - 6 types: Salary/Regular, Education, Transportation, Gadget, Business,
- *     Emergency
- *   - Interest: 1.5% all types, 2.0% business ⚠️ assumed MONTHLY, on a
- *     diminishing balance (client: "kame diminishing")
- *   - Ceiling: 2× capital share, capped at ₱200,000 ⚠️ (client said 150k–200k)
- *   - Emergency: max ₱20k, on top of regular loans (does NOT count toward
- *     the 2-loan limit ⚠️), 2–6 months only
- *   - Max 2 concurrent loans, co-makers: 1 if < ₱100k, 2 if ≥ ₱100k
- *   - New members: wait 2 months + financial literacy seminar (onsite);
- *     first loan capped at 80% until one loan is fully paid ⚠️ (80% of what
- *     exactly — ceiling or capital share — confirm with client)
- *   - Full capital (₱15k new / ₱20k old) required before loaning ⚠__
- *   - Committee approval → release (cash/cheque, claimed in person)
+ * Loan policy:
+ *   - Per-type amount ranges and 2× share less outstanding loan balances
+ *     (members under ₱20k share are limited to 80% of share capital)
+ *   - 1.5% monthly diminishing interest, 2% Business; Vehicle rates depend
+ *     on term: 1.5% at 12 months, 2% at 24, 3% at 36
+ *   - New members wait 2 months; reloan requires 50% of scheduled payments paid
+ *   - 1 co-maker below ₱100k; 2 at/above ₱100k; Board members cannot co-make
+ *   - Only Super Admins may approve, return, or reject loan applications
  *   - Delinquent = 6 months with no payment → letter + text reminders
  *   - Penalties for late payment exist but the formula was NOT given ⚠__
  *
@@ -64,17 +58,33 @@ export const LOAN_TYPES = [
   { value: 'Emergency', label: 'Emergency', rate: 1.5 },
 ]
 
-export const PAYMENT_CHANNELS = ['Cash', 'Cheque', 'ATM Deduction']
+export const LOAN_AMOUNT_RULES = {
+  Regular: { min: 20000, max: 200000 },
+  Emergency: { min: 5000, max: 20000 },
+  Gadget: { min: 10000, max: 50000 },
+  Education: { min: 10000, max: 50000 },
+  Transportation: { min: 50000, max: 150000 },
+  Business: { min: 50000, max: 100000 },
+}
+
+export const PAYMENT_CHANNELS = ['Cash', 'Cheque', 'ATM Deduction', 'GCash']
 export const RELEASE_CHANNELS = ['Cash', 'Cheque']
 
-export const CEILING_CAP = 200000 // ⚠️ client said ₱150k–200k — using 200k
-export const MIN_CAPITAL = 15000 // ⚠️ full capital first (client: 15k new / 20k old)
 export const COMAKER_THRESHOLD = 100000 // < 100k → 1 co-maker, ≥ 100k → 2
-export const EMERGENCY_MAX = 20000
 export const MAX_CONCURRENT = 2 // "hanggang dalawang loan lang"
 export const WAIT_MONTHS = 2 // new members wait before first loan
-export const FIRST_LOAN_FACTOR = 0.8 // first loan = 80% of the ceiling ⚠️
 export const DELINQUENT_MONTHS = 6
+
+export function loanRateForTerm(type, termMonths) {
+  if (type === 'Transportation') {
+    return { 12: 1.5, 24: 2, 36: 3 }[Number(termMonths)] || 1.5
+  }
+  return LOAN_TYPES.find((item) => item.value === type)?.rate || 1.5
+}
+
+export function loanTermsForType(type) {
+  return type === 'Transportation' ? [12, 24, 36] : null
+}
 
 const round2 = (value) => Math.round(value * 100) / 100
 
@@ -282,30 +292,42 @@ export const useLoansStore = defineStore('loans', () => {
     }
 
     const capital = member.capitalShare || 0
-    if (capital < MIN_CAPITAL) {
+    const minimumCapital = member.memberType === 'Regular' ? 20000 : 10000
+    if (capital < minimumCapital) {
       reasons.push(
-        `Capital share is ₱${capital.toLocaleString('en-PH')} — at least ₱${MIN_CAPITAL.toLocaleString('en-PH')} required before loaning.`,
+        `${member.memberType} members need at least ₱${minimumCapital.toLocaleString('en-PH')} in capital share before borrowing.`,
       )
     }
 
-    // New members wait 2 months (financial literacy seminar is onsite)
-    const eligibleDate = new Date(member.dateJoined)
-    eligibleDate.setMonth(eligibleDate.getMonth() + WAIT_MONTHS)
-    if (Date.now() < eligibleDate.getTime()) {
-      reasons.push(
-        `New member — must wait 2 months first (available on ${eligibleDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}).`,
-      )
+    const eligibleDate = new Date(`${member.dateJoined}T00:00:00`)
+    if (!Number.isNaN(eligibleDate.getTime())) {
+      const membershipDay = eligibleDate.getDate()
+      eligibleDate.setDate(1)
+      eligibleDate.setMonth(eligibleDate.getMonth() + WAIT_MONTHS)
+      const lastEligibleDay = new Date(
+        eligibleDate.getFullYear(),
+        eligibleDate.getMonth() + 1,
+        0,
+      ).getDate()
+      eligibleDate.setDate(Math.min(membershipDay, lastEligibleDay))
+      if (Date.now() < eligibleDate.getTime()) {
+        reasons.push(
+          `Members must wait 2 months after joining before borrowing (available on ${eligibleDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}).`,
+        )
+      }
     }
 
     const memberLoans = loans.value.filter((loan) => loan.memberId === memberId)
+    const activeLoans = memberLoans.filter(
+      (loan) => ['Approved', 'Released'].includes(loan.status) && balanceOf(loan) > 0,
+    )
+    const releasedLoans = activeLoans.filter((loan) => loan.status === 'Released')
     const activeCount = memberLoans.filter(
       (loan) => loan.status === 'Released' && loan.type !== 'Emergency',
     ).length
     const hasEmergency = memberLoans.some(
       (loan) => loan.status === 'Released' && loan.type === 'Emergency',
     )
-    const hasPaidLoan = memberLoans.some((loan) => loan.status === 'Paid')
-
     if (type !== 'Emergency' && activeCount >= MAX_CONCURRENT) {
       reasons.push(`Already has the maximum of ${MAX_CONCURRENT} concurrent loans.`)
     }
@@ -313,16 +335,46 @@ export const useLoansStore = defineStore('loans', () => {
       reasons.push('Already has an active emergency loan.')
     }
 
-    const ceiling = Math.min(capital * 2, CEILING_CAP)
-    const limit = hasPaidLoan ? ceiling : Math.floor(ceiling * FIRST_LOAN_FACTOR)
+    const unpaidReloans = releasedLoans.filter(
+      (loan) => loan.totalDue > 0 && paidOf(loan) / loan.totalDue < 0.5,
+    )
+    if (unpaidReloans.length > 0) {
+      reasons.push('At least 50% of each active loan’s scheduled total must be paid before reloaning.')
+    }
+
+    const additionalLoan = ['Gadget', 'Education', 'Transportation', 'Business'].includes(type)
+    if (additionalLoan && member.memberType !== 'Regular') {
+      reasons.push('Additional loans are available to Regular members only.')
+    }
+    if (additionalLoan && (member.status !== 'Active' || releasedLoans.some((loan) => isDelinquent(loan)))) {
+      reasons.push('Additional loans require a Regular member in good standing.')
+    }
+    if (['Transportation', 'Business'].includes(type) && capital < 50000) {
+      reasons.push('Vehicle and Business loans require at least ₱50,000 in capital share.')
+    }
+    if (type === 'Transportation' && activeLoans.length > 0) {
+      reasons.push('Vehicle loans require no other outstanding loan.')
+    }
+
+    const amountRule = LOAN_AMOUNT_RULES[type]
+    const shareLimit = capital < 20000 ? capital * 0.8 : capital * 2
+    const outstanding = activeLoans.reduce((sum, loan) => sum + balanceOf(loan), 0)
+    const limit = amountRule
+      ? Math.max(0, Math.min(amountRule.max, shareLimit - outstanding))
+      : Math.max(0, shareLimit - outstanding)
+    if (amountRule && limit < amountRule.min) {
+      reasons.push(
+        `Available loan limit is below the minimum of ₱${amountRule.min.toLocaleString('en-PH')} for this loan type.`,
+      )
+    }
 
     return {
       ok: reasons.length === 0,
       reasons,
       note: '',
-      ceiling,
+      ceiling: shareLimit,
       limit,
-      firstLoan: !hasPaidLoan,
+      firstLoan: releasedLoans.length === 0,
       activeCount,
       hasEmergency,
       member,
@@ -445,19 +497,49 @@ export const useLoansStore = defineStore('loans', () => {
         displayNames.push(String(entry).trim())
       }
     }
+    let error = null
     if (coMakerRows.length) {
       const { error: coMakerError } = await supabase.from('co_maker').insert(coMakerRows)
-      if (coMakerError) lastError.value = errorMessage(coMakerError) // loan itself is safe
+      error = coMakerError
     }
-    return displayNames
+    return { displayNames, error }
   }
 
-  // Guard for picked co-makers (adviser UAT fix): no member may
-  // co-make their own loan, and the same member may not fill both
-  // slots. Only id picks are checked — typed names from the app are
-  // matched in linkCoMakers and stay display-only when unmatched.
+  // Resolve both portal member picks and names submitted by the member app
+  // before validating co-maker eligibility.
   function validateCoMakerIds(entries, memberId) {
-    const ids = entries.filter((entry) => typeof entry === 'number')
+    const members = useMembersStore().members
+    const ids = []
+    for (const entry of entries) {
+      const name = String(entry || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+      const member =
+        typeof entry === 'number'
+          ? members.find((candidate) => candidate.id === entry)
+          : members.find((candidate) => {
+              const full = `${candidate.firstName} ${candidate.middleName} ${candidate.lastName}`
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase()
+              const short = `${candidate.firstName} ${candidate.lastName}`
+                .toLowerCase()
+                .replace(/\s+/g, ' ')
+              return (
+                full === name ||
+                short === name ||
+                String(candidate.memberNo || '').toLowerCase() === name
+              )
+            })
+      if (!member || member.status !== 'Active') {
+        return 'Each co-maker must be a registered, active member.'
+      }
+      if (member.isBoardMember) {
+        return 'A Board of Directors member cannot be a co-maker.'
+      }
+      ids.push(member.id)
+    }
     if (ids.includes(memberId)) {
       return 'The borrower cannot be their own co-maker. Pick a different member.'
     }
@@ -479,18 +561,32 @@ export const useLoansStore = defineStore('loans', () => {
     if (!typeInfo) return { ok: false, message: 'Choose a loan type.' }
 
     const amount = Number(principal)
-    if (!(amount > 0)) return { ok: false, message: 'Enter a loan amount.' }
-
-    if (type === 'Emergency') {
-      if (amount > EMERGENCY_MAX) {
-        return { ok: false, message: 'Emergency loans are capped at ₱20,000.' }
-      }
-    } else if (amount > elig.limit) {
+    const amountRule = LOAN_AMOUNT_RULES[type]
+    if (!Number.isFinite(amount) || !amountRule || amount < amountRule.min) {
       return {
         ok: false,
-        message: elig.firstLoan
-          ? `First loan is capped at 80% of the ceiling — maximum ₱${elig.limit.toLocaleString('en-PH')}.`
-          : `Amount exceeds the ceiling of ₱${elig.limit.toLocaleString('en-PH')} (2× capital share).`,
+        message: `The minimum ${typeInfo.label} loan is ₱${(amountRule?.min || 0).toLocaleString('en-PH')}.`,
+      }
+    }
+    if (amount > amountRule.max) {
+      return {
+        ok: false,
+        message: `${typeInfo.label} loans are capped at ₱${amountRule.max.toLocaleString('en-PH')}.`,
+      }
+    }
+    const term = Number(termMonths)
+    if (!(term >= 1 && term <= 36)) {
+      return { ok: false, message: 'Loan term must be between 1 and 36 months.' }
+    }
+    const vehicleTerms = loanTermsForType(type)
+    if (vehicleTerms && !vehicleTerms.includes(term)) {
+      return { ok: false, message: 'Vehicle loans are available for 12, 24, or 36 months only.' }
+    }
+
+    if (amount > elig.limit) {
+      return {
+        ok: false,
+        message: `Amount exceeds the available limit of ₱${elig.limit.toLocaleString('en-PH')} after capital-share and outstanding-loan limits.`,
       }
     }
 
@@ -516,19 +612,20 @@ export const useLoansStore = defineStore('loans', () => {
 
     const now = new Date().toISOString()
     const today = todayLocal()
-    const totals = loanTotals(amount, typeInfo.rate, termMonths)
+    const rate = loanRateForTerm(type, term)
+    const totals = loanTotals(amount, rate, term)
 
     const { data: row, error } = await supabase
       .from('loan')
       .insert({
         member_id: memberId,
         amount: round2(amount),
-        interest_rate: typeInfo.rate / 100, // fraction — seed/CSV convention
+        interest_rate: rate / 100, // fraction — seed/CSV convention
         date_issued: today, // moves to the release date below
-        due_date: plusMonths(today, termMonths),
+        due_date: plusMonths(today, term),
         status: 'For Approval',
         created_at: now,
-        term_months: Number(termMonths),
+        term_months: term,
         loan_type: type,
         // Attribution (30): snapshot of who filed the application.
         added_by_name: useAuthStore().displayName,
@@ -538,7 +635,21 @@ export const useLoansStore = defineStore('loans', () => {
       .single()
     if (error) return { ok: false, message: errorMessage(error) }
 
-    const displayNames = await linkCoMakers(row.loan_id, filledCoMakers, today)
+    const linked = await linkCoMakers(row.loan_id, filledCoMakers, today)
+    if (linked.error) {
+      const { error: rollbackError } = await supabase
+        .from('loan')
+        .delete()
+        .eq('loan_id', row.loan_id)
+      const message = errorMessage(linked.error)
+      return {
+        ok: false,
+        message: rollbackError
+          ? `${message} The loan row could not be removed automatically: ${errorMessage(rollbackError)}`
+          : message,
+      }
+    }
+    const displayNames = linked.displayNames
 
     const loan = {
       id: row.loan_id,
@@ -548,8 +659,8 @@ export const useLoansStore = defineStore('loans', () => {
       memberName: `${elig.member.firstName} ${elig.member.lastName}`,
       type,
       principal: round2(amount),
-      ratePercent: typeInfo.rate,
-      termMonths: Number(termMonths),
+      ratePercent: rate,
+      termMonths: term,
       totalDue: totals.totalDue, // frozen here — diminishing total
       coMakers: displayNames,
       requirements: [...requirements],
@@ -572,23 +683,58 @@ export const useLoansStore = defineStore('loans', () => {
   }
 
   async function approveLoan(id) {
+    if (!useAuthStore().isSuperAdmin) {
+      return { ok: false, message: 'Only a Super Admin may approve loans.' }
+    }
     const loan = loans.value.find((item) => item.id === id)
     if (!loan) return { ok: false, message: 'Loan not found.' }
     if (loan.status !== 'For Approval') {
       return { ok: false, message: 'Only loans under review can be approved.' }
     }
+    const elig = eligibility(loan.memberId, loan.type)
+    if (!elig.ok) return { ok: false, message: elig.reasons.join(' ') }
+    const amountRule = LOAN_AMOUNT_RULES[loan.type]
+    if (!amountRule || loan.principal < amountRule.min || loan.principal > amountRule.max) {
+      return { ok: false, message: 'The loan amount is outside the policy range for this loan type.' }
+    }
+    if (loan.principal > elig.limit) {
+      return { ok: false, message: `Amount exceeds the available limit of ₱${elig.limit.toLocaleString('en-PH')}.` }
+    }
+    if (!(Number(loan.termMonths) >= 1 && Number(loan.termMonths) <= 36)) {
+      return { ok: false, message: 'Loan term must be between 1 and 36 months.' }
+    }
+    const vehicleTerms = loanTermsForType(loan.type)
+    if (vehicleTerms && !vehicleTerms.includes(Number(loan.termMonths))) {
+      return { ok: false, message: 'Vehicle loans are available for 12, 24, or 36 months only.' }
+    }
+    const requiredCoMakers = loan.principal >= COMAKER_THRESHOLD ? 2 : 1
+    if (loan.coMakers.length < requiredCoMakers) {
+      return { ok: false, message: `${requiredCoMakers} co-maker${requiredCoMakers > 1 ? 's' : ''} required for this amount.` }
+    }
+    const coMakerProblem = validateCoMakerIds(loan.coMakers, loan.memberId)
+    if (coMakerProblem) return { ok: false, message: coMakerProblem }
     const auth = useAuthStore()
+    const rate = loanRateForTerm(loan.type, loan.termMonths)
     const { error } = await supabase
       .from('loan')
-      .update({ status: 'Approved', approved_by: auth.profile?.admin_id ?? null })
+      .update({
+        status: 'Approved',
+        approved_by: auth.profile?.admin_id ?? null,
+        interest_rate: rate / 100,
+      })
       .eq('loan_id', id)
     if (error) return { ok: false, message: errorMessage(error) }
     loan.status = 'Approved'
-    logAction(loan, 'Approved by committee')
+    loan.ratePercent = rate
+    loan.totalDue = loanTotals(loan.principal, rate, loan.termMonths).totalDue
+    logAction(loan, 'Approved by Super Admin')
     return { ok: true }
   }
 
   async function rejectLoan(id, remarks) {
+    if (!useAuthStore().isSuperAdmin) {
+      return { ok: false, message: 'Only a Super Admin may reject loans.' }
+    }
     const loan = loans.value.find((item) => item.id === id)
     if (!loan) return { ok: false, message: 'Loan not found.' }
     if (loan.status !== 'For Approval') {
@@ -1457,6 +1603,9 @@ export const useLoansStore = defineStore('loans', () => {
   // stamp is reverted, so a request can never sit Approved without
   // its loan row (the reverse order could produce duplicate loans).
   async function approveRequest(id, { coMakers = [], note = '' } = {}) {
+    if (!useAuthStore().isSuperAdmin) {
+      return { ok: false, message: 'Only a Super Admin may approve loan requests.' }
+    }
     const request = requests.value.find((item) => item.id === id)
     if (!request) return { ok: false, message: 'Request not found.' }
     if (request.status !== 'Pending') {
@@ -1479,22 +1628,23 @@ export const useLoansStore = defineStore('loans', () => {
     if (term < 1 || term > 36) {
       return { ok: false, message: 'The requested term is missing or outside 1–36 months.' }
     }
+    const vehicleTerms = loanTermsForType(request.type)
+    if (vehicleTerms && !vehicleTerms.includes(term)) {
+      return { ok: false, message: 'Vehicle loans are available for 12, 24, or 36 months only.' }
+    }
+    const amountRule = LOAN_AMOUNT_RULES[request.type]
+    if (!amountRule || amount < amountRule.min || amount > amountRule.max) {
+      return { ok: false, message: 'The requested amount is outside the policy range for this loan type.' }
+    }
 
-    // Same gate a portal-filed loan gets — capital share, 2-month wait,
-    // concurrent-loan limits and ceiling all re-checked at approval.
+    // Re-check capital, existing balances, waiting period, and type eligibility.
     const elig = eligibility(request.memberId, request.type)
     if (!elig.ok) return { ok: false, message: elig.reasons.join(' ') }
 
-    if (request.type === 'Emergency') {
-      if (amount > EMERGENCY_MAX) {
-        return { ok: false, message: 'Emergency loans are capped at ₱20,000.' }
-      }
-    } else if (amount > elig.limit) {
+    if (amount > elig.limit) {
       return {
         ok: false,
-        message: elig.firstLoan
-          ? `First loan is capped at 80% of the ceiling — maximum ₱${elig.limit.toLocaleString('en-PH')}.`
-          : `Amount exceeds the ceiling of ₱${elig.limit.toLocaleString('en-PH')} (2× capital share).`,
+        message: `Amount exceeds the available limit of ₱${elig.limit.toLocaleString('en-PH')} after capital-share and outstanding-loan limits.`,
       }
     }
 
@@ -1530,13 +1680,14 @@ export const useLoansStore = defineStore('loans', () => {
       .eq('application_id', id)
     if (stampError) return { ok: false, message: errorMessage(stampError) }
 
-    const totals = loanTotals(amount, typeInfo.rate, term)
+    const rate = loanRateForTerm(request.type, term)
+    const totals = loanTotals(amount, rate, term)
     const { data: row, error } = await supabase
       .from('loan')
       .insert({
         member_id: request.memberId,
         amount: round2(amount),
-        interest_rate: typeInfo.rate / 100, // fraction — seed/CSV convention
+        interest_rate: rate / 100, // fraction — seed/CSV convention
         date_issued: today, // moves to the release date on release
         due_date: plusMonths(today, term),
         status: 'Approved',
@@ -1556,7 +1707,29 @@ export const useLoansStore = defineStore('loans', () => {
       return { ok: false, message: errorMessage(error) }
     }
 
-    const displayNames = await linkCoMakers(row.loan_id, filledCoMakers, today)
+    const linked = await linkCoMakers(row.loan_id, filledCoMakers, today)
+    if (linked.error) {
+      const { error: rollbackLoanError } = await supabase
+        .from('loan')
+        .delete()
+        .eq('loan_id', row.loan_id)
+      const { error: resetRequestError } = await supabase
+        .from('loan_application')
+        .update({ status: 'Pending', reviewed_by: null, date_reviewed: null, remarks: null })
+        .eq('application_id', id)
+      const failures = [
+        rollbackLoanError && `loan rollback failed: ${errorMessage(rollbackLoanError)}`,
+        resetRequestError && `request reset failed: ${errorMessage(resetRequestError)}`,
+      ].filter(Boolean)
+      return {
+        ok: false,
+        message: [
+          `Could not save the selected co-makers: ${errorMessage(linked.error)}`,
+          ...failures,
+        ].join(' '),
+      }
+    }
+    const displayNames = linked.displayNames
 
     const loan = {
       id: row.loan_id,
@@ -1566,7 +1739,7 @@ export const useLoansStore = defineStore('loans', () => {
       memberName: request.memberName,
       type: request.type,
       principal: round2(amount),
-      ratePercent: typeInfo.rate,
+      ratePercent: rate,
       termMonths: term,
       totalDue: totals.totalDue, // frozen here — diminishing total
       coMakers: displayNames,
@@ -1624,6 +1797,9 @@ export const useLoansStore = defineStore('loans', () => {
   }
 
   async function decideRequest(id, status, remarks, label) {
+    if (!useAuthStore().isSuperAdmin) {
+      return { ok: false, message: 'Only a Super Admin may review loan requests.' }
+    }
     const request = requests.value.find((item) => item.id === id)
     if (!request) return { ok: false, message: 'Request not found.' }
     if (request.status !== 'Pending') {

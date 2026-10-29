@@ -157,10 +157,33 @@ def check_eligibility(member, amount, term, loans, shares, loan_type="Regular"):
 
 def submit_application(member, amount, term_months, loan_type="Regular",
                        purpose=""):
-    """Append a PENDING application; creates the store file on first use."""
+    """Append a PENDING application; creates the store file on first use.
+
+    Duplicate guard (panel revision: 'transactions should not be
+    duplicated easily'): the same member asking for the same amount and
+    term on the same day, with that application still PENDING or already
+    APPROVED, is almost always an accidental double-submit — the first
+    application's id is returned instead of filing a second one. The API
+    stays idempotent, so a double-clicked Submit button produces one
+    application, not two.
+    """
+    today = str(pd.Timestamp.today().date())
     app_id = f"APP-{pd.Timestamp.today():%Y%m%d}-001"
     if APPLICATIONS_CSV.exists():
         apps = pd.read_csv(APPLICATIONS_CSV, keep_default_na=False)
+        if len(apps):
+            same = apps[
+                (apps["member"].astype(str).str.strip().str.lower()
+                 == str(member).strip().lower())
+                & (pd.to_numeric(apps["amount"], errors="coerce")
+                   == float(amount))
+                & (pd.to_numeric(apps["term_months"], errors="coerce")
+                   == int(term_months))
+                & (apps["date_submitted"].astype(str) == today)
+                & (apps["status"].astype(str).str.upper()
+                   .isin(["PENDING", "APPROVED"]))]
+            if len(same):
+                return str(same.iloc[0]["app_id"])
         app_id = f"APP-{pd.Timestamp.today():%Y%m%d}-{len(apps) + 1:03d}"
     else:
         apps = pd.DataFrame()
@@ -609,6 +632,16 @@ def seasonality_report(loans, pays=None):
     era, n_excl = analysis_loans(loans)
     ym = era.groupby([era["date"].dt.year, era["date"].dt.month]).agg(
         loans=("loan_amount", "size"), disbursed=("loan_amount", "sum"))
+    # Year x month matrix — raw counts + pesos per cell, for the client
+    # to render a hoverable heatmap (same numbers the indices average).
+    matrix = []
+    for year, g in ym.groupby(level=0):
+        matrix.append({
+            "year": int(year),
+            "loans": [int(g["loans"].get((year, m), 0)) for m in range(1, 13)],
+            "disbursed": [round(float(g["disbursed"].get((year, m), 0.0)), 2)
+                          for m in range(1, 13)],
+        })
     month_loans = ym.groupby(level=1)["loans"].mean()
     month_disb = ym.groupby(level=1)["disbursed"].mean()
     base_loans = max(float(ym["loans"].mean()), 1e-9)
@@ -644,7 +677,7 @@ def seasonality_report(loans, pays=None):
     trough_candidates = [r for r in rows if r["avg_loans"] > 0] or rows
     trough_m = min(trough_candidates, key=lambda r: r["index_loans"])["month"]
     return {"months": rows, "recurring_months": repay_rows,
-            "recurring_caveat": repay_caveat,
+            "recurring_caveat": repay_caveat, "matrix": matrix,
             "peak_month": peak_m, "trough_month": trough_m,
             "payday_share": round(payday_share, 4),
             "payday_lift": round(payday_share / 0.197, 3),

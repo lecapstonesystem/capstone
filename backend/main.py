@@ -282,8 +282,23 @@ def require_key_q(x_api_key: str | None = Header(default=None),
 
 
 def _ledger():
-    """Fresh ledger read per request — tiny CSVs (loads in <50 ms)."""
-    loans, pays, stats, _shares = ua.load_data()
+    """Analytics dataset — fresh read per request (<150 ms either source).
+
+    LOANS are LIVE (store: Supabase-first, CSV fallback), so anything
+    entered on the website flows straight into trends, backtests,
+    forecasts, seasonality and member cycles — no re-upload needed.
+    The repayment SCHEDULE (pays) and completion MARKS (stats) stay on
+    the paper-record CSVs: the database stores only payments actually
+    received, while the ledger extract carries the full amortization
+    schedule and the coop's fully-paid marks. n_loans_analyzed in each
+    payload therefore reports the live count."""
+    loans, _p, _s, _sh = load()            # live register (147 loans)
+    _, pays, stats, _ = ua.load_data()      # paper schedule + marks (CSVs)
+    # Store frames skip load_data()'s coercion — mirror it so every pack
+    # function sees the exact dtypes it was built against.
+    loans["loan_amount"] = pd.to_numeric(loans["loan_amount"], errors="coerce")
+    loans["term_months"] = pd.to_numeric(loans["term_months"], errors="coerce")
+    loans["date"] = pd.to_datetime(loans["date"], errors="coerce")
     return loans, pays, stats
 
 

@@ -75,6 +75,13 @@
               Statistics only
             </button>
           </div>
+          <label
+            class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer"
+            title="Include archived members in membership counts, growth, and capital-share totals. Linked loan and payment history remains in financial reports."
+          >
+            <input v-model="includeArchivedMembers" type="checkbox" class="accent-green-600" />
+            Include archived members
+          </label>
           <button
             @click="printReports"
             class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition duration-200"
@@ -377,17 +384,15 @@
         </div>
       </section>
 
-      <!-- 4. Forecasting -->
+      <!-- 4. Expected loan collections -->
       <section
         v-if="reportMode === 'visualizations'"
         class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6"
       >
         <div class="flex items-center justify-between mb-4">
           <div>
-            <h2 class="font-semibold text-gray-800">Forecasting</h2>
-            <p class="text-xs text-gray-400">
-              Expected collections come from the active loans' own amortization schedules
-            </p>
+            <h2 class="font-semibold text-gray-800">Expected Loan Collections</h2>
+            <p class="text-xs text-gray-400">Based on active loans' repayment schedules</p>
           </div>
           <button
             @click="exportForecast"
@@ -425,7 +430,7 @@
           <!-- Expected collections per month -->
           <div>
             <p class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
-              Expected collections — next 12 months
+              Scheduled collections — next 12 months
             </p>
             <div v-if="forecastMonths.length > 0" class="overflow-x-auto">
               <div
@@ -452,7 +457,9 @@
                 </div>
               </div>
             </div>
-            <p v-else class="text-sm text-gray-400 py-8 text-center">No active loans to project.</p>
+            <p v-else class="text-sm text-gray-400 py-8 text-center">
+              No active loans with scheduled collections.
+            </p>
             <p class="text-xs text-gray-400 mt-2">
               {{ activeLoanCount }} active loan<span v-if="activeLoanCount !== 1">s</span> ·
               {{ formatPeso(forecastTwelve) }} expected within 12 months
@@ -461,10 +468,9 @@
         </div>
 
         <p class="text-xs text-gray-400 mt-4">
-          Method: expected collections rebuild each active loan's diminishing-balance schedule from
-          its release date, principal, rate and term, and cross off the instalments already covered
-          by verified payments — a receipt submitted through the app is not counted until an
-          administrator verifies it.
+          Calculation: remaining collections are based on each active loan's diminishing-balance
+          schedule, release date, principal, rate and term. Instalments covered by verified payments
+          are excluded; app-submitted receipts count only after administrator verification.
         </p>
       </section>
 
@@ -659,25 +665,41 @@
             {{ statusCounts.Inactive }} inactive. {{ rangeMembers.length }} joined during
             {{ rangeLabel.toLowerCase() }}.
           </p>
-          <div class="overflow-x-auto mt-3">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="text-left text-xs uppercase text-gray-500 border-b">
-                  <th class="py-2 pr-4">Month joined</th>
-                  <th class="py-2 text-right">New members</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <tr v-for="point in growthSeries" :key="point.label">
-                  <td class="py-2 pr-4 text-gray-700">{{ point.label }}</td>
-                  <td class="py-2 text-right text-gray-700">{{ point.count }}</td>
-                </tr>
-                <tr v-if="!growthSeries.length">
-                  <td colspan="2" class="py-2 text-gray-500">No members joined in this period.</td>
-                </tr>
-              </tbody>
-            </table>
+          <div v-if="growthYearGroups.length" class="space-y-2 mt-4">
+            <details
+              v-for="(group, index) in growthYearGroups"
+              :key="group.year"
+              :open="index === 0"
+              class="rounded-lg border border-gray-200"
+            >
+              <summary
+                class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 px-4 py-3 text-sm hover:bg-gray-100"
+              >
+                <span class="font-semibold text-gray-800">{{ group.year }}</span>
+                <span class="font-medium text-gray-700">
+                  {{ group.total.count }} new
+                  {{ group.total.count === 1 ? 'member' : 'members' }}
+                </span>
+              </summary>
+              <div class="overflow-x-auto px-4 pb-3">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-left text-xs uppercase text-gray-500 border-b">
+                      <th class="py-2 pr-4">Month joined</th>
+                      <th class="py-2 text-right">New members</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <tr v-for="point in group.rows" :key="point.label">
+                      <td class="py-2 pr-4 text-gray-700">{{ point.mon }} {{ group.year }}</td>
+                      <td class="py-2 text-right text-gray-700">{{ point.count }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </details>
           </div>
+          <p v-else class="mt-3 text-sm text-gray-500">No members joined in this period.</p>
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
@@ -768,21 +790,36 @@
               <dd class="font-semibold">{{ formatPeso(forecastTotals.beyond) }}</dd>
             </div>
           </dl>
-          <div class="overflow-x-auto mt-4">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="text-left text-xs uppercase text-gray-500 border-b">
-                  <th class="py-2 pr-4">Month due</th>
-                  <th class="py-2 text-right">Expected instalments</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <tr v-for="point in forecastMonths" :key="point.key">
-                  <td class="py-2 pr-4 text-gray-700">{{ point.label }}</td>
-                  <td class="py-2 text-right text-gray-700">{{ formatPeso(point.amount) }}</td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="space-y-2 mt-4">
+            <details
+              v-for="(group, index) in forecastYearGroups"
+              :key="group.year"
+              :open="index === 0"
+              class="rounded-lg border border-gray-200"
+            >
+              <summary
+                class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 px-4 py-3 text-sm hover:bg-gray-100"
+              >
+                <span class="font-semibold text-gray-800">{{ group.year }}</span>
+                <span class="font-medium text-gray-700">{{ formatPeso(group.total.amount) }}</span>
+              </summary>
+              <div class="overflow-x-auto px-4 pb-3">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-left text-xs uppercase text-gray-500 border-b">
+                      <th class="py-2 pr-4">Month due</th>
+                      <th class="py-2 text-right">Expected instalments</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <tr v-for="point in group.rows" :key="point.key">
+                      <td class="py-2 pr-4 text-gray-700">{{ point.mon }} {{ group.year }}</td>
+                      <td class="py-2 text-right text-gray-700">{{ formatPeso(point.amount) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -793,35 +830,56 @@
             {{ formatPeso(flow.income) }}, expenses were {{ formatPeso(flow.expense) }}, and net
             cash flow was {{ formatPeso(flow.net) }}.
           </p>
-          <div class="overflow-x-auto mt-3">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="text-left text-xs uppercase text-gray-500 border-b">
-                  <th class="py-2 pr-4">Month</th>
-                  <th class="py-2 pr-4 text-right">Income</th>
-                  <th class="py-2 pr-4 text-right">Expenses</th>
-                  <th class="py-2 text-right">Net</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <tr v-for="point in flowSeries" :key="point.label">
-                  <td class="py-2 pr-4 text-gray-700">{{ point.label }}</td>
-                  <td class="py-2 pr-4 text-right text-gray-700">{{ formatPeso(point.income) }}</td>
-                  <td class="py-2 pr-4 text-right text-gray-700">
-                    {{ formatPeso(point.expense) }}
-                  </td>
-                  <td class="py-2 text-right text-gray-700">
-                    {{ formatPeso(point.income - point.expense) }}
-                  </td>
-                </tr>
-                <tr v-if="!flowSeries.length">
-                  <td colspan="4" class="py-2 text-gray-500">
-                    No ledger transactions were recorded in this period.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div v-if="flowYearGroups.length" class="space-y-2 mt-4">
+            <details
+              v-for="(group, index) in flowYearGroups"
+              :key="group.year"
+              :open="index === 0"
+              class="rounded-lg border border-gray-200"
+            >
+              <summary
+                class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 px-4 py-3 text-sm hover:bg-gray-100"
+              >
+                <span class="font-semibold text-gray-800">{{ group.year }}</span>
+                <span class="flex flex-wrap justify-end gap-x-4 gap-y-1 text-right">
+                  <span class="text-green-700">Income {{ formatPeso(group.total.income) }}</span>
+                  <span class="text-red-700"> Expenses {{ formatPeso(group.total.expense) }} </span>
+                  <span class="font-semibold text-gray-800">
+                    Net {{ formatPeso(group.total.income - group.total.expense) }}
+                  </span>
+                </span>
+              </summary>
+              <div class="overflow-x-auto px-4 pb-3">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="text-left text-xs uppercase text-gray-500 border-b">
+                      <th class="py-2 pr-4">Month</th>
+                      <th class="py-2 pr-4 text-right">Income</th>
+                      <th class="py-2 pr-4 text-right">Expenses</th>
+                      <th class="py-2 text-right">Net</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <tr v-for="point in group.rows" :key="point.label">
+                      <td class="py-2 pr-4 text-gray-700">{{ point.mon }} {{ group.year }}</td>
+                      <td class="py-2 pr-4 text-right text-gray-700">
+                        {{ formatPeso(point.income) }}
+                      </td>
+                      <td class="py-2 pr-4 text-right text-gray-700">
+                        {{ formatPeso(point.expense) }}
+                      </td>
+                      <td class="py-2 text-right text-gray-700">
+                        {{ formatPeso(point.income - point.expense) }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </details>
           </div>
+          <p v-else class="mt-3 text-sm text-gray-500">
+            No ledger transactions were recorded in this period.
+          </p>
           <div class="overflow-x-auto mt-5">
             <h3 class="text-sm font-medium text-gray-700 mb-2">Top categories in this period</h3>
             <table class="w-full text-sm">
@@ -862,6 +920,7 @@ import { useLedgerStore } from '../stores/ledger'
 import { buildSchedule } from '../utils/amortization'
 
 const reportMode = ref('visualizations')
+const includeArchivedMembers = ref(false)
 const membersStore = useMembersStore()
 const appsStore = useApplicationsStore()
 const loansStore = useLoansStore()
@@ -1064,6 +1123,34 @@ function monthParts(year, monthIndex) {
   }
 }
 
+function groupByYear(points, totalFields, newestFirst = true) {
+  const groups = new Map()
+  points.forEach((point) => {
+    let group = groups.get(point.year)
+    if (!group) {
+      group = {
+        year: point.year,
+        rows: [],
+        total: Object.fromEntries(totalFields.map((field) => [field, 0])),
+      }
+      groups.set(point.year, group)
+    }
+    group.rows.push(point)
+    totalFields.forEach((field) => {
+      group.total[field] += Number(point[field]) || 0
+    })
+  })
+
+  return [...groups.values()]
+    .sort((a, b) => (newestFirst ? b.year - a.year : a.year - b.year))
+    .map((group) => ({
+      ...group,
+      total: Object.fromEntries(
+        Object.entries(group.total).map(([field, value]) => [field, round2(value)]),
+      ),
+    }))
+}
+
 // ---------- shared formatters ----------
 function formatPeso(amount) {
   const value = Number(amount) || 0
@@ -1095,15 +1182,21 @@ function printReports() {
 }
 
 // ---------- 1. Membership ----------
-const memberTotal = computed(() => membersStore.members.length)
+const reportMembers = computed(() =>
+  includeArchivedMembers.value
+    ? membersStore.members
+    : membersStore.members.filter((member) => !member.archivedAt),
+)
+
+const memberTotal = computed(() => reportMembers.value.length)
 
 const rangeMembers = computed(() =>
-  membersStore.members.filter((member) => inRange(member.dateJoined)),
+  reportMembers.value.filter((member) => inRange(member.dateJoined)),
 )
 
 const statusCounts = computed(() => ({
-  Active: membersStore.members.filter((member) => member.status === 'Active').length,
-  Inactive: membersStore.members.filter((member) => member.status === 'Inactive').length,
+  Active: reportMembers.value.filter((member) => member.status === 'Active').length,
+  Inactive: reportMembers.value.filter((member) => member.status === 'Inactive').length,
 }))
 
 // New members grouped by month (only months that have joins)
@@ -1118,9 +1211,11 @@ const growthSeries = computed(() => {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, count]) => {
       const [year, month] = key.split('-').map(Number)
-      return { label: monthLabel(year, month), count, ...monthParts(year, month) }
+      return { label: monthLabel(year, month), year, count, ...monthParts(year, month) }
     })
 })
+
+const growthYearGroups = computed(() => groupByYear(growthSeries.value, ['count']))
 
 const growthMax = computed(() => Math.max(1, ...growthSeries.value.map((point) => point.count)))
 
@@ -1243,7 +1338,7 @@ function typeBarPct(total) {
   return Math.max(2, Math.round((total / loansByTypeMax.value) * 100))
 }
 
-// ---------- 4. Forecasting ----------
+// ---------- 4. Expected loan collections ----------
 const FORECAST_MONTHS = 12
 
 const round2 = (value) => Math.round(value * 100) / 100
@@ -1313,6 +1408,7 @@ const forecastMonths = computed(() => {
     buckets.push({
       key: `${date.getFullYear()}-${date.getMonth()}`,
       label: monthLabel(date.getFullYear(), date.getMonth()),
+      year: date.getFullYear(),
       amount: 0,
       ...monthParts(date.getFullYear(), date.getMonth()),
     })
@@ -1327,6 +1423,8 @@ const forecastMonths = computed(() => {
   })
   return buckets.map((bucket) => ({ ...bucket, amount: round2(bucket.amount) }))
 })
+
+const forecastYearGroups = computed(() => groupByYear(forecastMonths.value, ['amount'], false))
 
 const forecastMax = computed(() =>
   Math.max(1, ...forecastMonths.value.map((point) => point.amount)),
@@ -1374,11 +1472,14 @@ const flowSeries = computed(() => {
     .sort((a, b) => a.year - b.year || a.month - b.month)
     .map((bucket) => ({
       label: monthLabel(bucket.year, bucket.month),
+      year: bucket.year,
       ...monthParts(bucket.year, bucket.month),
       income: bucket.income,
       expense: bucket.expense,
     }))
 })
+
+const flowYearGroups = computed(() => groupByYear(flowSeries.value, ['income', 'expense']))
 
 const flowMax = computed(() =>
   Math.max(1, ...flowSeries.value.map((point) => Math.max(point.income, point.expense))),
@@ -1414,7 +1515,7 @@ const topCategories = computed(() => {
 
 // ---------- 6. Financial summary ----------
 const capitalTotal = computed(() =>
-  membersStore.members.reduce((sum, member) => sum + (member.capitalShare || 0), 0),
+  reportMembers.value.reduce((sum, member) => sum + (member.capitalShare || 0), 0),
 )
 
 const membershipFees = computed(() =>
@@ -1502,11 +1603,11 @@ function exportLoans() {
 
 function exportForecast() {
   download(
-    'ucms-forecast.csv',
+    'ucms-expected-loan-collections.csv',
     ['Line', 'Value'],
     [
       ...forecastMonths.value.map((point) => [
-        `Expected collections — ${point.label}`,
+        `Scheduled collections — ${point.label}`,
         point.amount.toFixed(2),
       ]),
       ['Already overdue', forecastTotals.value.overdue.toFixed(2)],

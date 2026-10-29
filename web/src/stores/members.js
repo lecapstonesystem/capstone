@@ -84,6 +84,8 @@ function rowToMember(row, capitals = new Map(), entries = new Map()) {
     middleName: row.middle_name || '',
     memberType: titleCase(row.member_type) || 'Regular',
     isBoardMember: row.is_board_member === true,
+    archivedAt: row.archived_at || null,
+    archivedBy: row.archived_by || null,
     gender: titleCase(row.gender),
     dateOfBirth: row.date_of_birth ? String(row.date_of_birth).slice(0, 10) : '',
     civilStatus: row.civil_status || '',
@@ -176,6 +178,7 @@ export const useMembersStore = defineStore('members', () => {
   const lastError = ref('')
   const search = ref('')
   const statusFilter = ref('All')
+  const showArchived = ref(false)
 
   // Column sorting — header click toggles ascending/descending (SortableTh)
   const sortKey = ref('memberNo')
@@ -193,6 +196,7 @@ export const useMembersStore = defineStore('members', () => {
   const filteredMembers = computed(() => {
     const query = search.value.trim().toLowerCase()
     const filtered = members.value.filter((member) => {
+      if (member.archivedAt && !showArchived.value) return false
       const matchesStatus = statusFilter.value === 'All' || member.status === statusFilter.value
       const fullName = `${member.firstName} ${member.lastName}`.toLowerCase()
       const matchesSearch =
@@ -206,7 +210,10 @@ export const useMembersStore = defineStore('members', () => {
     return sortRows(filtered, sortKey.value, sortDir.value, accessors)
   })
 
-  const totalCount = computed(() => members.value.length)
+  const totalCount = computed(() => members.value.filter((member) => !member.archivedAt).length)
+  const archivedCount = computed(
+    () => members.value.filter((member) => Boolean(member.archivedAt)).length,
+  )
 
   const activeCount = computed(
     () => members.value.filter((member) => member.status === 'Active').length,
@@ -246,7 +253,7 @@ export const useMembersStore = defineStore('members', () => {
   }
 
   // New search/filter results always start from page 1
-  watch([search, statusFilter], () => {
+  watch([search, statusFilter, showArchived], () => {
     page.value = 1
   })
 
@@ -536,11 +543,31 @@ export const useMembersStore = defineStore('members', () => {
 
   // Lifecycle: every change is logged and keeps the record. Deactivation
   // carries the admin's written reason into the activity trail.
-  async function setStatus(id, status, reason = '') {
+  async function setStatus(id, status, reason = '', archive = false) {
     const current = members.value.find((item) => item.id === id)
-    if (!current || current.status === status) return
+    if (!current) return { ok: false, message: 'Member not found.' }
+    if (current.status === status && !(status === 'Inactive' && archive && !current.archivedAt)) {
+      return { ok: true }
+    }
+    if (status === 'Active' && current.archivedAt) {
+      return {
+        ok: false,
+        message: 'Restore this member from the archive before reactivating them.',
+      }
+    }
     const patch = { status, login_enabled: status === 'Active' }
     if (status !== 'Active') patch.must_change_password = false
+    if (status === 'Inactive' && archive && !current.archivedAt) {
+      const adminId = useAuthStore().profile?.admin_id
+      if (!adminId) {
+        return {
+          ok: false,
+          message: 'This session is not linked to an admin record — sign out and back in.',
+        }
+      }
+      patch.archived_at = new Date().toISOString()
+      patch.archived_by = adminId
+    }
     const { data: row, error } = await supabase
       .from('member')
       .update(patch)
@@ -549,16 +576,72 @@ export const useMembersStore = defineStore('members', () => {
       .single()
     if (error) {
       lastError.value = errorMessage(error)
-      return
+      return { ok: false, message: lastError.value }
     }
     const updated = replaceLocal(rowToMember(row, keepCapital(current)))
     const note = String(reason || '').trim()
     if (updated) {
       logAction(
         updated,
-        note ? `Status changed to ${status} — ${note}` : `Status changed to ${status}`,
+        status === 'Inactive' && archive
+          ? `Member deactivated and archived${note ? ` — ${note}` : ''}`
+          : note
+            ? `Status changed to ${status} — ${note}`
+            : `Status changed to ${status}`,
       )
     }
+    return { ok: true }
+  }
+
+  async function archiveMember(id, reason = '') {
+    const current = members.value.find((item) => item.id === id)
+    if (!current) return { ok: false, message: 'Member not found.' }
+    if (current.status !== 'Inactive') {
+      return { ok: false, message: 'Only inactive members can be archived.' }
+    }
+    if (current.archivedAt) return { ok: false, message: 'This member is already archived.' }
+    const adminId = useAuthStore().profile?.admin_id
+    if (!adminId) {
+      return {
+        ok: false,
+        message: 'This session is not linked to an admin record — sign out and back in.',
+      }
+    }
+    const { data: row, error } = await supabase
+      .from('member')
+      .update({ archived_at: new Date().toISOString(), archived_by: adminId })
+      .eq('member_id', id)
+      .select()
+      .single()
+    if (error) return { ok: false, message: errorMessage(error) }
+    const updated = replaceLocal(rowToMember(row, keepCapital(current)))
+    if (updated) {
+      const note = String(reason || '').trim()
+      logAction(updated, note ? `Member archived — ${note}` : 'Member archived')
+    }
+    return { ok: true }
+  }
+
+  async function restoreMember(id, reason = '') {
+    const current = members.value.find((item) => item.id === id)
+    if (!current) return { ok: false, message: 'Member not found.' }
+    if (!current.archivedAt) return { ok: false, message: 'This member is not archived.' }
+    const { data: row, error } = await supabase
+      .from('member')
+      .update({ archived_at: null, archived_by: null })
+      .eq('member_id', id)
+      .select()
+      .single()
+    if (error) return { ok: false, message: errorMessage(error) }
+    const updated = replaceLocal(rowToMember(row, keepCapital(current)))
+    if (updated) {
+      const note = String(reason || '').trim()
+      logAction(
+        updated,
+        note ? `Member restored from archive — ${note}` : 'Member restored from archive',
+      )
+    }
+    return { ok: true }
   }
 
   /**
@@ -917,6 +1000,7 @@ export const useMembersStore = defineStore('members', () => {
     fetchMembers,
     search,
     statusFilter,
+    showArchived,
     filteredMembers,
     sortKey,
     sortDir,
@@ -924,6 +1008,7 @@ export const useMembersStore = defineStore('members', () => {
     sortState,
     totalCount,
     activeCount,
+    archivedCount,
     page,
     pageSize,
     totalPages,
@@ -934,6 +1019,8 @@ export const useMembersStore = defineStore('members', () => {
     updateMember,
     loadMemberForPrint,
     setStatus,
+    archiveMember,
+    restoreMember,
     issueTempPassword,
     setLoginEnabled,
     addCapital,

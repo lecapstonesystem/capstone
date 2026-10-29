@@ -8,18 +8,19 @@ out of scope (admin portal writes directly under `06_admin_access.sql`,
 the app writes directly under RLS from `02` + `13`).
 
 Migrations `database/01…32` are applied on production. The portal's
-immutable-ledger correction flow uses `database/32_immutable_ledger_reversals.sql`;
-the mobile app does not issue direct ledger writes.
+immutable-ledger correction flow uses migration 32. Member archiving
+requires `database/33_member_archive.sql` before that UI is deployed.
+The mobile app does not issue direct ledger writes.
 
 ---
 
 ## 1. Credentials
 
-| What | Value |
-|---|---|
-| Project URL | `https://akgdwvcuyfqwtvnhryut.supabase.co` |
+| What                   | Value                                                                                                                                                                                                 |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project URL            | `https://akgdwvcuyfqwtvnhryut.supabase.co`                                                                                                                                                            |
 | Key to ship in the app | the **publishable key** (`sb_publishable_…`) — same value as `web/.env` (`VITE_SUPABASE_…`) or Supabase Dashboard → API Keys → Publishable. Safe to bundle: it is public by design; RLS is the guard. |
-| NEVER ship | the **secret key** (`sb_secret_…` / `backend/.env`). Anyone who unpacks the APK would get full database access. Supabase also actively rejects it from app/browser contexts. |
+| NEVER ship             | the **secret key** (`sb_secret_…` / `backend/.env`). Anyone who unpacks the APK would get full database access. Supabase also actively rejects it from app/browser contexts.                          |
 
 ## 2. Setup (supabase-kt)
 
@@ -45,19 +46,19 @@ val supabase = Supabase.create(
 **Not using supabase-kt? Plain HTTP works too** — every flow below is
 just these endpoints:
 
-| Need | Call |
-|---|---|
-| Register | `POST {url}/auth/v1/signup` body `{"email","password"}` |
-| Sign in | `POST {url}/auth/v1/token?grant_type=password` body `{"email","password"}` → returns `access_token` |
-| Table read/write | `{url}/rest/v1/{table}` — headers: `apikey: <publishable>`, `Authorization: Bearer <access_token>` |
-| Photo upload | `POST {url}/storage/v1/object/{bucket}/{path}` — same headers + `Content-Type: image/jpeg`, `x-upsert: true` |
+| Need             | Call                                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| Register         | `POST {url}/auth/v1/signup` body `{"email","password"}`                                                      |
+| Sign in          | `POST {url}/auth/v1/token?grant_type=password` body `{"email","password"}` → returns `access_token`          |
+| Table read/write | `{url}/rest/v1/{table}` — headers: `apikey: <publishable>`, `Authorization: Bearer <access_token>`           |
+| Photo upload     | `POST {url}/storage/v1/object/{bucket}/{path}` — same headers + `Content-Type: image/jpeg`, `x-upsert: true` |
 
 ## 3. Auth model — email + password
 
 - **Registration flow (not yet a member):** sign up first — this mints
   the `auth.uid` that every insert below must carry. Requires the
-  dashboard toggle: *Authentication → Sign In / Providers → Email →
-  Confirm email = OFF* (Hans does this once).
+  dashboard toggle: _Authentication → Sign In / Providers → Email →
+  Confirm email = OFF_ (Hans does this once).
 - **Paying members:** sign in with email + password — same account they
   got at registration approval (or one an admin creates later in the
   portal: Members → Issue Credentials signs the login up and links
@@ -81,16 +82,16 @@ supabase.auth.signInWith(Email) {
 
 ## 4. What RLS allows (the whole contract in one table)
 
-| Action | Allowed? |
-|---|---|
-| Register (insert own member row, `status='Pending'`) | yes, once per account |
-| Read own member row / own loans / own payments / own applications | yes |
-| Read own notifications, mark them read | yes |
-| File loan application (`status='Pending'`) | yes, own member_id only |
-| Submit payment with receipt (`status='Pending'`, own released loan) | yes |
-| Upload files into **own folder** in `member-documents` (profile photo, payment receipt, loan documents under `loan-apps/{application_id}`) | yes |
-| Read anything else / other members / ledger / admin tables | **no** |
-| Mark own payment verified, set own status/member_no, approve anything | **no** (admin portal only) |
+| Action                                                                                                                                     | Allowed?                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- |
+| Register (insert own member row, `status='Pending'`)                                                                                       | yes, once per account      |
+| Read own member row / own loans / own payments / own applications                                                                          | yes                        |
+| Read own notifications, mark them read                                                                                                     | yes                        |
+| File loan application (`status='Pending'`)                                                                                                 | yes, own member_id only    |
+| Submit payment with receipt (`status='Pending'`, own released loan)                                                                        | yes                        |
+| Upload files into **own folder** in `member-documents` (profile photo, payment receipt, loan documents under `loan-apps/{application_id}`) | yes                        |
+| Read anything else / other members / ledger / admin tables                                                                                 | **no**                     |
+| Mark own payment verified, set own status/member_no, approve anything                                                                      | **no** (admin portal only) |
 
 ## 5. Flow 1 — member registration (with photo)
 
@@ -285,15 +286,15 @@ Track `Pending → Recorded` after the admin verifies in the portal.
 
 ## 8. Error codes
 
-| Code / message | Meaning | Fix |
-|---|---|---|
-| HTTP body `code: 42501` (RestException) | RLS rejected the write | almost always a wrong `status` value, or a `member_id`/`loan_id` that is not yours |
-| `23505` on `member_auth_uid_key` | account already has a registration row | sign in instead of signing up |
-| 401 / "JWT expired" / PGRST301 | session expired | sign in again |
-| storage `413` / "exceeded" | file > 10 MB | compress harder / re-encode |
-| storage `415` | mime not allowed | upload jpeg/png/webp/pdf (`contentType = image/jpeg`) |
-| signUp `weak_password` / invalid email | local validation | enforce 8+ chars in the form |
-| 401 `Forbidden use of secret key` | the secret key leaked into the app | replace with the publishable key immediately |
+| Code / message                          | Meaning                                | Fix                                                                                |
+| --------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------- |
+| HTTP body `code: 42501` (RestException) | RLS rejected the write                 | almost always a wrong `status` value, or a `member_id`/`loan_id` that is not yours |
+| `23505` on `member_auth_uid_key`        | account already has a registration row | sign in instead of signing up                                                      |
+| 401 / "JWT expired" / PGRST301          | session expired                        | sign in again                                                                      |
+| storage `413` / "exceeded"              | file > 10 MB                           | compress harder / re-encode                                                        |
+| storage `415`                           | mime not allowed                       | upload jpeg/png/webp/pdf (`contentType = image/jpeg`)                              |
+| signUp `weak_password` / invalid email  | local validation                       | enforce 8+ chars in the form                                                       |
+| 401 `Forbidden use of secret key`       | the secret key leaked into the app     | replace with the publishable key immediately                                       |
 
 ## 9. What the app can NEVER do (defense talking points)
 
@@ -307,12 +308,12 @@ Track `Pending → Recorded` after the admin verifies in the portal.
 
 ## 10. Status lifecycles (who flips what)
 
-| Row | App writes | Admin portal later sets |
-|---|---|---|
-| `member` | `Pending` | `Active` (assigns `member_no`) or `Rejected` |
-| `loan_application` | `Pending` | `Under Review` → `Approved` / `Returned` / `Rejected` |
-| `payment` | `Pending` | `Recorded` (+ `verified_by`, `date_verified`) |
-| `notification` | (reads own rows) marks own `read_at` | creates every row — bulk reminders + loan-decision notices |
+| Row                | App writes                           | Admin portal later sets                                    |
+| ------------------ | ------------------------------------ | ---------------------------------------------------------- |
+| `member`           | `Pending`                            | `Active` (assigns `member_no`) or `Rejected`               |
+| `loan_application` | `Pending`                            | `Under Review` → `Approved` / `Returned` / `Rejected`      |
+| `payment`          | `Pending`                            | `Recorded` (+ `verified_by`, `date_verified`)              |
+| `notification`     | (reads own rows) marks own `read_at` | creates every row — bulk reminders + loan-decision notices |
 
 Balances count only `Recorded` payments — a `Pending` receipt does not
 move the loan balance until verified.
@@ -320,8 +321,8 @@ move the loan balance until verified.
 ## 11. End-to-end test (current state — everything below exists)
 
 1. Point the app at the production URL + publishable key (section 1).
-2. Dashboard: *Authentication → Sign In / Providers → Email → Confirm
-   email = OFF* (verify once).
+2. Dashboard: _Authentication → Sign In / Providers → Email → Confirm
+   email = OFF_ (verify once).
 3. App registers a test member with a photo → portal **Registrations**
    shows it, source "Mobile App", status Pending → approve it → member
    becomes Active, photo is their avatar everywhere.
@@ -332,7 +333,7 @@ move the loan balance until verified.
 5. App records a loan payment with a receipt → portal **Loans** →
    payment shows, receipt viewable, status Pending → verify it →
    Recorded, balance moves.
-6. Portal → **Notifications** → *Find payments due* → send → the app's
+6. Portal → **Notifications** → _Find payments due_ → send → the app's
    notification inbox shows the reminder; and when the admin approves /
    returns / rejects your app-filed loan request, the inbox shows
    `Loan request approved / returned / rejected` (with the admin's
@@ -345,12 +346,12 @@ is the delivery channel. No push service, no Firebase — RLS does the
 scoping, and a database trigger freezes message content: you may only
 ever set `read_at`.
 
-| Need | Call |
-|---|---|
-| List my messages (newest first) | see below |
-| Unread count for the bell badge | count rows where `read_at` is null |
-| Mark one read | update `read_at` filtered to its `notification_id` |
-| Edit title / body / target | **never** — read-only by trigger |
+| Need                            | Call                                               |
+| ------------------------------- | -------------------------------------------------- |
+| List my messages (newest first) | see below                                          |
+| Unread count for the bell badge | count rows where `read_at` is null                 |
+| Mark one read                   | update `read_at` filtered to its `notification_id` |
+| Edit title / body / target      | **never** — read-only by trigger                   |
 
 ```kotlin
 val notes = supabase.from("notification")

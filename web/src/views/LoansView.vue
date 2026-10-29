@@ -36,8 +36,8 @@
       >
         Loan decisions require a <strong>Super Admin</strong>. Limits use the loan-type range and
         capital share (2× share less outstanding balances; under ₱20,000 share is limited to 80%).
-        Interest is diminishing: <strong>1.5%</strong> generally, <strong>2%</strong> Business,
-        and <strong>1.5% / 2% / 3%</strong> for 12 / 24 / 36-month Vehicle loans. Reloan requires
+        Interest is diminishing: <strong>1.5%</strong> generally, <strong>2%</strong> Business, and
+        <strong>1.5% / 2% / 3%</strong> for 12 / 24 / 36-month Vehicle loans. Reloan requires
         <strong>50% paid</strong>.
       </div>
 
@@ -2924,7 +2924,7 @@ const reqs = reactive({
 
 const memberOptions = computed(() =>
   membersStore.members
-    .filter((member) => member.status === 'Active')
+    .filter((member) => member.status === 'Active' && !member.archivedAt)
     .map((member) => ({
       id: member.id,
       memberNo: member.memberNo,
@@ -2941,8 +2941,7 @@ const memberOptions = computed(() =>
 function coMakerOptions(slotIndex) {
   const otherPick = newForm.coMakers[slotIndex === 0 ? 1 : 0]
   return memberOptions.value.filter(
-    (option) =>
-      !option.isBoardMember && option.id !== newForm.memberId && option.id !== otherPick,
+    (option) => !option.isBoardMember && option.id !== newForm.memberId && option.id !== otherPick,
   )
 }
 
@@ -2964,9 +2963,10 @@ const typeInfo = computed(() => ({
   rate: loanRateForTerm(newForm.type, newForm.termMonths),
 }))
 
-const termOptions = computed(() =>
-  loanTermsForType(newForm.type) ||
-  (newForm.type === 'Emergency' ? [2, 3, 4, 5, 6] : [6, 12, 18, 24, 36]),
+const termOptions = computed(
+  () =>
+    loanTermsForType(newForm.type) ||
+    (newForm.type === 'Emergency' ? [2, 3, 4, 5, 6] : [6, 12, 18, 24, 36]),
 )
 
 // Emergency loans default to a short term; vehicle rates use 12/24/36 months.

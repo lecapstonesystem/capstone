@@ -55,7 +55,8 @@ reset end-to-end (Admins → Reset → check the email → open the link).
 
 - Database schema, RLS policies, audit log: migrations in
   `database/` (run in numeric order). Apply migration 32 before
-  deploying the immutable-ledger reversal UI.
+  deploying the immutable-ledger reversal UI, and migration 33 before
+  deploying member archiving.
 - Storage bucket `member-documents`: already private, policies in 13.
 - The Android app talks to Supabase directly — the web deploy does
   not affect it (contract: `docs/app_contract.md`).

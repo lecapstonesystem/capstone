@@ -6,7 +6,10 @@
         <div>
           <h1 class="text-2xl font-bold text-gray-800">Members</h1>
           <p class="text-sm text-gray-500 mt-1">
-            {{ membersStore.totalCount }} total · {{ membersStore.activeCount }} active
+            {{ membersStore.totalCount }} members · {{ membersStore.activeCount }} active
+            <span v-if="membersStore.archivedCount">
+              · {{ membersStore.archivedCount }} archived
+            </span>
           </p>
         </div>
         <button
@@ -35,6 +38,13 @@
           <option value="Active">Active</option>
           <option value="Inactive">Inactive</option>
         </select>
+        <label
+          class="flex items-center gap-2 whitespace-nowrap text-sm text-gray-600 cursor-pointer"
+          title="Archived members are hidden from this list unless included"
+        >
+          <input v-model="membersStore.showArchived" type="checkbox" class="accent-green-600" />
+          Show archived ({{ membersStore.archivedCount }})
+        </label>
 
         <!-- Column visibility -->
         <div class="relative">
@@ -161,6 +171,12 @@
                     class="px-2.5 py-1 rounded-full text-xs font-medium"
                   >
                     {{ member.status }}
+                  </span>
+                  <span
+                    v-if="member.archivedAt"
+                    class="ml-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-600"
+                  >
+                    Archived
                   </span>
                 </td>
                 <td v-if="columns.dateJoined" class="px-6 py-4 text-gray-500">
@@ -358,6 +374,9 @@
                   Member Type
                 </p>
                 <p class="text-gray-700">{{ detailMember.memberType || '—' }}</p>
+                <p v-if="detailMember.archivedAt" class="text-xs text-gray-500 mt-1">
+                  Archived {{ formatDate(detailMember.archivedAt.slice(0, 10)) }}
+                </p>
                 <p v-if="detailMember.isBoardMember" class="text-xs text-amber-700 mt-1">
                   Board of Directors member
                 </p>
@@ -558,18 +577,32 @@
               <!-- Membership status actions -->
               <div class="flex flex-wrap gap-2 pt-1">
                 <button
-                  v-if="detailMember.status === 'Active'"
+                  v-if="detailMember.status === 'Active' && !detailMember.archivedAt"
                   @click="requestStatusChange(detailMember, 'Inactive')"
                   class="border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-amber-50 transition duration-200"
                 >
                   Deactivate
                 </button>
                 <button
-                  v-else-if="detailMember.status === 'Inactive'"
+                  v-else-if="detailMember.status === 'Inactive' && !detailMember.archivedAt"
                   @click="requestStatusChange(detailMember, 'Active')"
                   class="border border-green-300 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-50 transition duration-200"
                 >
                   Reactivate
+                </button>
+                <button
+                  v-if="detailMember.status === 'Inactive' && !detailMember.archivedAt"
+                  @click="requestArchiveMember(detailMember)"
+                  class="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-50 transition duration-200"
+                >
+                  Archive Member
+                </button>
+                <button
+                  v-if="detailMember.archivedAt"
+                  @click="requestRestoreMember(detailMember)"
+                  class="border border-green-300 text-green-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-50 transition duration-200"
+                >
+                  Restore from Archive
                 </button>
                 <!-- Developer-only: the button never renders for staff,
                      and the database refuses the delete for any other
@@ -774,7 +807,11 @@
                 </select>
               </div>
               <label class="flex items-center gap-2 text-sm text-gray-700 self-end pb-2">
-                <input v-model="form.isBoardMember" type="checkbox" class="accent-green-600 w-4 h-4" />
+                <input
+                  v-model="form.isBoardMember"
+                  type="checkbox"
+                  class="accent-green-600 w-4 h-4"
+                />
                 Board of Directors member
               </label>
               <div>
@@ -1002,6 +1039,23 @@
           <p class="text-sm text-gray-500 mb-6" :class="confirmAction.reason ? 'mb-4' : ''">
             {{ confirmAction.message }}
           </p>
+          <label
+            v-if="confirmAction.archiveOption"
+            class="flex items-start gap-2 mb-4 text-sm text-gray-700 cursor-pointer"
+          >
+            <input
+              v-model="archiveMemberOnDeactivate"
+              type="checkbox"
+              class="mt-0.5 accent-green-600"
+            />
+            <span>
+              Also archive this member
+              <span class="block text-xs text-gray-500 mt-0.5">
+                Hides them from the Members list and member reports by default. Their record and
+                history are retained.
+              </span>
+            </span>
+          </label>
           <div v-if="confirmAction.reason" class="mb-6">
             <label class="block text-xs font-medium text-gray-500 mb-1">Reason (required)</label>
             <textarea
@@ -1011,6 +1065,7 @@
               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             ></textarea>
           </div>
+          <p v-if="confirmError" class="text-sm text-red-600 mb-4">{{ confirmError }}</p>
           <div class="flex justify-end gap-3">
             <button
               @click="confirmAction = null"
@@ -1158,31 +1213,44 @@ const copied = ref(false)
 // Generic confirmation state (status changes & corrections)
 const confirmAction = ref(null) // { title, message, confirmLabel, danger, reason, run }
 const confirmReason = ref('')
+const confirmError = ref('')
+const archiveMemberOnDeactivate = ref(false)
 
 async function runConfirm() {
   if (!confirmAction.value) return
-  // Corrections must say why — the reason goes into the audit trail.
   if (confirmAction.value.reason && !confirmReason.value.trim()) return
   const action = confirmAction.value
   const reason = confirmReason.value.trim()
+  const result = await action.run(reason, archiveMemberOnDeactivate.value)
+  if (result?.ok === false) {
+    confirmError.value = result.message || 'The action could not be completed.'
+    return
+  }
   confirmAction.value = null
   confirmReason.value = ''
-  const result = await action.run(reason)
-  if (!result || result.ok !== false) {
-    if (action.success) toasts.success(action.success)
-  }
+  confirmError.value = ''
+  const successMessage =
+    typeof action.success === 'function'
+      ? action.success(reason, archiveMemberOnDeactivate.value)
+      : action.success
+  archiveMemberOnDeactivate.value = false
+  if (successMessage) toasts.success(successMessage)
 }
 
 // Lifecycle actions and confirmations
 function requestStatusChange(member, newStatus) {
   const name = `${member.firstName} ${member.lastName}`
+  confirmReason.value = ''
+  confirmError.value = ''
+  archiveMemberOnDeactivate.value = false
   const presets = {
     Inactive: {
       title: 'Deactivate Member?',
-      message: `${name} will be marked inactive and their app login disabled. The record and its history are kept, and you can reactivate anytime.`,
+      message: `${name} will be marked inactive and their app login disabled. Their record and history will be kept. You can optionally archive them as part of this action.`,
       confirmLabel: 'Deactivate',
       danger: true,
       reason: true,
+      archiveOption: true,
       success: 'Member deactivated.',
     },
     Active: {
@@ -1195,7 +1263,43 @@ function requestStatusChange(member, newStatus) {
   }
   confirmAction.value = {
     ...presets[newStatus],
-    run: (reason) => membersStore.setStatus(member.id, newStatus, reason),
+    success: (reason, archive) =>
+      newStatus === 'Inactive' && archive
+        ? 'Member deactivated and archived.'
+        : newStatus === 'Inactive'
+          ? 'Member deactivated.'
+          : 'Member reactivated.',
+    run: (reason, archive) => membersStore.setStatus(member.id, newStatus, reason, archive),
+  }
+}
+
+function requestArchiveMember(member) {
+  confirmReason.value = ''
+  confirmError.value = ''
+  archiveMemberOnDeactivate.value = false
+  confirmAction.value = {
+    title: 'Archive Inactive Member?',
+    message: `${member.firstName} ${member.lastName} (${member.memberNo}) will be hidden from the normal Members list and excluded from member reports by default. Their record and financial history are retained. You can restore them later.`,
+    confirmLabel: 'Archive Member',
+    danger: false,
+    reason: true,
+    success: 'Member archived.',
+    run: (reason) => membersStore.archiveMember(member.id, reason),
+  }
+}
+
+function requestRestoreMember(member) {
+  confirmReason.value = ''
+  confirmError.value = ''
+  archiveMemberOnDeactivate.value = false
+  confirmAction.value = {
+    title: 'Restore Member?',
+    message: `${member.firstName} ${member.lastName} (${member.memberNo}) will reappear in the Members list and member reports. Their status will remain Inactive until you reactivate them.`,
+    confirmLabel: 'Restore Member',
+    danger: false,
+    reason: true,
+    success: 'Member restored from archive.',
+    run: (reason) => membersStore.restoreMember(member.id, reason),
   }
 }
 

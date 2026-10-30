@@ -8,3 +8,5 @@ scikit-learn
 matplotlib
 openpyxl
 # NOTE: `supabase` is optional at import (lazy) — missing lib just means CSV fallback.
+python-jose[cryptography]==3.3.0
+

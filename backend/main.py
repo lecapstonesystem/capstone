@@ -50,7 +50,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from store import load_all  # noqa: E402  (Supabase-first, CSV fallback)
 from loan_simulator import loan_totals, round2, simulate_loan  # noqa: E402  (single impl, shared with web)
 
-API_KEY = os.environ.get("UCMS_API_KEY", "")  # empty = dev-open, warns at startup
+SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
+
+# FAIL CLOSED: Force the application to crash on startup if the key is missing
+if not SUPABASE_JWT_SECRET:
+    import sys
+    print("CRITICAL SECURITY ERROR: SUPABASE_JWT_SECRET is missing! System exiting.", file=sys.stderr)
+    sys.exit(1)
+
 # Comma-separated frontend origin(s) allowed to call this API in browsers.
 # Default covers local dev, OUR deployed site, and the teammate's admin
 # portal (ucms-admin.pages.dev) — a manually created Render service doesn't
@@ -66,13 +73,13 @@ CORS_ORIGINS = [o.strip() for o in
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    if not API_KEY:
-        print("WARNING: UCMS_API_KEY unset — API is open. "
-              "Set it in backend/.env before any demo.")
+    # The application already verifies keys above line 53 on startup.
+    # We safely yield here to let the FastAPI server initialize without old warnings.
     yield
 
 
 app = FastAPI(title="UCMS Analytics API", version="0.3.0", lifespan=lifespan)
+
 
 # Browsers block cross-origin fetch by default: the Vite dev server
 # (http://localhost:5173) may call this API only because of this middleware.
@@ -86,11 +93,56 @@ app.add_middleware(
 )
 
 
-def require_key(x_api_key: str | None = Header(default=None)):
-    """Shared-secret gate for the admin portal. Empty env = dev-open (warns)."""
-    if API_KEY and x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="bad or missing X-API-Key")
-    return True
+from jose import jwt, JWTError # If 'jose' isn't imported at the top of your file
+
+def require_key(authorization: str | None = Header(default=None)):
+    """
+    Decodes the Supabase JWT token from the Authorization header and
+    verifies if the requester is an active administrator.
+    """
+    # Test Scenario 1: Unauthenticated request (Missing header or wrong prefix)
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401, 
+            detail="Missing or malformed Authorization header."
+        )
+    
+    # Extract the token string out of 'Bearer <token>'
+    token = authorization.split(" ")[1]
+    
+    try:
+        # Decode the token using your secure Supabase secret
+        payload = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
+        
+        # Read the role properties out of the Supabase metadata object
+        user_metadata = payload.get("user_metadata", {})
+        user_role = user_metadata.get("role")
+        is_disabled = user_metadata.get("is_disabled", False)
+        
+        # Test Scenario 3: User is an ordinary member
+        if user_role != "admin":
+            raise HTTPException(
+                status_code=403, 
+                detail="Access denied. Administrator privileges required."
+            )
+            
+        # Test Scenario 4: User is an admin, but their account has been disabled
+        if is_disabled:
+            raise HTTPException(
+                status_code=403, 
+                detail="Access denied. This administrator account is disabled."
+            )
+            
+        # Test Scenario 5: Enabled admin account passes perfectly!
+        return True
+        
+    # Test Scenario 2: Expired or corrupted session token
+    except JWTError:
+        raise HTTPException(
+            status_code=401, 
+            detail="Session has expired or is invalid. Please log in again."
+        )
+
 
 
 def frame_rows(df: pd.DataFrame):

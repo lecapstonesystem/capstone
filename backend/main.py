@@ -136,9 +136,14 @@ def require_key(authorization: str | None = Header(default=None)):
         if not user_check.data or len(user_check.data) == 0:
             raise HTTPException(status_code=403, detail="Access denied. Admin profile not found.")
             
-        db_user = user_check.data
+        if not user_check.data or len(user_check.data) == 0:
+            raise HTTPException(status_code=403, detail="Access denied. Admin profile not found.")
+            
+        # FIX: Extract the first record dictionary out of the returned list list first!
+        db_user = user_check.data[0]
         user_role = db_user.get("role")
         is_login_enabled = db_user.get("login_enabled", True)
+
 
         # Test Scenario 3: User is an ordinary member
         if user_role != "admin":
@@ -444,8 +449,8 @@ def analytics_insights(holdout: int = Query(default=6, ge=3, le=12),
 
 
 @app.get("/charts/{kind}.png")
-def chart_image(kind: str, key: str = Query(default=""),
-                _: bool = Depends(require_key_q)):
+def chart_image(kind: str, verified: bool = Depends(require_key)):
+
     """Demo charts as PNGs: heatmap / forecast / backtest / cycles.
 
     Aggregate or anonymised (cycles shows M1..Mn, never member names), so

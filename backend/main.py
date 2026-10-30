@@ -123,22 +123,22 @@ def require_key(authorization: str | None = Header(default=None)):
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token payload identifiers.")
         
-        # ====================================================================
+                # ====================================================================
         # FIXED: LIVE DATABASE ADMIN ROLES CHECK (No longer editable by user)
         # ====================================================================
         client = store.get_client()
         if client is None:
             raise HTTPException(status_code=500, detail="Database connectivity offline.")
 
-        # Query the 'member' table directly using your user_id. 
-        user_check = client.table("member").select("role, is_disabled").eq("user_id", user_id).execute()
+        # Query the 'admin' table directly using your user_id mapped to 'auth_uid'
+        user_check = client.table("admin").select("role, login_enabled").eq("auth_uid", user_id).execute()
         
         if not user_check.data or len(user_check.data) == 0:
-            raise HTTPException(status_code=403, detail="Access denied. User profile not found.")
+            raise HTTPException(status_code=403, detail="Access denied. Admin profile not found.")
             
-        db_user = user_check.data[0]
+        db_user = user_check.data
         user_role = db_user.get("role")
-        is_disabled = db_user.get("is_disabled", False)
+        is_login_enabled = db_user.get("login_enabled", True)
 
         # Test Scenario 3: User is an ordinary member
         if user_role != "admin":
@@ -147,25 +147,15 @@ def require_key(authorization: str | None = Header(default=None)):
                 detail="Access denied. Administrator privileges required."
             )
             
-        # Test Scenario 4: User is an admin, but their account has been disabled
-        if is_disabled:
+        # Test Scenario 4: User is an admin, but their account has login disabled
+        if not is_login_enabled:
             raise HTTPException(
                 status_code=403, 
                 detail="Access denied. This administrator account is disabled."
             )
             
-        # Test Scenario 5: Enabled admin account passes database validation perfectly!
         return True
         
-    # Test Scenario 2: Expired or corrupted session token signature
-    except JWTError:
-        raise HTTPException(
-            status_code=401, 
-            detail="Session has expired or is invalid. Please log in again."
-        )
-
-        
-    # Test Scenario 2: Expired or corrupted session token
     except JWTError:
         raise HTTPException(
             status_code=401, 

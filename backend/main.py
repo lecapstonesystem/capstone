@@ -136,17 +136,15 @@ def require_key(authorization: str | None = Header(default=None)):
         if not user_check.data or len(user_check.data) == 0:
             raise HTTPException(status_code=403, detail="Access denied. Admin profile not found.")
             
-        if not user_check.data or len(user_check.data) == 0:
-            raise HTTPException(status_code=403, detail="Access denied. Admin profile not found.")
-            
-        # FIX: Extract the first record dictionary out of the returned list list first!
         db_user = user_check.data[0]
         user_role = db_user.get("role")
         is_login_enabled = db_user.get("login_enabled", True)
 
+        # FIX: Explicitly match the exact production database string roles (Case-Sensitive)
+        allowed_roles = {"Admin", "Super Admin", "Developer"}
 
         # Test Scenario 3: User is an ordinary member
-        if user_role != "admin":
+        if user_role not in allowed_roles:
             raise HTTPException(
                 status_code=403, 
                 detail="Access denied. Administrator privileges required."

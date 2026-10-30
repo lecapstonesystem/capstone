@@ -7,25 +7,31 @@
  *
  * Configure via `.env` (see `.env.example`):
  *   VITE_API_URL  e.g. http://localhost:8000  (dev) or the deployed URL
- *   VITE_API_KEY  must match the backend's UCMS_API_KEY
  *
  * Throws a plain-English Error when unconfigured or when the backend
  * answers non-2xx — views can catch it and fall back to store data.
  */
+import { useAuthStore } from '../stores/auth' // 1. IMPORTANT: Adjust this path to match where your Pinia auth store lives!
+
 const base = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
-const key = import.meta.env.VITE_API_KEY || ''
 
 async function call(path, options = {}) {
   if (!base) {
     throw new Error(
-      'Analytics API not configured. Set VITE_API_URL and VITE_API_KEY in web/.env, ' +
-        'then restart npm run dev.',
+      'Analytics API not configured. Set VITE_API_URL in web/.env, then restart npm run dev.',
     )
   }
+
+  // 2. Dynamically extract the active Supabase JWT access token from Pinia
+  const authStore = useAuthStore()
+  const sessionToken = authStore.session?.access_token || authStore.token || ''
+
   const res = await fetch(`${base}${path}`, {
     ...options,
     headers: {
-      ...(key ? { 'X-API-Key': key } : {}),
+      // 3. Inject token into standard Authorization Bearer header
+          ...(sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {}),
+
       'Content-Type': 'application/json',
       ...(options.headers || {}),
     },
@@ -80,6 +86,9 @@ export const analyticsApi = {
   reliability: () => call('/analytics/reliability'),
   collectionsV2: (months = 6) => call(`/analytics/collections?months=${months}`),
   insights: (holdout = 6) => call(`/analytics/insights?holdout=${holdout}`),
-  // <img> tags cannot send headers, so charts carry the key in the query.
-  chartUrl: (kind) => `${base}/charts/${kind}.png?key=${encodeURIComponent(key)}`,
+  
+  // 4. FIXING CHART URL LEAKS: 
+  // We completely strip the static "?key=" string parameter. Your UI components must 
+  // now query this URL using a safe fetch wrapper instead of raw HTML <img src="..."> tags.
+  chartUrl: (kind) => `${base}/charts/${kind}.png`,
 }

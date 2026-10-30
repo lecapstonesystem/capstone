@@ -39,6 +39,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from jose import jwt, JWTError
 
 # Load backend/.env BEFORE ucms_analytics/store read env vars at import time.
 load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -47,7 +48,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import ucms_analytics as ua  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from store import load_all  # noqa: E402  (Supabase-first, CSV fallback)
+import store
+from store import load_all  # # noqa: E402 (Supabase-first, CSV fallback)
+  # noqa: E402  (Supabase-first, CSV fallback)
 from loan_simulator import loan_totals, round2, simulate_loan  # noqa: E402  (single impl, shared with web)
 
 SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
@@ -93,12 +96,10 @@ app.add_middleware(
 )
 
 
-from jose import jwt, JWTError # If 'jose' isn't imported at the top of your file
-
 def require_key(authorization: str | None = Header(default=None)):
     """
-    Decodes the Supabase JWT token from the Authorization header and
-    verifies if the requester is an active administrator.
+    Decodes the Supabase JWT token from the Authorization header, extracts the secure
+    user ID, and runs a live database check to verify authentic admin clearance.
     """
     # Test Scenario 1: Unauthenticated request (Missing header or wrong prefix)
     if not authorization or not authorization.startswith("Bearer "):
@@ -108,17 +109,37 @@ def require_key(authorization: str | None = Header(default=None)):
         )
     
     # Extract the token string out of 'Bearer <token>'
-    token = authorization.split(" ")[1]
+    token_parts = authorization.split(" ")
+    if len(token_parts) != 2:
+        raise HTTPException(status_code=401, detail="Malformed token pattern.")
+    token = token_parts[1]
     
     try:
-        # Decode the token using your secure Supabase secret
+        # Decode the signature safely using your backend secret key
         payload = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
         
-        # Read the role properties out of the Supabase metadata object
-        user_metadata = payload.get("user_metadata", {})
-        user_role = user_metadata.get("role")
-        is_disabled = user_metadata.get("is_disabled", False)
+        # Extract the immutable, secure User ID instead of user_metadata
+        user_id = payload.get("sub") 
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token payload identifiers.")
         
+        # ====================================================================
+        # FIXED: LIVE DATABASE ADMIN ROLES CHECK (No longer editable by user)
+        # ====================================================================
+        client = store.get_client()
+        if client is None:
+            raise HTTPException(status_code=500, detail="Database connectivity offline.")
+
+        # Query the 'member' table directly using your user_id. 
+        user_check = client.table("member").select("role, is_disabled").eq("user_id", user_id).execute()
+        
+        if not user_check.data or len(user_check.data) == 0:
+            raise HTTPException(status_code=403, detail="Access denied. User profile not found.")
+            
+        db_user = user_check.data[0]
+        user_role = db_user.get("role")
+        is_disabled = db_user.get("is_disabled", False)
+
         # Test Scenario 3: User is an ordinary member
         if user_role != "admin":
             raise HTTPException(
@@ -133,8 +154,16 @@ def require_key(authorization: str | None = Header(default=None)):
                 detail="Access denied. This administrator account is disabled."
             )
             
-        # Test Scenario 5: Enabled admin account passes perfectly!
+        # Test Scenario 5: Enabled admin account passes database validation perfectly!
         return True
+        
+    # Test Scenario 2: Expired or corrupted session token signature
+    except JWTError:
+        raise HTTPException(
+            status_code=401, 
+            detail="Session has expired or is invalid. Please log in again."
+        )
+
         
     # Test Scenario 2: Expired or corrupted session token
     except JWTError:

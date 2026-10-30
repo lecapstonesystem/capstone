@@ -30,3 +30,5 @@ services:
       # Which site may call the API from the browser (Cloudflare Pages origin):
       - key: UCMS_CORS_ORIGINS
         value: https://ucms-defense.pages.dev
+       - key: SUPABASE_JWT_SECRET
+         sync: false
